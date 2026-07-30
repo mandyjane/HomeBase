@@ -23419,7 +23419,21 @@ function TaskCard({
       style: {
         flex: 1
       }
-    }), /*#__PURE__*/React.createElement("button", {
+    }), onUpdateAlerts && /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: e => e.stopPropagation(),
+      style: {
+        width: 32,
+        height: 32,
+        borderRadius: 9,
+        border: "none",
+        background: "rgba(255,255,255,0.05)",
+        color: C.inkMute,
+        fontSize: 10,
+        cursor: "pointer",
+        flexShrink: 0
+      }
+    }, "B"), /*#__PURE__*/React.createElement("button", {
       onClick: () => onEdit(task),
       className: "sans",
       style: {
