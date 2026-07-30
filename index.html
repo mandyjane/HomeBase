@@ -23421,7 +23421,10 @@ function TaskCard({
       }
     }), onUpdateAlerts && /*#__PURE__*/React.createElement("button", {
       type: "button",
-      onClick: e => e.stopPropagation(),
+      onClick: e => {
+        e.stopPropagation();
+        setShowNotif(true);
+      },
       style: {
         width: 32,
         height: 32,
@@ -23429,11 +23432,26 @@ function TaskCard({
         border: "none",
         background: "rgba(255,255,255,0.05)",
         color: C.inkMute,
-        fontSize: 10,
         cursor: "pointer",
-        flexShrink: 0
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        padding: 0
       }
-    }, "B"), /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "15",
+      height: "15",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.8",
+      strokeLinecap: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M13.73 21a2 2 0 0 1-3.46 0"
+    }))), /*#__PURE__*/React.createElement("button", {
       onClick: () => onEdit(task),
       className: "sans",
       style: {
