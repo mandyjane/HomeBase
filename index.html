@@ -6926,7 +6926,10 @@ function App({
   // Subscribe to push and store subscription in Supabase
   async function subscribePush() {
     try {
-      if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        showToast("Push not supported on this browser", "warn");
+        return;
+      }
       const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
       if (!sub) {
@@ -6937,7 +6940,9 @@ function App({
       }
       if (sbClient && sbHouseholdId && sbUserId) {
         const keys = sub.toJSON().keys || {};
-        await sbClient.from("push_subscriptions").upsert({
+        const {
+          error
+        } = await sbClient.from("push_subscriptions").upsert({
           endpoint: sub.endpoint,
           p256dh: keys.p256dh || "",
           auth: keys.auth || "",
@@ -6946,8 +6951,12 @@ function App({
         }, {
           onConflict: "endpoint"
         });
+        if (error) showToast("Sub save error: " + error.message, "warn");else showToast("Push subscription saved", "success");
+      } else {
+        showToast("No Supabase connection (sb:" + !!sbClient + " hh:" + !!sbHouseholdId + " u:" + !!sbUserId + ")", "warn");
       }
     } catch (e) {
+      showToast("Push sub error: " + e.message, "warn");
       console.warn("[push sub]", e);
     }
   }
@@ -7081,13 +7090,18 @@ function App({
       (async () => {
         try {
           await sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false);
-          await sbClient.from("alert_schedule").upsert(rows, {
+          const {
+            error
+          } = await sbClient.from("alert_schedule").upsert(rows, {
             onConflict: "id"
           });
+          if (error) showToast("Alert save error: " + error.message, "warn");else showToast(rows.length + " alert(s) scheduled on server", "success");
         } catch (e) {
-          console.warn("[alert_schedule]", e);
+          showToast("Alert schedule error: " + e.message, "warn");
         }
       })();
+    } else if (notifEnabled && notifPerm === "granted") {
+      showToast("No alerts to schedule (items:" + rows.length + " sb:" + !!sbClient + " hh:" + !!sbHouseholdId + ")", "info");
     }
     return () => {
       notifTimers.current.forEach(id => clearTimeout(id));
@@ -57201,7 +57215,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v347"))))), diagOpen && (() => {
+  }, "v348"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
