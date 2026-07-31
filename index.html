@@ -1058,6 +1058,36 @@ function periodEnd(period, key) {
   e.setDate(e.getDate() + (period === "fortnightly" ? 13 : 6));
   return e;
 }
+// v372 · Human-readable period date range: "28 Jul – 10 Aug"
+function periodDateRange(period, key) {
+  if (!key) return "";
+  if (period === "monthly") {
+    const [y, m] = key.split("-").map(Number);
+    const start = new Date(y, m - 1, 1);
+    const end = new Date(y, m, 0);
+    const sm = start.toLocaleDateString("en-AU", {
+      day: "numeric",
+      month: "short"
+    });
+    const em = end.toLocaleDateString("en-AU", {
+      day: "numeric",
+      month: "short"
+    });
+    return `${sm} – ${em}`;
+  }
+  const [y, m, d] = key.split("-").map(Number);
+  const start = new Date(y, m - 1, d);
+  const end = periodEnd(period, key);
+  const sf = start.toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short"
+  });
+  const ef = end.toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short"
+  });
+  return `${sf} – ${ef}`;
+}
 // Given a stored periods object, return one with current buckets, zeroing any bucket
 // whose key has rolled over.
 function freshPeriods(p, reset = REWARD_RESET_DEFAULT) {
@@ -12992,7 +13022,37 @@ function App({
         color: C.inkFaint,
         marginTop: 5
       }
-    }, lv.toNext, " pts to Lv ", lv.level + 1))))))) : tab === "settings" ? null :
+    }, lv.toNext, " pts to Lv ", lv.level + 1), (() => {
+      const g = rewards[key] || DEFAULT_REWARDS[key];
+      const p = migratePeriod(g.period);
+      const bk = periodBucket(p, fp);
+      const end = bk ? periodEnd(p, bk.key) : null;
+      const dl = end ? Math.max(0, Math.round((end - new Date()) / 864e5)) : 0;
+      const cur = who === "shared" ? (bk.her || 0) + (bk.him || 0) : bk[key] || 0;
+      return /*#__PURE__*/React.createElement("div", {
+        className: "sans",
+        style: {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginTop: 5
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 9,
+          color: C.inkFaint
+        }
+      }, cur, " / ", g.target, " · ", g.treat || "No treat set"), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 8,
+          fontWeight: 700,
+          padding: "1px 6px",
+          borderRadius: 5,
+          background: softTint(dl <= 1 ? C.urgent : C.low),
+          color: dl <= 1 ? C.urgent : C.low
+        }
+      }, dl === 0 ? "Last day" : dl <= 1 ? "1d left" : `${dl}d left`));
+    })())))))) : tab === "settings" ? null :
     /*#__PURE__*/
     /* Tab heading for non-home tabs */
     React.createElement("div", {
@@ -14339,11 +14399,29 @@ function App({
     }))), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
+        flex: 1,
         fontSize: 12,
         fontWeight: 500,
         color: C.inkSoft
       }
-    }, sharedToGo > 0 ? `${sharedToGo} points to ${sharedGoal.treat}` : `Goal reached — enjoy ${sharedGoal.treat}!`))))), treatApproval && treatRequests.filter(r => r.status === "pending").map(req => /*#__PURE__*/React.createElement(TreatApprovalCard, {
+    }, sharedToGo > 0 ? `${sharedToGo} points to ${sharedGoal.treat}` : `Goal reached — enjoy ${sharedGoal.treat}!`), (() => {
+      const sp = migratePeriod(sharedGoal.period);
+      const bk = periodBucket(sp, fp);
+      const end = bk ? periodEnd(sp, bk.key) : null;
+      const dl = end ? Math.max(0, Math.round((end - new Date()) / 864e5)) : 0;
+      return /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 8,
+          fontWeight: 700,
+          padding: "2px 7px",
+          borderRadius: 5,
+          background: softTint(dl <= 1 ? C.urgent : C.low),
+          color: dl <= 1 ? C.urgent : C.low,
+          flexShrink: 0
+        }
+      }, dl === 0 ? "Last day" : dl <= 1 ? "1d left" : `${dl}d left`);
+    })())))), treatApproval && treatRequests.filter(r => r.status === "pending").map(req => /*#__PURE__*/React.createElement(TreatApprovalCard, {
       key: req.id,
       req: req,
       people: people,
@@ -52805,7 +52883,56 @@ function GoalCard({
       background: daysLeft <= 1 ? softTint(C.urgent) : C.ruleSoft,
       color: daysLeft <= 1 ? C.urgent : C.inkMute
     }
-  }, daysLabel(daysLeft)))), /*#__PURE__*/React.createElement(L, null, "The treat ", g.locked && showPeriodTarget && /*#__PURE__*/React.createElement("span", {
+  }, daysLabel(daysLeft)))), !showPeriodTarget && (() => {
+    const bk = periodBucket(period, fp);
+    const end = bk ? periodEnd(period, bk.key) : null;
+    const dl = end ? Math.max(0, Math.round((end - new Date()) / 864e5)) : 0;
+    const range = bk ? periodDateRange(period, bk.key) : "";
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        marginBottom: 14,
+        padding: "8px 10px",
+        background: C.ruleSoft,
+        borderRadius: 10
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "12",
+      height: "12",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: C.inkMute,
+      strokeWidth: "2",
+      strokeLinecap: "round"
+    }, /*#__PURE__*/React.createElement("rect", {
+      x: "3",
+      y: "4",
+      width: "18",
+      height: "18",
+      rx: "2"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M16 2v4M8 2v4M3 10h18"
+    })), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        color: C.inkMute
+      }
+    }, periodLabel[period] || period, " · ", range), /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: dl <= 1 ? C.urgent : C.low
+      }
+    }, dl === 0 ? "Last day" : dl === 1 ? "1 day left" : `${dl} days left`));
+  })(), /*#__PURE__*/React.createElement(L, null, "The treat ", g.locked && showPeriodTarget && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 8,
       color: C.low,
@@ -55012,7 +55139,7 @@ function RewardsModal({
       borderRadius: 10,
       padding: 3,
       gap: 3,
-      marginBottom: 12
+      marginBottom: 6
     }
   }, REWARD_PERIODS.map(([val, lbl]) => {
     const on = sharedPeriod === val;
@@ -55032,7 +55159,74 @@ function RewardsModal({
         color: on ? C.onAccent : C.inkMute
       }
     }, lbl);
-  })), /*#__PURE__*/React.createElement("label", {
+  })), (() => {
+    const bk = periodBucket(sharedPeriod, fp);
+    const end = periodEnd(sharedPeriod, bk.key);
+    const dl = Math.max(0, Math.round((end - new Date()) / 864e5));
+    return /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        color: C.inkMute,
+        marginBottom: 12,
+        display: "flex",
+        alignItems: "center",
+        gap: 5
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "11",
+      height: "11",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round"
+    }, /*#__PURE__*/React.createElement("rect", {
+      x: "3",
+      y: "4",
+      width: "18",
+      height: "18",
+      rx: "2"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M16 2v4M8 2v4M3 10h18"
+    })), periodDateRange(sharedPeriod, bk.key), " · ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.low,
+        fontWeight: 700
+      }
+    }, dl === 0 ? "Last day" : dl === 1 ? "1 day left" : `${dl} days left`));
+  })(), sharedPeriod !== "monthly" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("label", {
+    className: "lbl",
+    style: {
+      display: "block",
+      marginBottom: 8
+    }
+  }, "Starts on"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 4,
+      marginBottom: 12
+    }
+  }, DOW_INITIAL.map((d, i) => {
+    const on = rewardReset === i;
+    return /*#__PURE__*/React.createElement("button", {
+      key: i,
+      onClick: () => setRewardReset(i),
+      "aria-label": DOW_FULL[i],
+      className: "sans",
+      style: {
+        flex: 1,
+        padding: "8px 0",
+        borderRadius: 9,
+        cursor: "pointer",
+        fontSize: 11,
+        fontWeight: 700,
+        border: `1.5px solid ${on ? C.accent : C.rule}`,
+        background: on ? C.accent : C.card,
+        color: on ? C.onAccent : C.inkMute
+      }
+    }, d);
+  }))), /*#__PURE__*/React.createElement("label", {
     className: "lbl",
     style: {
       display: "block",
@@ -55059,7 +55253,52 @@ function RewardsModal({
       fontSize: 12,
       fontWeight: 700
     }
-  }, v)))), /*#__PURE__*/React.createElement("div", {
+  }, v)))), (sharedPeriod !== "monthly" || personalPeriod !== "monthly") && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 16,
+      padding: 15,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    className: "lbl",
+    style: {
+      display: "block",
+      marginBottom: 8
+    }
+  }, "Resets on"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 4
+    }
+  }, DOW_INITIAL.map((d, i) => {
+    const on = rewardReset === i;
+    return /*#__PURE__*/React.createElement("button", {
+      key: i,
+      onClick: () => setRewardReset(i),
+      "aria-label": DOW_FULL[i],
+      className: "sans",
+      style: {
+        flex: 1,
+        padding: "8px 0",
+        borderRadius: 9,
+        cursor: "pointer",
+        fontSize: 11,
+        fontWeight: 700,
+        border: `1.5px solid ${on ? C.accent : C.rule}`,
+        background: on ? C.accent : C.card,
+        color: on ? C.onAccent : C.inkMute
+      }
+    }, d);
+  })), /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.inkFaint,
+      marginTop: 6
+    }
+  }, "Weekly and fortnightly periods start on this day. Monthly always resets on the 1st.")), /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.card,
       border: `1px solid ${C.rule}`,
@@ -55120,7 +55359,7 @@ function RewardsModal({
       borderRadius: 10,
       padding: 3,
       gap: 3,
-      marginBottom: 12
+      marginBottom: 6
     }
   }, REWARD_PERIODS.map(([val, lbl]) => {
     const on = personalPeriod === val;
@@ -55140,7 +55379,43 @@ function RewardsModal({
         color: on ? C.onAccent : C.inkMute
       }
     }, lbl);
-  })), /*#__PURE__*/React.createElement("label", {
+  })), (() => {
+    const bk = periodBucket(personalPeriod, fp);
+    const end = periodEnd(personalPeriod, bk.key);
+    const dl = Math.max(0, Math.round((end - new Date()) / 864e5));
+    return /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        color: C.inkMute,
+        marginBottom: 12,
+        display: "flex",
+        alignItems: "center",
+        gap: 5
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "11",
+      height: "11",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round"
+    }, /*#__PURE__*/React.createElement("rect", {
+      x: "3",
+      y: "4",
+      width: "18",
+      height: "18",
+      rx: "2"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M16 2v4M8 2v4M3 10h18"
+    })), periodDateRange(personalPeriod, bk.key), " · ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.low,
+        fontWeight: 700
+      }
+    }, dl === 0 ? "Last day" : dl === 1 ? "1 day left" : `${dl} days left`));
+  })(), /*#__PURE__*/React.createElement("label", {
     className: "lbl",
     style: {
       display: "block",
@@ -59446,7 +59721,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v371"))))), diagOpen && (() => {
+  }, "v373"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
