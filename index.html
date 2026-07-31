@@ -8217,6 +8217,9 @@ function App({
     setPointsLog(lsGet("hb_pointsLog", []));
     setBonusLog(lsGet("hb_bonusLog", []));
     setManualOT(lsGet("hb_manualOT", []));
+    setTreatRequests(lsGet("hb_treatRequests", []));
+    setRewards(lsGet("hb_rewards", DEFAULT_REWARDS));
+    setTreatApproval(lsGet("hb_treatApproval", false));
   }, [syncVersion]);
   // ROLL OVER — AND RECORD WHAT JUST CLOSED.
   //
@@ -8809,6 +8812,24 @@ function App({
     });
     setTreatRequests(next);
     showToast("Sent for approval", "info");
+    // Push notification to partner via alert_schedule
+    if (sbClient && sbHouseholdId) {
+      const requesterName = who === "her" ? people.her.name : who === "him" ? people.him.name : "Someone";
+      sbClient.from("alert_schedule").upsert([{
+        id: "treat-req-" + Date.now(),
+        fire_at: new Date().toISOString(),
+        title: "Treat request",
+        body: requesterName + " wants to set a new treat: " + newTreat,
+        household_id: sbHouseholdId,
+        sent: false
+      }], {
+        onConflict: "id"
+      }).then(({
+        error
+      }) => {
+        if (error) console.warn("[treat push]", error.message);
+      });
+    }
   }
   function approveTreatRequest(reqId) {
     setTreatRequests(rr => rr.map(r => {
@@ -8823,6 +8844,24 @@ function App({
         }
       }));
       showToast("Treat approved", "success");
+      // Push notification to requester
+      if (sbClient && sbHouseholdId) {
+        const approverName = currentUser === "her" ? people.her.name : people.him.name;
+        sbClient.from("alert_schedule").upsert([{
+          id: "treat-appr-" + Date.now(),
+          fire_at: new Date().toISOString(),
+          title: "Treat approved!",
+          body: approverName + " approved the treat: " + r.treat,
+          household_id: sbHouseholdId,
+          sent: false
+        }], {
+          onConflict: "id"
+        }).then(({
+          error
+        }) => {
+          if (error) console.warn("[treat push]", error.message);
+        });
+      }
       return {
         ...r,
         status: "approved",
@@ -8860,6 +8899,25 @@ function App({
         }
       } else {
         showToast("Treat denied", "info");
+      }
+      // Push notification to requester
+      if (sbClient && sbHouseholdId) {
+        const denierName = currentUser === "her" ? people.her.name : people.him.name;
+        const denied = updated.find(r2 => r2.id === reqId);
+        sbClient.from("alert_schedule").upsert([{
+          id: "treat-deny-" + Date.now(),
+          fire_at: new Date().toISOString(),
+          title: counterProposal ? "Counter-proposal" : "Treat denied",
+          body: denierName + (counterProposal ? " counter-proposed: " + counterProposal : " denied the treat" + (denied ? " - " + denied.treat : "")),
+          household_id: sbHouseholdId,
+          sent: false
+        }], {
+          onConflict: "id"
+        }).then(({
+          error
+        }) => {
+          if (error) console.warn("[treat push]", error.message);
+        });
       }
       return updated;
     });
@@ -59863,7 +59921,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v374"))))), diagOpen && (() => {
+  }, "v377"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
