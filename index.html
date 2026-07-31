@@ -22532,71 +22532,7 @@ function AgendaRow({
       alignItems: "center",
       gap: 7
     }
-  }, (() => {
-    // v241 · was `bill && (t.autoPay || isPlan(t))`, which treated a PINNED-FLOOR
-    // bill as armed and hid its Mark paid button — on precisely the bill that
-    // will never sweep and must be ticked by hand. Only a genuinely armed
-    // direct debit suppresses the tick.
-    const armedAuto = autoPayState(t, today) === "auto";
-    if (!onToggle || armedAuto) return null;
-    // v251 · THIS BUTTON NOW CELEBRATES. It read row.done only - no `celebrate`
-    // anywhere - so ticking gave a silent state flip. The animation was never
-    // missing: it lived entirely on the COLLAPSED circle, which drew
-    // cbdone/cbring/tickdraw. v250 removed that circle from the dashboard and took
-    // the only animated control with it.
-    // row.done OR celebrate throughout, so the finished state paints instantly on
-    // tap instead of waiting for the toggle to round-trip through state.
-    return /*#__PURE__*/React.createElement("button", {
-      onClick: e => {
-        e.stopPropagation();
-        handleToggle();
-      },
-      className: "sans" + (celebrate ? " cbdone" : ""),
-      "aria-label": row.done ? bill ? "Mark unpaid" : "Mark not done" : bill ? "Mark paid" : "Mark done",
-      style: {
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        height: 30,
-        padding: "0 12px 0 6px",
-        borderRadius: 9,
-        cursor: "pointer",
-        flexShrink: 0,
-        position: "relative",
-        border: `1.5px solid ${row.done || celebrate ? C.low : C.rule}`,
-        background: row.done || celebrate ? softTint(C.low) : C.card,
-        color: row.done || celebrate ? C.low : C.inkSoft,
-        fontSize: 11.5,
-        fontWeight: 600
-      }
-    }, celebrate && /*#__PURE__*/React.createElement("span", {
-      className: "cbring"
-    }), /*#__PURE__*/React.createElement("span", {
-      style: {
-        width: 18,
-        height: 18,
-        borderRadius: "50%",
-        flexShrink: 0,
-        border: `2px solid ${row.done || celebrate ? C.low : C.inkFaint}`,
-        background: row.done || celebrate ? softTint(C.low) : "transparent",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }
-    }, (row.done || celebrate) && /*#__PURE__*/React.createElement("svg", {
-      width: "10",
-      height: "10",
-      viewBox: "0 0 12 12"
-    }, /*#__PURE__*/React.createElement("path", {
-      className: celebrate ? "tickdraw" : "",
-      d: "M2.5 6 L5 8.5 L9.5 3.5",
-      stroke: C.low,
-      strokeWidth: "2",
-      fill: "none",
-      strokeLinecap: "round",
-      strokeLinejoin: "round"
-    }))), row.done || celebrate ? bill ? "Paid" : "Done" : bill ? "Mark paid" : "Mark done");
-  })(), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: () => setDelPrompt(true),
     "aria-label": "Delete",
     title: "Delete",
@@ -22684,7 +22620,60 @@ function AgendaRow({
       cursor: "pointer",
       flexShrink: 0
     }
-  }, "Edit")), /*#__PURE__*/React.createElement(ConfirmDelete, {
+  }, "Edit"), (() => {
+    const armedAuto = autoPayState(t, today) === "auto";
+    if (!onToggle || armedAuto) return null;
+    return /*#__PURE__*/React.createElement("button", {
+      onClick: e => {
+        e.stopPropagation();
+        handleToggle();
+      },
+      className: "sans" + (celebrate ? " cbdone" : ""),
+      "aria-label": row.done ? bill ? "Mark unpaid" : "Mark not done" : bill ? "Mark paid" : "Mark done",
+      style: {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        height: 30,
+        padding: "0 12px 0 6px",
+        borderRadius: 9,
+        cursor: "pointer",
+        flexShrink: 0,
+        position: "relative",
+        border: `1.5px solid ${row.done || celebrate ? C.low : C.rule}`,
+        background: row.done || celebrate ? softTint(C.low) : C.card,
+        color: row.done || celebrate ? C.low : C.inkSoft,
+        fontSize: 11.5,
+        fontWeight: 600
+      }
+    }, celebrate && /*#__PURE__*/React.createElement("span", {
+      className: "cbring"
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 18,
+        height: 18,
+        borderRadius: "50%",
+        flexShrink: 0,
+        border: `2px solid ${row.done || celebrate ? C.low : C.inkFaint}`,
+        background: row.done || celebrate ? softTint(C.low) : "transparent",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, (row.done || celebrate) && /*#__PURE__*/React.createElement("svg", {
+      width: "10",
+      height: "10",
+      viewBox: "0 0 12 12"
+    }, /*#__PURE__*/React.createElement("path", {
+      className: celebrate ? "tickdraw" : "",
+      d: "M2.5 6 L5 8.5 L9.5 3.5",
+      stroke: C.low,
+      strokeWidth: "2",
+      fill: "none",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }))), row.done || celebrate ? bill ? "Paid" : "Done" : bill ? "Mark paid" : "Mark done");
+  })()), /*#__PURE__*/React.createElement(ConfirmDelete, {
     open: delPrompt,
     title: recurs ? "Delete which?" : isTask ? bill ? "Delete this bill?" : "Delete this task?" : "Delete this event?",
     body: recurs ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", {
@@ -23404,7 +23393,53 @@ function TaskCard({
         justifyContent: "center",
         flexShrink: 0
       }
-    }, /*#__PURE__*/React.createElement(TrashIcon, null)), /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement(TrashIcon, null)), task.done && task.doneAt && onSetDoneAt && BILLUI.editPaid && /*#__PURE__*/React.createElement("button", {
+      onClick: () => setDoneEdit(true),
+      "aria-label": "Edit completion date and time",
+      className: "sans",
+      style: {
+        height: 34,
+        boxSizing: "border-box",
+        display: "flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "0 12px",
+        borderRadius: 10,
+        border: `1.5px solid ${C.low}`,
+        background: C.page,
+        color: C.low,
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: "pointer",
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "13",
+      height: "13",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round"
+    }, /*#__PURE__*/React.createElement("circle", {
+      cx: "12",
+      cy: "12",
+      r: "9"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M12 7v5l3 2"
+    })), /*#__PURE__*/React.createElement("span", {
+      className: "doneWord"
+    }, "Done"), /*#__PURE__*/React.createElement("svg", {
+      width: "10",
+      height: "10",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2.8",
+      strokeLinecap: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "m6 9 6 6 6-6"
+    }))), /*#__PURE__*/React.createElement("span", {
       style: {
         flex: 1
       }
@@ -23453,7 +23488,21 @@ function TaskCard({
         marginLeft: -10,
         marginTop: -0.75
       }
-    })), /*#__PURE__*/React.createElement("button", {
+    })), !task.done && /*#__PURE__*/React.createElement("button", {
+      onClick: () => onNag(task),
+      className: "sans",
+      style: {
+        padding: "8px 16px",
+        borderRadius: 10,
+        border: "none",
+        background: softTint(personColor(people.her.color)),
+        color: personColor(people.her.color),
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: "pointer",
+        flexShrink: 0
+      }
+    }, "Nag"), /*#__PURE__*/React.createElement("button", {
       onClick: () => onEdit(task),
       className: "sans",
       style: {
@@ -23469,67 +23518,7 @@ function TaskCard({
         cursor: "pointer",
         flexShrink: 0
       }
-    }, "Edit"), task.done && task.doneAt && onSetDoneAt && BILLUI.editPaid && /*#__PURE__*/React.createElement("button", {
-      onClick: () => setDoneEdit(true),
-      "aria-label": "Edit completion date and time",
-      className: "sans",
-      style: {
-        height: 34,
-        boxSizing: "border-box",
-        display: "flex",
-        alignItems: "center",
-        gap: 5,
-        padding: "0 12px",
-        borderRadius: 10,
-        border: `1.5px solid ${C.low}`,
-        background: C.page,
-        color: C.low,
-        fontSize: 12,
-        fontWeight: 600,
-        cursor: "pointer",
-        flexShrink: 0
-      }
-    }, /*#__PURE__*/React.createElement("svg", {
-      width: "13",
-      height: "13",
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: "currentColor",
-      strokeWidth: "2",
-      strokeLinecap: "round"
-    }, /*#__PURE__*/React.createElement("circle", {
-      cx: "12",
-      cy: "12",
-      r: "9"
-    }), /*#__PURE__*/React.createElement("path", {
-      d: "M12 7v5l3 2"
-    })), /*#__PURE__*/React.createElement("span", {
-      className: "doneWord"
-    }, "Done"), /*#__PURE__*/React.createElement("svg", {
-      width: "10",
-      height: "10",
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: "currentColor",
-      strokeWidth: "2.8",
-      strokeLinecap: "round"
-    }, /*#__PURE__*/React.createElement("path", {
-      d: "m6 9 6 6 6-6"
-    }))), !task.done && /*#__PURE__*/React.createElement("button", {
-      onClick: () => onNag(task),
-      className: "sans",
-      style: {
-        padding: "8px 16px",
-        borderRadius: 10,
-        border: "none",
-        background: softTint(personColor(people.her.color)),
-        color: personColor(people.her.color),
-        fontSize: 12,
-        fontWeight: 600,
-        cursor: "pointer",
-        flexShrink: 0
-      }
-    }, "Nag")))), /*#__PURE__*/React.createElement(DoneEditSheet, {
+    }, "Edit")))), /*#__PURE__*/React.createElement(DoneEditSheet, {
       key: "de" + (task._seriesId || task.id) + "@" + (task._occDate || task.dueDate),
       open: doneEdit,
       task: task,
@@ -56718,7 +56707,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v334"))))), diagOpen && (() => {
+  }, "v335"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
