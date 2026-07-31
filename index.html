@@ -8319,12 +8319,17 @@ function App({
     ...e,
     alerts
   } : e));
+  // v340 · Clear BOTH reward events AND the goal record log. Before this, the
+  // Record tab in each person's sheet kept showing "Met"/"Missed"/"Claimed" rows
+  // even after tapping "Clear reward history" in Settings → Data.
   function clearRewardHistory() {
     const before = events.length;
     const kept = events.filter(ev => ev.category !== "Reward");
     setEvents(kept);
-    const removed = before - kept.length;
-    showToast(removed ? "Cleared " + removed + " reward" + (removed > 1 ? "s" : "") + " from history" : "No rewards to clear", removed ? "success" : "info");
+    const logBefore = (goalLog || []).length;
+    setGoalLog([]);
+    const removed = before - kept.length + logBefore;
+    showToast(removed ? "Cleared reward history" : "No rewards to clear", removed ? "success" : "info");
   }
 
   // Cash in a met reward goal: create a Reward event for the treat, and bank the
