@@ -6885,7 +6885,7 @@ function App({
   //   "events" — events only (default; an event's time is load-bearing, a chore's isn't)
   //   "all"    — tasks and events
 
-  // ── v342 · CLIENT-SIDE NOTIFICATION SCHEDULING ──────────────────────────────
+  // ── v343 · CLIENT-SIDE NOTIFICATION SCHEDULING ──────────────────────────────
   // Phase 2a: fires alerts via service worker showNotification while the app is
   // open or backgrounded. Requires sw-notif.js deployed alongside index.html.
   const [notifEnabled, setNotifEnabled] = useState(() => lsGet("hb_notifEnabled", false));
@@ -6897,17 +6897,16 @@ function App({
     }
   });
   const notifTimers = useRef([]);
-  const swReg = useRef(null);
   useEffect(() => {
     lsSet("hb_notifEnabled", notifEnabled);
   }, [notifEnabled]);
 
-  // Register service worker on mount
+  // Register service worker on mount (relative path works on any GitHub Pages layout)
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw-notif.js").then(reg => {
-        swReg.current = reg;
-      }).catch(e => console.warn("[sw]", e));
+      navigator.serviceWorker.register("./sw-notif.js", {
+        scope: "./"
+      }).catch(e => console.warn("[sw reg]", e.message));
     }
   }, []);
   function toggleNotif() {
@@ -6925,24 +6924,31 @@ function App({
       setNotifEnabled(false);
     }
   }
-  function fireNotif(title, body, tag) {
-    const reg = swReg.current;
-    if (reg && reg.showNotification) {
-      reg.showNotification(title, {
-        body,
-        tag,
-        icon: "/icon-192.png",
-        badge: "/icon-192.png"
-      });
-    } else {
-      try {
-        new Notification(title, {
+
+  // fireNotif waits for the service worker to be ready before showing.
+  // Falls back to new Notification() for desktop browsers without a SW.
+  async function fireNotif(title, body, tag) {
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification(title, {
           body,
-          tag
+          tag,
+          icon: "./icon-192.png",
+          badge: "./icon-192.png"
         });
-      } catch (e) {
-        console.warn("[notif]", e);
+        return;
       }
+    } catch (e) {
+      console.warn("[notif sw]", e);
+    }
+    try {
+      new Notification(title, {
+        body,
+        tag
+      });
+    } catch (e2) {
+      console.warn("[notif fallback]", e2);
     }
   }
   function testNotif() {
@@ -6962,7 +6968,9 @@ function App({
       horizon = now + 24 * 60 * 60 * 1000;
     function schedule(title, body, fireAt, tag) {
       if (fireAt <= now || fireAt > horizon) return;
-      notifTimers.current.push(setTimeout(() => fireNotif(title, body, tag), fireAt - now));
+      notifTimers.current.push(setTimeout(() => {
+        fireNotif(title, body, tag);
+      }, fireAt - now));
     }
     function calcFire(dateStr, timeStr, a) {
       const t = a.type === "day_of" && a.time ? a.time : a.type === "at_time" ? timeStr || "09:00" : a.time || timeStr || "09:00";
@@ -57101,7 +57109,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v343"))))), diagOpen && (() => {
+  }, "v344"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
