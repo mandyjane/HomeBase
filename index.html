@@ -7591,16 +7591,25 @@ function App({
   const [pointsLog, setPointsLog] = useState(() => lsGet("hb_pointsLog", []));
   // v363 · timestamp of last points reset — completed tasks before this are excluded
   const [pointsResetAt, setPointsResetAt] = useState(() => lsGet("hb_pointsResetAt", null));
+  // ── THE BONUS LOG *(v196)* ────────────────────────────────────────────────
+  // SEPARATE from pointsLog on purpose. pointsLog stores {date,her,him} and MERGES
+  // same-day entries into one row — there is nowhere to hang a reason, and no way to
+  // reverse one award without unpicking a merged total. The bonus log keeps each award
+  // whole: {id,ts,who,reason,award:{her,him}}. `award` is the EXACT split that was paid,
+  // stored not re-derived, so Undo refunds precisely what went out (same doctrine as the
+  // task `award` field). Points themselves still flow through awardPoints — this log is
+  // the human-readable record beside them, never a second source of truth for totals.
+  const [bonusLog, setBonusLog] = useState(() => lsGet("hb_bonusLog", []));
+  const [bonusSheet, setBonusSheet] = useState(null); // null | "her" | "him" — set by the PersonSheet +Bonus button (v202)
   // v366 · Effective cutoff for pre-v363 data (pointsResetAt was never recorded).
   // Walk all completed tasks + bonuses newest→oldest, accumulate per-person points.
   // When adding an item would exceed either person's current balance, everything
-  // older is pre-reset. Store the result so this only runs once.
+  // older is pre-reset.
   const effectiveResetAt = useMemo(() => {
     if (pointsResetAt) return pointsResetAt;
     const herPts = points.her || 0,
       himPts = points.him || 0;
     if (herPts === 0 && himPts === 0) return new Date().toISOString();
-    // Collect every point-earning event (tasks + bonuses) with per-person split
     const items = [];
     (tasks || []).forEach(t => {
       if (!t || isBill(t)) return;
@@ -7634,7 +7643,6 @@ function App({
       });
     });
     items.sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || ""));
-    // Walk newest→oldest. Track the last item whose cumulative sum fits.
     let hS = 0,
       mS = 0,
       cutoff = null;
@@ -7646,18 +7654,8 @@ function App({
       mS += it.him;
       cutoff = it.doneAt;
     }
-    return cutoff; // null if sum never exceeded = no reset ever happened
+    return cutoff;
   }, [pointsResetAt, tasks, bonusLog, points.her, points.him]);
-  // ── THE BONUS LOG *(v196)* ────────────────────────────────────────────────
-  // SEPARATE from pointsLog on purpose. pointsLog stores {date,her,him} and MERGES
-  // same-day entries into one row — there is nowhere to hang a reason, and no way to
-  // reverse one award without unpicking a merged total. The bonus log keeps each award
-  // whole: {id,ts,who,reason,award:{her,him}}. `award` is the EXACT split that was paid,
-  // stored not re-derived, so Undo refunds precisely what went out (same doctrine as the
-  // task `award` field). Points themselves still flow through awardPoints — this log is
-  // the human-readable record beside them, never a second source of truth for totals.
-  const [bonusLog, setBonusLog] = useState(() => lsGet("hb_bonusLog", []));
-  const [bonusSheet, setBonusSheet] = useState(null); // null | "her" | "him" — set by the PersonSheet +Bonus button (v202)
   // Migrate the stored colours to the new jewel palette ON LOAD. Done in the initialiser,
   // not an effect: an effect would render one frame with the old muddy hex first, and — more
   // importantly — it would need to guard against writing back on every render.
