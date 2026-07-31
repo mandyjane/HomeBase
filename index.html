@@ -17080,9 +17080,9 @@ function EventCard({
       width: 32,
       height: 32,
       borderRadius: 9,
-      border: "none",
-      background: "rgba(255,255,255,0.05)",
-      color: C.inkMute,
+      border: `1.5px solid ${ev.alerts && ev.alerts.length > 0 ? C.low : C.rule}`,
+      background: ev.alerts && ev.alerts.length > 0 ? C.lowSoft : C.page,
+      color: ev.alerts && ev.alerts.length > 0 ? C.low : C.inkMute,
       cursor: "pointer",
       display: "flex",
       alignItems: "center",
@@ -22625,9 +22625,9 @@ function AgendaRow({
       width: 32,
       height: 32,
       borderRadius: 9,
-      border: "none",
-      background: "rgba(255,255,255,0.05)",
-      color: C.inkMute,
+      border: `1.5px solid ${t.alerts && t.alerts.length > 0 ? C.low : C.rule}`,
+      background: t.alerts && t.alerts.length > 0 ? C.lowSoft : C.page,
+      color: t.alerts && t.alerts.length > 0 ? C.low : C.inkMute,
       cursor: "pointer",
       display: "flex",
       alignItems: "center",
@@ -23517,9 +23517,9 @@ function TaskCard({
         width: 32,
         height: 32,
         borderRadius: 9,
-        border: "none",
-        background: "rgba(255,255,255,0.05)",
-        color: C.inkMute,
+        border: `1.5px solid ${task.alerts && task.alerts.length > 0 ? C.low : C.rule}`,
+        background: task.alerts && task.alerts.length > 0 ? C.lowSoft : C.page,
+        color: task.alerts && task.alerts.length > 0 ? C.low : C.inkMute,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -56789,7 +56789,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v337"))))), diagOpen && (() => {
+  }, "v338"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
