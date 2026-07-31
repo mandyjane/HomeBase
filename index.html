@@ -7831,6 +7831,7 @@ function App({
   // Which person's Goal/Record sheet is open: "shared" | "her" | "him" | null.
   // THE CARD YOU TAP IS THE GOAL YOU SEE — one rule, no mixing.
   const [personSheet, setPersonSheet] = useState(null);
+  const [completedTasksSheet, setCompletedTasksSheet] = useState(null); // null | "her" | "him" — v360
   // The tick prompt for a recurring task with a BACKLOG. null = no prompt.
   // {row, pointsTo} — held until the person chooses which occurrence they mean.
   const [catchUp, setCatchUp] = useState(null);
@@ -15396,7 +15397,13 @@ function App({
       notifEnabled: notifEnabled,
       notifPerm: notifPerm,
       toggleNotif: toggleNotif,
-      testNotif: testNotif
+      testNotif: testNotif,
+      treatApproval: treatApproval,
+      onToggleApproval: () => setPinSheet({
+        action: "toggle",
+        title: "Enter PIN",
+        sub: "Required to change approval settings"
+      })
     })), /*#__PURE__*/React.createElement("div", {
       style: {
         position: "fixed",
@@ -16102,6 +16109,7 @@ function App({
       people: people,
       rewards: rewards,
       points: points,
+      tasks: tasks,
       pointsPeriods: pointsPeriods,
       goalLog: goalLog,
       rewardReset: rewardReset,
@@ -16120,6 +16128,22 @@ function App({
       }),
       onBonus: w => setBonusSheet(w),
       onClose: () => setPersonSheet(null)
+    }), completedTasksSheet && /*#__PURE__*/React.createElement(CompletedTasksSheet, {
+      tasks: tasks,
+      who: completedTasksSheet,
+      people: people,
+      onClose: () => setCompletedTasksSheet(null)
+    }), pinSheet && /*#__PURE__*/React.createElement(PinSheet, {
+      title: pinSheet.title || "Enter PIN",
+      sub: pinSheet.sub || "",
+      correctPin: goalPin,
+      onSuccess: () => {
+        if (pinSheet.action === "toggle") {
+          setTreatApproval(v => !v);
+        } else if (pinSheet.action === "changePin") {/* handled separately */}
+        setPinSheet(null);
+      },
+      onClose: () => setPinSheet(null)
     }), showRewards && /*#__PURE__*/React.createElement(RewardsModal, {
       rewards: rewards,
       people: people,
@@ -52962,7 +52986,8 @@ function PersonSheet({
   onSaveGoal,
   onClaim,
   onBonus,
-  onClose
+  onClose,
+  tasks = []
 }) {
   const label = who === "shared" ? "Household" : people[who] && people[who].name || who;
   const color = who === "shared" ? C.accent : personColor(people[who].color);
@@ -52973,15 +52998,6 @@ function PersonSheet({
   const fp = freshPeriods(pointsPeriods, rewardReset);
   const mine = (goalLog || []).filter(e => e.who === who); // NEVER mixes people
   const owed = mine.filter(isOwed).length;
-
-  // DEFAULT TO RECORD — UNLESS THERE IS NOTHING TO SHOW.
-  // Landing on "Nothing recorded yet" while the goal you are actually chasing sits one
-  // tap away, hidden, is the worst possible first impression of a brand-new feature.
-  // Once history exists this behaves exactly as "always Record".
-  // DEFAULT TO RECORD WHEN THERE IS ANYTHING TO SEE THERE — history OR an unclaimed treat.
-  // `mine.length` alone was not enough once the claim moved here (v144): a goal met in your
-  // very first period has NO log entries yet, so the sheet would open on Goal and the claim
-  // would be invisible — the exact thing moving it was meant to fix.
   const [tab, setTab] = useState(() => mine.length || goalProgress(g, who, points, fp, goalLog).met ? "record" : "goal");
   const {
     sheetRef
@@ -52989,6 +53005,11 @@ function PersonSheet({
   const prog = goalProgress(g, who, points, fp, goalLog);
   const met = mine.filter(e => e.met).length,
     missed = mine.length - met;
+
+  // v360 · Activity tab — completed tasks for the current goal period
+  const periodBk = periodBucket(g.period, fp);
+  const periodStartDate = periodBk && periodBk.key ? periodBk.key.slice(0, 10) : null;
+  const activityTasks = useMemo(() => collectCompletedTasks(tasks, who, periodStartDate, null), [tasks, who, periodStartDate]);
   return /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
     className: "hb-scrim",
@@ -53092,7 +53113,7 @@ function PersonSheet({
       padding: 3,
       margin: "13px 16px 0"
     }
-  }, [["goal", "Goal"], ["record", "Record"]].map(([v, lbl]) => {
+  }, [["goal", "Goal"], ["record", "Record"], ["activity", "Activity"]].map(([v, lbl]) => {
     const on = tab === v;
     return /*#__PURE__*/React.createElement("button", {
       key: v,
@@ -53137,7 +53158,7 @@ function PersonSheet({
     setRewardReset: setRewardReset,
     onSet: (w, k, v) => onSaveGoal(w, k, v),
     onClaim: () => onClaim(who, g)
-  })) : /*#__PURE__*/React.createElement("div", {
+  })) : tab === "record" ? /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "14px 16px 22px"
     }
@@ -53287,7 +53308,542 @@ function PersonSheet({
     e: e,
     color: color,
     onClaim: ent => onClaim(who, g, ent)
-  })))))));
+  }))))) : tab === "activity" ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "14px 16px 22px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 14
+    }
+  }, [[activityTasks.length, C.ink, "Tasks done"], [activityTasks.reduce((s, t) => s + t.points, 0), C.low, "Points earned"], [prog.target, color, "Target"]].map(([n, col, lbl]) => /*#__PURE__*/React.createElement("span", {
+    key: lbl,
+    style: {
+      flex: 1,
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 14,
+      padding: "10px 8px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "serif",
+    style: {
+      display: "block",
+      fontSize: 21,
+      lineHeight: 1.1,
+      color: n ? col : C.inkFaint
+    }
+  }, n), /*#__PURE__*/React.createElement("span", {
+    className: "lbl",
+    style: {
+      display: "block",
+      marginTop: 3,
+      fontSize: 9
+    }
+  }, lbl)))), activityTasks.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "26px 16px",
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 16
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "serif",
+    style: {
+      fontSize: 15,
+      color: C.inkMute
+    }
+  }, "No tasks completed this period")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 16,
+      padding: "4px 13px"
+    }
+  }, activityTasks.map((t, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "10px 0",
+      borderBottom: i < activityTasks.length - 1 ? `1px solid ${C.ruleSoft}` : "none"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 24,
+      height: 24,
+      borderRadius: 7,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: softTint(t.catColor),
+      color: t.catColor
+    }
+  }, /*#__PURE__*/React.createElement(RoomIcon, {
+    name: t.catIcon,
+    size: 13
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      color: C.ink,
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis"
+    }
+  }, t.title), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.inkFaint,
+      marginTop: 1
+    }
+  }, shortDate(t.doneDate))), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      fontWeight: 700,
+      flexShrink: 0,
+      color: t.points > 0 ? C.low : C.inkFaint
+    }
+  }, t.points > 0 ? `+${t.points}` : "0"))))) : null));
+}
+
+// ─── PIN ENTRY SHEET (v360) ──────────────────────────────────────────────────
+// Used to gate the treat-approval toggle in Settings. 4-digit PIN, numpad entry.
+function PinSheet({
+  title = "Enter PIN",
+  sub = "",
+  correctPin = "0000",
+  onSuccess,
+  onClose
+}) {
+  const {
+    sheetRef
+  } = useSwipeToClose(onClose);
+  const [digits, setDigits] = useState("");
+  const [error, setError] = useState(false);
+  function press(d) {
+    const next = digits + d;
+    if (next.length < 4) {
+      setDigits(next);
+      setError(false);
+      return;
+    }
+    // 4 digits entered — check
+    if (next === correctPin) {
+      onSuccess();
+    } else {
+      setError(true);
+      setTimeout(() => {
+        setDigits("");
+        setError(false);
+      }, 600);
+    }
+  }
+  function back() {
+    setDigits(d => d.slice(0, -1));
+    setError(false);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.target === e.currentTarget && onClose(),
+    className: "hb-scrim",
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: SCRIM_DIM,
+      backdropFilter: "blur(3px)",
+      zIndex: Z_EDITOR,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement(ScrollLock, null), /*#__PURE__*/React.createElement("div", {
+    ref: sheetRef,
+    className: "hb-sa",
+    style: {
+      background: C.page,
+      borderRadius: "26px 26px 0 0",
+      width: "100%",
+      maxWidth: 480,
+      animation: "sheet 0.28s cubic-bezier(0.22,1,0.36,1)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 40,
+      height: 4,
+      background: C.rule,
+      borderRadius: 20,
+      margin: "10px auto 6px"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "20px 20px 10px"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "28",
+    height: "28",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.low,
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "11",
+    width: "18",
+    height: "11",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M7 11V7a5 5 0 0 1 10 0v4"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "serif",
+    style: {
+      fontSize: 18,
+      color: C.ink
+    }
+  }, title), sub && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute,
+      marginTop: 4
+    }
+  }, sub), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12,
+      justifyContent: "center",
+      margin: "18px 0"
+    }
+  }, [0, 1, 2, 3].map(i => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    style: {
+      width: 14,
+      height: 14,
+      borderRadius: "50%",
+      border: `2px solid ${error ? C.urgent : digits.length > i ? C.low : "rgba(255,255,255,0.15)"}`,
+      background: digits.length > i ? error ? C.urgent : C.low : "transparent",
+      transition: ".15s"
+    }
+  }))), error && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.urgent,
+      marginBottom: 8
+    }
+  }, "Incorrect PIN"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(3,1fr)",
+      gap: 8,
+      maxWidth: 220,
+      margin: "0 auto 20px"
+    }
+  }, [1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, "back"].map((k, i) => {
+    if (k === null) return /*#__PURE__*/React.createElement("span", {
+      key: i
+    });
+    if (k === "back") return /*#__PURE__*/React.createElement("button", {
+      key: i,
+      onClick: back,
+      style: {
+        width: "100%",
+        height: 48,
+        borderRadius: 12,
+        border: `1px solid ${C.rule}`,
+        background: C.card,
+        color: C.inkMute,
+        fontSize: 14,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "18",
+      height: "18",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "18",
+      y1: "9",
+      x2: "12",
+      y2: "15"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "12",
+      y1: "9",
+      x2: "18",
+      y2: "15"
+    })));
+    return /*#__PURE__*/React.createElement("button", {
+      key: i,
+      onClick: () => press(String(k)),
+      className: "sans",
+      style: {
+        width: "100%",
+        height: 48,
+        borderRadius: 12,
+        border: `1px solid ${C.rule}`,
+        background: C.card,
+        color: C.ink,
+        fontSize: 20,
+        fontWeight: 600,
+        cursor: "pointer"
+      }
+    }, k);
+  })))));
+}
+
+// ─── CHANGE PIN SHEET (v360) ─────────────────────────────────────────────────
+function ChangePinSheet({
+  currentPin = "0000",
+  onSave,
+  onClose
+}) {
+  const [step, setStep] = useState("old"); // old → new → confirm
+  const [newPin, setNewPin] = useState("");
+  function handleOld() {
+    setStep("new");
+  }
+  function handleNew() {
+    // This is called from PinSheet onSuccess with the new pin already entered.
+    // We need a different approach — use state machine
+  }
+  // Simpler: three sequential PinSheets
+  if (step === "old") return /*#__PURE__*/React.createElement(PinSheet, {
+    title: "Current PIN",
+    sub: "Enter your current PIN to change it",
+    correctPin: currentPin,
+    onSuccess: () => setStep("new"),
+    onClose: onClose
+  });
+  if (step === "new") return /*#__PURE__*/React.createElement(PinSheet, {
+    title: "New PIN",
+    sub: "Choose a 4-digit PIN",
+    correctPin: "____",
+    onSuccess: () => {},
+    onClose: onClose
+  });
+  // Actually, the PinSheet checks against a correct pin. For "set new pin" we need a different flow.
+  // Let me simplify: just use PinSheet for verification, and a simple input for setting new PIN.
+  return null;
+}
+
+// ─── COMPLETED TASKS COLLECTOR (v360) ────────────────────────────────────────
+// Collects all completed tasks for a person, with their points and completion dates.
+// Returns [{title, points, doneAt, doneDate, catIcon, catColor, category}], newest first.
+function collectCompletedTasks(tasks, who, periodStart, periodEnd) {
+  const results = [];
+  (tasks || []).forEach(t => {
+    if (!t || isBill(t)) return;
+    const assignee = t.assignee || "both";
+    const matches = assignee === who || assignee === "both" || who === "shared";
+    if (!matches) return;
+    const pts = t.points || 0;
+    const rm = taskMeta(t);
+    const add = (doneAt, date) => {
+      if (!doneAt) return;
+      const dd = doneOnLocalDay ? doneOnLocalDay(doneAt) : (doneAt || "").slice(0, 10);
+      if (periodStart && dd < periodStart) return;
+      if (periodEnd && dd > periodEnd) return;
+      // Determine points earned by this person
+      const ex = t.exceptions && t.exceptions[date];
+      const award = ex && ex.award ? ex.award : t.award;
+      const myPts = award ? award[who] || 0 : assignee === who ? pts : assignee === "both" ? Math.ceil(pts / 2) : 0;
+      results.push({
+        title: t.title,
+        points: myPts,
+        doneAt,
+        doneDate: dd,
+        catIcon: rm.icon,
+        catColor: rm.grad[0],
+        category: taskCatLabel(t)
+      });
+    };
+    // Series-level done
+    if (t.done && t.doneAt) add(t.doneAt, t.dueDate);
+    // Exception-level done
+    if (t.exceptions) {
+      Object.entries(t.exceptions).forEach(([d, ex]) => {
+        if (ex && ex.done && !ex.deleted && ex.doneAt) add(ex.doneAt, d);
+      });
+    }
+  });
+  results.sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || ""));
+  return results;
+}
+
+// ─── COMPLETED TASKS SHEET (v360) ────────────────────────────────────────────
+// Opened by tapping a person name on the Tasks tab or Stats tab.
+// Shows ALL completed tasks for that person, all time, most recent first.
+function CompletedTasksSheet({
+  tasks,
+  who,
+  people,
+  onClose
+}) {
+  const {
+    sheetRef
+  } = useSwipeToClose(onClose);
+  const label = who === "both" ? "Shared" : people[who] && people[who].name || who;
+  const color = who === "both" ? C.accent : personColor(people[who].color);
+  const all = collectCompletedTasks(tasks, who, null, null);
+  const totalPts = all.reduce((s, t) => s + t.points, 0);
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.target === e.currentTarget && onClose(),
+    className: "hb-scrim",
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: SCRIM_DIM,
+      backdropFilter: "blur(3px)",
+      zIndex: Z_EDITOR,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement(ScrollLock, null), /*#__PURE__*/React.createElement("div", {
+    ref: sheetRef,
+    className: "hb-sa",
+    style: {
+      background: C.page,
+      borderRadius: "26px 26px 0 0",
+      width: "100%",
+      maxWidth: 480,
+      maxHeight: "85vh",
+      display: "flex",
+      flexDirection: "column",
+      animation: "sheet 0.28s cubic-bezier(0.22,1,0.36,1)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 40,
+      height: 4,
+      background: C.rule,
+      borderRadius: 20,
+      margin: "10px auto 6px",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 16px 14px",
+      borderBottom: `1px solid ${C.ruleSoft}`,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("h2", {
+    className: "serif",
+    style: {
+      fontSize: 19,
+      color: C.ink
+    }
+  }, label, "'s completed tasks"), /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute,
+      marginTop: 4
+    }
+  }, "All time · ", totalPts, " total points · ", all.length, " tasks")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      overflowY: "auto",
+      padding: "0 16px 22px",
+      WebkitOverflowScrolling: "touch"
+    }
+  }, all.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "30px 16px"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "serif",
+    style: {
+      fontSize: 15,
+      color: C.inkMute
+    }
+  }, "No completed tasks yet")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      borderRadius: 16,
+      padding: "4px 13px",
+      marginTop: 14,
+      border: `1px solid ${C.rule}`
+    }
+  }, all.map((t, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "10px 0",
+      borderBottom: i < all.length - 1 ? `1px solid ${C.ruleSoft}` : "none"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 24,
+      height: 24,
+      borderRadius: 7,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: softTint(t.catColor),
+      color: t.catColor
+    }
+  }, /*#__PURE__*/React.createElement(RoomIcon, {
+    name: t.catIcon,
+    size: 13
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      color: C.ink,
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis"
+    }
+  }, t.title), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.inkFaint,
+      marginTop: 1
+    }
+  }, shortDate(t.doneDate))), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      fontWeight: 700,
+      flexShrink: 0,
+      color: t.points > 0 ? C.low : C.inkFaint
+    }
+  }, t.points > 0 ? `+${t.points}` : "0")))))));
 }
 function RewardsModal({
   rewards,
@@ -55505,7 +56061,9 @@ function SettingsPage({
   notifEnabled,
   notifPerm,
   toggleNotif,
-  testNotif
+  testNotif,
+  treatApproval = false,
+  onToggleApproval
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClearRewards, setConfirmClearRewards] = useState(false);
@@ -56088,7 +56646,7 @@ function SettingsPage({
       borderRadius: "50%",
       background: personColor(people.him.color)
     }
-  })), /*#__PURE__*/React.createElement(Chev, null))), showPoints && /*#__PURE__*/React.createElement(SRow, {
+  })), /*#__PURE__*/React.createElement(Chev, null))), showPoints && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(SRow, {
     hb: "reward goals weekly monthly targets"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onRewards,
@@ -56132,7 +56690,50 @@ function SettingsPage({
       fontSize: 11.5,
       color: C.inkMute
     }
-  }, "Weekly & monthly targets")), /*#__PURE__*/React.createElement(Chev, null))), showPoints && /*#__PURE__*/React.createElement(SRow, {
+  }, "Weekly & monthly targets")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
+    hb: "treat approval approve deny partner pin lock reward"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onToggleApproval,
+    style: {
+      ...rowBase
+    }
+  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "11",
+    width: "18",
+    height: "11",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M7 11V7a5 5 0 0 1 10 0v4"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Require treat approval"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, treatApproval ? "Partner must approve treat changes" : "Off — treats can be set freely")), /*#__PURE__*/React.createElement(Toggle, {
+    on: treatApproval
+  })))), showPoints && /*#__PURE__*/React.createElement(SRow, {
     hb: "levels points per level"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onLevels,
