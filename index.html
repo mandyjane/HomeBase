@@ -8800,16 +8800,39 @@ function App({
       };
     }));
   }
-  function denyTreatRequest(reqId) {
-    setTreatRequests(rr => rr.map(r => {
-      if (r.id !== reqId) return r;
-      showToast("Treat denied", "info");
-      return {
-        ...r,
-        status: "denied",
-        resolvedBy: currentUser === "her" ? "her" : "him"
-      };
-    }));
+  function denyTreatRequest(reqId, counterProposal) {
+    setTreatRequests(rr => {
+      const updated = rr.map(r => {
+        if (r.id !== reqId) return r;
+        return {
+          ...r,
+          status: "denied",
+          resolvedBy: currentUser === "her" ? "her" : "him"
+        };
+      });
+      // If counter-proposal provided, create a new pending request from the denier
+      if (counterProposal) {
+        const denied = rr.find(r => r.id === reqId);
+        if (denied) {
+          const counterWho = denied.who; // same goal slot (her/him/shared)
+          const prev = (rewards[counterWho] || {}).treat || "";
+          updated.push({
+            id: Date.now(),
+            who: counterWho,
+            treat: counterProposal,
+            previousTreat: prev,
+            requestedAt: new Date().toISOString(),
+            status: "pending",
+            resolvedBy: null,
+            counterFrom: currentUser === "her" ? "her" : "him"
+          });
+          showToast("Counter-proposal sent", "info");
+        }
+      } else {
+        showToast("Treat denied", "info");
+      }
+      return updated;
+    });
   }
   function cancelTreatRequest(reqId) {
     setTreatRequests(rr => rr.filter(r => r.id !== reqId));
@@ -14320,151 +14343,13 @@ function App({
         fontWeight: 500,
         color: C.inkSoft
       }
-    }, sharedToGo > 0 ? `${sharedToGo} points to ${sharedGoal.treat}` : `Goal reached — enjoy ${sharedGoal.treat}!`))))), treatApproval && treatRequests.filter(r => r.status === "pending").map(req => {
-      const reqName = (people[req.who] || {}).name || req.who;
-      const partnerColor = req.who === "shared" ? C.accent : personColor((people[req.who] || {}).color);
-      return /*#__PURE__*/React.createElement("div", {
-        key: req.id,
-        style: {
-          background: `linear-gradient(160deg,rgba(226,90,124,0.08),rgba(226,90,124,0.03))`,
-          border: "1.5px solid rgba(226,90,124,0.25)",
-          borderRadius: 16,
-          padding: 14,
-          marginBottom: 12
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          marginBottom: 4
-        }
-      }, /*#__PURE__*/React.createElement("svg", {
-        width: "14",
-        height: "14",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: "#e25a7c",
-        strokeWidth: "2",
-        strokeLinecap: "round"
-      }, /*#__PURE__*/React.createElement("circle", {
-        cx: "12",
-        cy: "12",
-        r: "10"
-      }), /*#__PURE__*/React.createElement("path", {
-        d: "M12 8v4M12 16h.01"
-      })), /*#__PURE__*/React.createElement("span", {
-        className: "sans",
-        style: {
-          fontSize: 13,
-          fontWeight: 700,
-          color: "#e25a7c"
-        }
-      }, reqName, " set ", req.who === "shared" ? "the household" : req.who === "her" ? "her" : "his", " treat")), /*#__PURE__*/React.createElement("div", {
-        className: "sans",
-        style: {
-          fontSize: 11.5,
-          color: C.inkMute,
-          lineHeight: 1.4,
-          marginBottom: 12
-        }
-      }, "Do you approve this treat for the current period?"), /*#__PURE__*/React.createElement("div", {
-        style: {
-          background: C.cardSoft || "rgba(255,255,255,0.04)",
-          borderRadius: 10,
-          padding: "10px 12px",
-          marginBottom: 12,
-          display: "flex",
-          alignItems: "center",
-          gap: 8
-        }
-      }, /*#__PURE__*/React.createElement("svg", {
-        width: "16",
-        height: "16",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: partnerColor,
-        strokeWidth: "2",
-        strokeLinecap: "round",
-        style: {
-          flexShrink: 0
-        }
-      }, /*#__PURE__*/React.createElement("path", {
-        d: "M20 12v9H4v-9"
-      }), /*#__PURE__*/React.createElement("path", {
-        d: "M2 7h20v5H2z"
-      }), /*#__PURE__*/React.createElement("path", {
-        d: "M12 22V7"
-      }), /*#__PURE__*/React.createElement("path", {
-        d: "M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"
-      }), /*#__PURE__*/React.createElement("path", {
-        d: "M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"
-      })), /*#__PURE__*/React.createElement("span", {
-        className: "serif",
-        style: {
-          fontSize: 14,
-          fontWeight: 600,
-          color: C.ink
-        }
-      }, "\"", req.treat, "\"")), req.previousTreat && /*#__PURE__*/React.createElement("div", {
-        className: "sans",
-        style: {
-          fontSize: 10,
-          color: C.inkMute,
-          marginBottom: 10,
-          display: "flex",
-          alignItems: "center",
-          gap: 4
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          textDecoration: "line-through",
-          opacity: .6
-        }
-      }, req.previousTreat), /*#__PURE__*/React.createElement("svg", {
-        width: "10",
-        height: "10",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: C.inkMute,
-        strokeWidth: "2"
-      }, /*#__PURE__*/React.createElement("path", {
-        d: "M5 12h14m-7-7l7 7-7 7"
-      })), /*#__PURE__*/React.createElement("span", null, req.treat)), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          gap: 8
-        }
-      }, /*#__PURE__*/React.createElement("button", {
-        onClick: () => denyTreatRequest(req.id),
-        className: "sans",
-        style: {
-          flex: 1,
-          padding: 10,
-          borderRadius: 10,
-          border: "1.5px solid rgba(232,85,85,0.3)",
-          background: "rgba(232,85,85,0.15)",
-          color: "#e85555",
-          fontSize: 12,
-          fontWeight: 700,
-          cursor: "pointer"
-        }
-      }, "Deny"), /*#__PURE__*/React.createElement("button", {
-        onClick: () => approveTreatRequest(req.id),
-        className: "sans",
-        style: {
-          flex: 1,
-          padding: 10,
-          borderRadius: 10,
-          border: "none",
-          background: "#34c47c",
-          color: "#fff",
-          fontSize: 12,
-          fontWeight: 700,
-          cursor: "pointer"
-        }
-      }, "Approve")));
-    }), searching && /*#__PURE__*/React.createElement("div", {
+    }, sharedToGo > 0 ? `${sharedToGo} points to ${sharedGoal.treat}` : `Goal reached — enjoy ${sharedGoal.treat}!`))))), treatApproval && treatRequests.filter(r => r.status === "pending").map(req => /*#__PURE__*/React.createElement(TreatApprovalCard, {
+      key: req.id,
+      req: req,
+      people: people,
+      onApprove: approveTreatRequest,
+      onDeny: denyTreatRequest
+    })), searching && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 18
       }
@@ -16535,6 +16420,11 @@ function App({
       goalLog: goalLog,
       rewardReset: rewardReset,
       setRewardReset: setRewardReset,
+      treatApproval: treatApproval,
+      treatRequests: treatRequests,
+      onSubmitTreat: submitTreatRequest,
+      onCancelRequest: cancelTreatRequest,
+      onDismissResult: dismissTreatResult,
       onSave: r => {
         setRewards(r);
         setShowRewards(false);
@@ -52589,7 +52479,8 @@ function GoalCard({
   treatRequests = [],
   onSubmitTreat,
   onCancelRequest,
-  onDismissResult
+  onDismissResult,
+  showPeriodTarget = true
 }) {
   const L = ({
     children
@@ -52701,7 +52592,7 @@ function GoalCard({
       fontWeight: 700,
       color: C.rewardGold
     }
-  }, claimedThisPeriod ? "Claimed — resets next period" : met ? "Goal met — claim it on the Record tab" : "Goal met!")), /*#__PURE__*/React.createElement("div", {
+  }, claimedThisPeriod ? "Claimed — resets next period" : met ? "Goal met — claim it on the Record tab" : "Goal met!")), showPeriodTarget && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -52767,8 +52658,6 @@ function GoalCard({
     }
   }, REWARD_PERIODS.map(([val, lbl]) => {
     const on = period === val;
-    // Widening is ALWAYS allowed (a longer window can only contain more of the
-    // same points). Narrowing is locked only when it would actually cost points.
     const lock = on ? null : fp ? periodLock(period, val, who, fp) : null;
     return /*#__PURE__*/React.createElement("button", {
       key: val,
@@ -52916,7 +52805,7 @@ function GoalCard({
       background: daysLeft <= 1 ? softTint(C.urgent) : C.ruleSoft,
       color: daysLeft <= 1 ? C.urgent : C.inkMute
     }
-  }, daysLabel(daysLeft))), /*#__PURE__*/React.createElement(L, null, "The treat ", g.locked && /*#__PURE__*/React.createElement("span", {
+  }, daysLabel(daysLeft)))), /*#__PURE__*/React.createElement(L, null, "The treat ", g.locked && showPeriodTarget && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 8,
       color: C.low,
@@ -52985,7 +52874,7 @@ function GoalCard({
     d: "M22 2L11 13"
   }), /*#__PURE__*/React.createElement("path", {
     d: "M22 2l-7 20-4-9-9-4 20-7"
-  })), "Send for approval"), pendingReq && /*#__PURE__*/React.createElement("div", {
+  })), who === "shared" ? "Suggest treat" : "Send for approval"), pendingReq && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 8,
       background: "rgba(255,193,7,0.08)",
@@ -53141,7 +53030,7 @@ function GoalCard({
         borderColor: rgbaFromHex(C.low, 0.3)
       } : {})
     }
-  }), /*#__PURE__*/React.createElement(L, null, "Points target"), /*#__PURE__*/React.createElement("div", {
+  }), showPeriodTarget && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(L, null, "Points target"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6,
@@ -53166,7 +53055,7 @@ function GoalCard({
       fontSize: 12,
       fontWeight: 700
     }
-  }, v))));
+  }, v)))));
 }
 
 // ─── PERSON SHEET: one goal, one record, no mixing ──────────────────────────
@@ -53774,6 +53663,7 @@ function PersonSheet({
     onSubmitTreat: onSubmitTreat,
     onCancelRequest: onCancelRequest,
     onDismissResult: onDismissResult,
+    showPeriodTarget: false,
     onSet: (w, k, v) => onSaveGoal(w, k, v),
     onClaim: () => onClaim(who, g)
   })) : tab === "record" ? /*#__PURE__*/React.createElement("div", {
@@ -54515,6 +54405,246 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd, resetAfter) {
   return results;
 }
 
+// v370 · TreatApprovalCard — dashboard card for approving/denying/counter-proposing treats.
+// MODULE SCOPE (not inside App) — uses useState for the counter-propose input.
+function TreatApprovalCard({
+  req,
+  people,
+  onApprove,
+  onDeny
+}) {
+  const [showCounter, setShowCounter] = useState(false);
+  const [counterText, setCounterText] = useState("");
+  const reqName = (people[req.who] || {}).name || req.who;
+  const partnerColor = req.who === "shared" ? C.accent : personColor((people[req.who] || {}).color);
+  const fromLabel = req.counterFrom ? (people[req.counterFrom] || {}).name : "";
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "linear-gradient(160deg,rgba(226,90,124,0.08),rgba(226,90,124,0.03))",
+      border: "1.5px solid rgba(226,90,124,0.25)",
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "#e25a7c",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "12",
+    r: "10"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 8v4M12 16h.01"
+  })), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: "#e25a7c"
+    }
+  }, req.counterFrom ? `${fromLabel} counter-proposed` : `${reqName} set ${req.who === "shared" ? "the household" : req.who === "her" ? "her" : "his"} treat`)), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute,
+      lineHeight: 1.4,
+      marginBottom: 12
+    }
+  }, "Do you approve this treat for the current period?"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.cardSoft || "rgba(255,255,255,0.04)",
+      borderRadius: 10,
+      padding: "10px 12px",
+      marginBottom: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: partnerColor,
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    style: {
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M20 12v9H4v-9"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M2 7h20v5H2z"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 22V7"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"
+  })), /*#__PURE__*/React.createElement("span", {
+    className: "serif",
+    style: {
+      fontSize: 14,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "\"", req.treat, "\"")), req.previousTreat && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.inkMute,
+      marginBottom: 10,
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      textDecoration: "line-through",
+      opacity: .6
+    }
+  }, req.previousTreat), /*#__PURE__*/React.createElement("svg", {
+    width: "10",
+    height: "10",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.inkMute,
+    strokeWidth: "2"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M5 12h14m-7-7l7 7-7 7"
+  })), /*#__PURE__*/React.createElement("span", null, req.treat)), showCounter ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("input", {
+    value: counterText,
+    onChange: e => setCounterText(e.target.value),
+    placeholder: "Suggest an alternative treat",
+    className: "sans",
+    style: {
+      width: "100%",
+      padding: "10px 12px",
+      borderRadius: 10,
+      border: `1.5px solid rgba(226,90,124,0.3)`,
+      background: C.bg,
+      color: C.ink,
+      fontSize: 13,
+      boxSizing: "border-box",
+      marginBottom: 8
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowCounter(false),
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: 10,
+      borderRadius: 10,
+      border: `1.5px solid ${C.rule}`,
+      background: "transparent",
+      color: C.inkMute,
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      if (counterText.trim()) onDeny(req.id, counterText.trim());
+    },
+    className: "sans",
+    disabled: !counterText.trim(),
+    style: {
+      flex: 1,
+      padding: 10,
+      borderRadius: 10,
+      border: "none",
+      background: counterText.trim() ? "#e25a7c" : "rgba(226,90,124,0.3)",
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: counterText.trim() ? "pointer" : "default"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "12",
+    height: "12",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M22 2L11 13"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M22 2l-7 20-4-9-9-4 20-7"
+  })), "Counter-propose")))) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onDeny(req.id),
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: 10,
+      borderRadius: 10,
+      border: "1.5px solid rgba(232,85,85,0.3)",
+      background: "rgba(232,85,85,0.15)",
+      color: "#e85555",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "Deny"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowCounter(true),
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: 10,
+      borderRadius: 10,
+      border: `1.5px solid rgba(226,90,124,0.3)`,
+      background: "rgba(226,90,124,0.08)",
+      color: "#e25a7c",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "Counter-propose"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onApprove(req.id),
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: 10,
+      borderRadius: 10,
+      border: "none",
+      background: "#34c47c",
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "Approve")));
+}
+
 // v366 · Collect bonus log entries for the activity timeline.
 // Returns objects shaped like collectCompletedTasks results so they can be merged.
 function collectBonusActivity(bonusLog, who, periodStart, periodEnd, resetAfter) {
@@ -54727,11 +54857,13 @@ function RewardsModal({
   setRewardReset,
   onSave,
   onClaim,
-  onClose
+  onClose,
+  treatApproval = false,
+  treatRequests = [],
+  onSubmitTreat,
+  onCancelRequest,
+  onDismissResult
 }) {
-  // LIFETIME IS RETIRED. A stored lifetime goal is migrated to monthly ON READ, so the
-  // picker never has to render a value it no longer offers. `claimed` (the old lifetime
-  // surplus bank) is spread through untouched — kept in storage, never wiped.
   const [form, setForm] = useState(() => {
     const g = w => {
       const src = {
@@ -54748,18 +54880,31 @@ function RewardsModal({
       him: g("him")
     };
   });
-  const set = useCallback((who, k, v) => setForm(f => ({
+  // v371 · Personal goals share period+target for fairness. Changing either syncs both.
+  const setShared = (k, v) => setForm(f => ({
     ...f,
-    [who]: {
-      ...f[who],
+    shared: {
+      ...f.shared,
       [k]: v
     }
-  })), []);
+  }));
+  const setPersonal = (k, v) => setForm(f => ({
+    ...f,
+    her: {
+      ...f.her,
+      [k]: v
+    },
+    him: {
+      ...f.him,
+      [k]: v
+    }
+  }));
   const fp = freshPeriods(pointsPeriods, rewardReset);
   const {
     sheetRef
   } = useSwipeToClose(onClose);
-  const goals = [["shared", "Shared — household", C.accent], ["her", people.her.name, personColor(people.her.color)], ["him", people.him.name, personColor(people.him.color)]];
+  const personalPeriod = migratePeriod(form.her.period);
+  const sharedPeriod = migratePeriod(form.shared.period);
   return /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
     className: "hb-scrim",
@@ -54799,20 +54944,14 @@ function RewardsModal({
       borderRadius: 20,
       margin: "0 auto 16px"
     }
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement("h2", {
+  }), /*#__PURE__*/React.createElement("h2", {
     className: "serif",
     style: {
       fontSize: 23,
       fontStyle: "italic",
       color: C.onAccent
     }
-  }, "Reward goals"))), /*#__PURE__*/React.createElement("div", {
+  }, "Reward goals")), /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "22px"
     }
@@ -54823,19 +54962,212 @@ function RewardsModal({
       color: C.inkSoft,
       marginBottom: 18
     }
-  }, "Set a treat to work toward. Points you earn from tasks fill these up — one shared goal for the two of you, and a personal one each."), goals.map(([who, label, color]) => /*#__PURE__*/React.createElement(GoalCard, {
-    key: who,
-    who: who,
-    label: label,
-    color: color,
-    g: form[who],
-    fp: fp,
-    progress: goalProgress(form[who], who, points, fp, goalLog),
-    rewardReset: rewardReset,
-    setRewardReset: setRewardReset,
-    onSet: set,
-    onClaim: w => onClaim(w, form[w])
-  })), /*#__PURE__*/React.createElement("button", {
+  }, "Set the period and targets here. Treats are set from each person's goal card on the dashboard."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 16,
+      padding: 15,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.accent,
+      display: "flex"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"
+  }))), /*#__PURE__*/React.createElement("span", {
+    className: "serif",
+    style: {
+      fontSize: 16,
+      fontStyle: "italic",
+      color: C.ink
+    }
+  }, "Household goal")), /*#__PURE__*/React.createElement("label", {
+    className: "lbl",
+    style: {
+      display: "block",
+      marginBottom: 8
+    }
+  }, "Period"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      background: C.ruleSoft,
+      borderRadius: 10,
+      padding: 3,
+      gap: 3,
+      marginBottom: 12
+    }
+  }, REWARD_PERIODS.map(([val, lbl]) => {
+    const on = sharedPeriod === val;
+    return /*#__PURE__*/React.createElement("button", {
+      key: val,
+      onClick: () => setShared("period", val),
+      className: "sans",
+      style: {
+        flex: 1,
+        padding: "7px",
+        borderRadius: 7,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 12,
+        fontWeight: 700,
+        background: on ? C.accent : "transparent",
+        color: on ? C.onAccent : C.inkMute
+      }
+    }, lbl);
+  })), /*#__PURE__*/React.createElement("label", {
+    className: "lbl",
+    style: {
+      display: "block",
+      marginBottom: 8
+    }
+  }, "Points target"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, [50, 100, 150, 200, 250, 300].map(v => /*#__PURE__*/React.createElement("button", {
+    key: v,
+    onClick: () => setShared("target", v),
+    className: "sans",
+    style: {
+      flex: 1,
+      minWidth: 0,
+      padding: "9px 0",
+      borderRadius: 20,
+      cursor: "pointer",
+      border: `1.5px solid ${form.shared.target === v ? C.accent : C.rule}`,
+      background: form.shared.target === v ? C.accentSoft : C.card,
+      color: form.shared.target === v ? C.accent : C.inkMute,
+      fontSize: 12,
+      fontWeight: 700
+    }
+  }, v)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 16,
+      padding: 15,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "flex",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 14,
+      height: 14,
+      borderRadius: "50%",
+      background: personColor(people.her.color)
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 14,
+      height: 14,
+      borderRadius: "50%",
+      background: personColor(people.him.color)
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    className: "serif",
+    style: {
+      fontSize: 16,
+      fontStyle: "italic",
+      color: C.ink
+    }
+  }, people.her.name, " & ", people.him.name)), /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute,
+      marginBottom: 12
+    }
+  }, "Shared period and target keeps it fair — treats are set individually from the dashboard."), /*#__PURE__*/React.createElement("label", {
+    className: "lbl",
+    style: {
+      display: "block",
+      marginBottom: 8
+    }
+  }, "Period"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      background: C.ruleSoft,
+      borderRadius: 10,
+      padding: 3,
+      gap: 3,
+      marginBottom: 12
+    }
+  }, REWARD_PERIODS.map(([val, lbl]) => {
+    const on = personalPeriod === val;
+    return /*#__PURE__*/React.createElement("button", {
+      key: val,
+      onClick: () => setPersonal("period", val),
+      className: "sans",
+      style: {
+        flex: 1,
+        padding: "7px",
+        borderRadius: 7,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 12,
+        fontWeight: 700,
+        background: on ? C.low : "transparent",
+        color: on ? C.onAccent : C.inkMute
+      }
+    }, lbl);
+  })), /*#__PURE__*/React.createElement("label", {
+    className: "lbl",
+    style: {
+      display: "block",
+      marginBottom: 8
+    }
+  }, "Points target"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, [25, 50, 75, 100, 150, 200].map(v => /*#__PURE__*/React.createElement("button", {
+    key: v,
+    onClick: () => setPersonal("target", v),
+    className: "sans",
+    style: {
+      flex: 1,
+      minWidth: 0,
+      padding: "9px 0",
+      borderRadius: 20,
+      cursor: "pointer",
+      border: `1.5px solid ${form.her.target === v ? C.low : C.rule}`,
+      background: form.her.target === v ? softTint(C.low) : C.card,
+      color: form.her.target === v ? C.low : C.inkMute,
+      fontSize: 12,
+      fontWeight: 700
+    }
+  }, v)))), /*#__PURE__*/React.createElement("button", {
     onClick: () => onSave(form),
     className: "sans",
     style: {
@@ -57565,7 +57897,7 @@ function SettingsPage({
       fontSize: 11.5,
       color: C.inkMute
     }
-  }, "Weekly & monthly targets")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
+  }, "Period, targets & household goal")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
     hb: "household treat proposer first turns scorer"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -59114,7 +59446,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v370"))))), diagOpen && (() => {
+  }, "v371"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
