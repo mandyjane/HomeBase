@@ -53862,10 +53862,10 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd) {
     const rm = taskMeta(t);
     const add = (doneAt, date) => {
       if (!doneAt) return;
-      const dd = doneOnLocalDay ? doneOnLocalDay(doneAt) : (doneAt || "").slice(0, 10);
+      const dd = toLocalYMD(new Date(doneAt));
+      if (!dd) return;
       if (periodStart && dd < periodStart) return;
       if (periodEnd && dd > periodEnd) return;
-      // Determine points earned by this person
       const ex = t.exceptions && t.exceptions[date];
       const award = ex && ex.award ? ex.award : t.award;
       const myPts = award ? award[who] || 0 : assignee === who ? pts : assignee === "both" ? Math.ceil(pts / 2) : 0;
@@ -58390,7 +58390,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v360"))))), diagOpen && (() => {
+  }, "v361"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
