@@ -14090,6 +14090,7 @@ function App({
               deleteEvent(row.ref, scope);
             }
           },
+          onNag: row.kind === "task" && !isBill(row.ref) ? startNag : null,
           onNextDry: adv && adv.wet && adv.nextDry && row.kind === "task" ? () => {
             setTasks(ts => ts.map(t => t.id === row.ref.id ? {
               ...t,
@@ -14521,6 +14522,7 @@ function App({
            not a misfiled completion against today. */,
         onToggle: row.kind === "task" ? (pointsTo, amt, pdate, pphoto) => toggleDone(row.ref, pointsTo, amt, pdate, pphoto) : null,
         tickInExpansion: true,
+        onNag: row.kind === "task" && !isBill(row.ref) ? startNag : null,
         onEdit: () => {
           if (row.kind === "event") {
             setEditEvent(row.ref);
@@ -14603,6 +14605,7 @@ function App({
            long-horizon items and an accidental tick on one is worse than an
            extra tap. The toggle is unchanged; only the circle moved. */,
         tickInExpansion: true,
+        onNag: startNag,
         onToggleSub: subId => toggleSub(t, subId),
         onEdit: () => {
           setEditTask(t);
@@ -14900,6 +14903,7 @@ function App({
       },
       workCardTint: workCardTint,
       onSaveDayNote: saveDayNote,
+      onNag: startNag,
       onChangeType: ev => setRetype(ev),
       onHistory: ev => setHistFor(ev),
       workHist: workHist,
@@ -21743,6 +21747,7 @@ function AgendaRow({
   onDelete,
   onEndRepeat,
   onEndRepeatAt,
+  onNag,
   onNextDry,
   docSlot,
   compact = false,
@@ -22694,7 +22699,22 @@ function AgendaRow({
       marginLeft: -10,
       marginTop: -0.75
     }
-  })), /*#__PURE__*/React.createElement("button", {
+  })), isTask && !bill && !row.done && onNag && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onNag(t),
+    className: "sans",
+    style: {
+      height: 30,
+      padding: "0 12px",
+      borderRadius: 9,
+      border: "none",
+      background: softTint(personColor(people.her.color)),
+      color: personColor(people.her.color),
+      fontSize: 11.5,
+      fontWeight: 600,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, "Nag"), /*#__PURE__*/React.createElement("button", {
     onClick: onEdit,
     className: "sans",
     style: {
@@ -24688,6 +24708,7 @@ function CalendarTab({
   onDeleteTask,
   onDeleteEvent,
   onEndRepeatAt,
+  onNag,
   today,
   viewFilter,
   onAdd,
@@ -26172,6 +26193,7 @@ function DaySheet({
     showTimes: showTimes,
     onToggle: (pointsTo, amt, pdate, pphoto) => onToggle(t, pointsTo, amt, pdate, pphoto),
     onToggleSub: onToggleSub ? sid => onToggleSub(t, sid) : null,
+    onNag: !isBill(t) ? onNag : null,
     onEdit: () => onEdit(t),
     onDelete: scope => onDeleteTask && onDeleteTask(t, scope),
     onEndRepeatAt: onEndRepeatAt
