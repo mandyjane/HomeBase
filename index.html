@@ -6491,6 +6491,93 @@ function importData(json, {
     keys: staged.length
   };
 }
+
+// v367 · CrashBoundary — "What the duck?" error page with traced confused duck.
+// Class component required for componentDidCatch / getDerivedStateFromError.
+const DUCK_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 387 516" fill="none"><path d="M9,156C12,151 13,151 17,147C21,143 23,142 28,139C33,136 33,137 38,135C43,133 43,132 51,132C59,132 66,132 74,133C82,134 82,135 89,137C96,139 98,140 104,144C110,148 114,151 117,154C120,157 116,156 116,156C116,156 117,154 118,155C119,156 119,155 122,159C125,163 129,168 132,174C135,180 135,181 136,187C137,193 137,196 136,202C135,208 134,209 133,212C132,215 131,214 130,216C129,218 127,215 130,219C133,223 140,232 142,236C144,240 140,237 138,237C136,237 140,237 135,235C130,233 122,230 117,230C112,230 116,232 112,234C108,236 106,237 100,239C94,241 90,241 84,242C78,243 80,243 74,242C68,241 63,241 57,239C51,237 50,237 45,235C40,233 35,230 32,228C29,226 33,228 31,226C29,224 26,224 22,220C18,216 16,214 12,209C8,204 8,204 6,198C4,192 3,187 2,183C1,179 3,184 3,182C3,180 2,179 2,176C2,173 1,173 3,169C5,165 6,161 9,156Z" fill="white" stroke="#333" stroke-width="4.5"/><path d="M151,366C151,367 153,365 154,368C155,371 146,376 155,379C164,382 187,381 196,383C205,385 195,386 198,387C201,388 206,388 208,388C210,388 202,385 209,385C216,385 233,387 240,388C247,389 241,391 241,391C241,391 232,389 242,388C252,387 275,387 285,388C295,389 286,391 286,391C286,391 273,390 287,388C301,386 335,383 349,383C363,383 349,386 350,386C351,386 349,383 354,382C359,381 368,382 374,380C380,378 382,376 383,373C384,370 382,368 378,366C374,364 370,365 367,362C364,359 366,355 366,354C366,353 368,355 366,358C364,361 360,362 357,366C354,370 357,372 353,374C349,376 348,376 341,374C334,372 333,365 323,365C313,365 306,374 296,376C286,378 286,377 279,375C272,373 270,366 263,366C256,366 255,371 248,373C241,375 238,375 231,375C224,375 223,376 216,374C209,372 204,366 199,365C194,364 195,368 191,370C187,372 185,375 180,372C175,369 172,362 170,358C168,354 170,352 169,352C168,352 170,358 167,360C164,362 158,362 154,363C150,364 151,365 151,366Z" fill="#9DD5EA" stroke="#6BB0D0" stroke-width="1.5"/><path d="M210,137C208,139 214,143 209,147C204,151 195,152 189,154C183,156 187,154 183,158C179,162 176,163 172,171C168,179 166,181 164,195C162,209 163,226 161,235C159,244 157,232 155,238C153,244 154,256 154,263C154,270 153,265 156,269C159,273 162,278 167,282C172,286 177,286 180,289C183,292 181,293 180,295C179,297 176,296 176,296C176,296 178,295 178,297C178,299 179,299 178,303C177,307 175,308 173,313C171,318 171,320 170,327C169,334 169,336 170,343C171,350 173,354 176,359C179,364 180,365 183,367C186,369 185,368 188,367C191,366 192,364 195,363C198,362 198,362 202,363C206,364 208,367 213,369C218,371 217,371 224,371C231,371 236,372 243,370C250,368 253,365 258,364C263,363 261,362 266,364C271,366 272,369 279,371C286,373 289,373 296,372C303,371 305,370 310,368C315,366 316,363 319,362C322,361 322,361 325,362C328,363 328,365 333,367C338,369 341,374 348,371C355,368 358,361 363,353C368,345 369,343 371,336C373,329 374,331 374,321C374,311 374,303 372,291C370,279 368,271 366,267C364,263 365,271 363,273C361,275 359,277 356,278C353,279 352,280 348,278C344,276 344,273 337,271C330,269 322,270 318,267C314,264 318,261 319,259C320,257 323,258 324,257C325,256 322,265 322,256C322,247 324,230 324,216C324,202 323,203 321,194C319,185 318,181 314,173C310,165 308,164 301,158C294,152 289,151 281,147C273,143 270,144 263,140C256,136 251,129 247,128C243,127 247,133 245,135C243,137 240,136 236,135C232,134 228,129 226,130C224,131 228,138 226,140C224,142 220,141 216,140C212,139 212,135 210,137Z" fill="#FDE068"/><path d="M182,153C178,156 172,161 168,168C164,175 165,180 164,184C163,188 163,173 162,184C161,195 160,219 158,234C156,249 153,243 151,250C149,257 150,259 151,265C152,271 153,273 156,277C159,281 160,282 163,284C166,286 168,286 170,287C172,288 170,290 171,290C172,290 171,288 173,289C175,290 182,290 182,294C182,298 176,300 173,305C170,310 170,310 168,318C166,326 166,332 166,340C166,348 172,350 170,355C168,360 159,359 155,362C151,365 151,367 150,369C149,371 149,370 150,373C151,376 143,377 156,381C169,385 184,387 211,389C238,391 245,393 279,392C313,391 343,387 365,385C387,383 374,384 378,382C382,380 383,380 385,377C387,374 387,371 385,367C383,363 380,363 375,361C370,359 365,362 364,358C363,354 369,351 372,344C375,337 376,334 377,324C378,314 379,313 377,300C375,287 371,271 368,263C365,255 366,261 365,262C364,263 365,266 362,269C359,272 358,276 353,276C348,276 346,271 339,268C332,265 324,270 321,264C318,258 326,252 327,240C328,228 328,224 327,210C326,196 323,185 321,178C319,171 322,182 319,178C316,174 314,166 309,160C304,154 299,151 295,149C291,147 300,153 293,150C286,147 270,140 263,136C256,132 263,133 262,133C261,133 264,136 260,134C256,132 250,125 246,123C242,121 244,122 243,124C242,126 246,132 242,132C238,132 228,125 224,126C220,127 227,135 223,137C219,139 211,132 207,134C203,136 209,141 207,144C205,147 203,144 198,146C193,148 188,152 184,154C180,156 186,150 182,153Z" fill="none" stroke="#333" stroke-width="4"/><path d="M177,257C176,259 176,260 178,262C180,264 177,265 184,267C191,269 200,272 210,273C220,274 222,274 228,273C234,272 236,270 239,270C242,270 240,273 241,273C242,273 243,272 243,272C243,272 242,273 241,272C240,271 239,271 240,269C241,267 245,265 246,263C247,261 246,260 246,258C246,256 250,258 244,255C238,252 227,245 218,243C209,241 211,242 205,244C199,246 196,249 191,251C186,253 184,252 181,253C178,254 178,255 177,257Z" fill="#F5A623" stroke="#333" stroke-width="2.5"/><circle cx="187" cy="231" r="12" fill="#333"/><circle cx="259" cy="234" r="12" fill="#333"/><circle cx="180" cy="226" r="4" fill="white"/><circle cx="252" cy="228" r="4" fill="white"/><text x="70" y="192" text-anchor="middle" font-family="\'Segoe Script\',\'Comic Sans MS\',\'Marker Felt\',cursive" font-size="38" fill="#333">Ribbit</text></svg>';
+class CrashBoundary extends React.Component {
+  constructor(p) {
+    super(p);
+    this.state = {
+      hasError: false
+    };
+  }
+  static getDerivedStateFromError() {
+    return {
+      hasError: true
+    };
+  }
+  componentDidCatch(e, info) {
+    console.error("CrashBoundary caught:", e, info);
+  }
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    const isSleek = (localStorage.getItem("hb_mood") || "sleek") === "sleek";
+    const bg = isSleek ? "#0e1513" : "#fdf6f0";
+    const ink = isSleek ? "#e0ebe8" : "#2c2c2c";
+    const mute = isSleek ? "#5a7a72" : "#8a7a6e";
+    const hint = isSleek ? "#3a5a52" : "#b0a090";
+    const btnBg = isSleek ? "linear-gradient(135deg,#1bb9a0,#3dd6b8)" : "linear-gradient(135deg,#e25a7c,#f48fb1)";
+    const btnC = isSleek ? "#0e1513" : "#fff";
+    return React.createElement("div", {
+      style: {
+        background: bg,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100vh",
+        padding: 40,
+        textAlign: "center",
+        fontFamily: "'Roboto Condensed',system-ui,sans-serif"
+      }
+    }, React.createElement("h1", {
+      className: "serif",
+      style: {
+        fontSize: 24,
+        fontStyle: "italic",
+        color: ink,
+        marginBottom: 16
+      }
+    }, "What the duck?"), React.createElement("div", {
+      style: {
+        width: 200,
+        marginBottom: 4
+      },
+      dangerouslySetInnerHTML: {
+        __html: DUCK_SVG
+      }
+    }), React.createElement("p", {
+      className: "sans",
+      style: {
+        fontSize: 13,
+        color: mute,
+        lineHeight: 1.5,
+        margin: "12px 0 24px"
+      }
+    }, "Something broke. Your data is safe — just reload and you'll be right back."), React.createElement("button", {
+      className: "sans",
+      onClick: () => location.reload(),
+      style: {
+        background: btnBg,
+        color: btnC,
+        border: "none",
+        borderRadius: 14,
+        padding: "13px 36px",
+        fontSize: 14,
+        fontWeight: 700,
+        cursor: "pointer"
+      }
+    }, "Reload"), React.createElement("p", {
+      className: "sans",
+      style: {
+        fontSize: 10,
+        color: hint,
+        marginTop: 20
+      }
+    }, "If this keeps happening, try clearing your browser cache."));
+  }
+}
 function AppRoot() {
   const [authed, setAuthed] = useState(() => {
     // Check for existing session
@@ -6552,10 +6639,10 @@ function AppRoot() {
   if (!authed) return React.createElement(LoginScreen, {
     onLogin: handleLogin
   });
-  return React.createElement(App, {
+  return React.createElement(CrashBoundary, null, React.createElement(App, {
     sbUserName,
     syncVersion
-  });
+  }));
 }
 function App({
   sbUserName,
@@ -58537,7 +58624,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v366"))))), diagOpen && (() => {
+  }, "v367"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
