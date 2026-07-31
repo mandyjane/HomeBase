@@ -7591,16 +7591,11 @@ function App({
   const [pointsLog, setPointsLog] = useState(() => lsGet("hb_pointsLog", []));
   // v363 · timestamp of last points reset — completed tasks before this are excluded
   const [pointsResetAt, setPointsResetAt] = useState(() => lsGet("hb_pointsResetAt", null));
-  // v365 · Effective cutoff: if pointsResetAt is null (pre-v363 reset), derive from
-  // the oldest pointsLog entry. If pointsLog is also empty and points are 0, everything
-  // was reset and nothing should show. If points > 0 with no log, no reset ever happened.
-  const effectiveResetAt = useMemo(() => {
-    if (pointsResetAt) return pointsResetAt;
-    if (pointsLog.length > 0) return pointsLog[0].date + "T00:00:00";
-    // No log, no timestamp: if points are 0 for both, treat as just-reset
-    if ((points.her || 0) === 0 && (points.him || 0) === 0) return new Date().toISOString();
-    return null; // no reset ever happened
-  }, [pointsResetAt, pointsLog, points.her, points.him]);
+  // v366 · Effective cutoff: only honour an EXPLICIT reset timestamp.
+  // The v365 fallback tried to derive a cutoff from pointsLog or the zero-points
+  // check, but it filtered out real completed tasks. If no explicit reset was ever
+  // recorded, show everything — "too much" is better than "nothing".
+  const effectiveResetAt = pointsResetAt || null;
   // ── THE BONUS LOG *(v196)* ────────────────────────────────────────────────
   // SEPARATE from pointsLog on purpose. pointsLog stores {date,her,him} and MERGES
   // same-day entries into one row — there is nowhere to hang a reason, and no way to
@@ -16131,6 +16126,7 @@ function App({
       rewards: rewards,
       points: points,
       tasks: tasks,
+      bonusLog: bonusLog,
       pointsResetAt: effectiveResetAt,
       pointsPeriods: pointsPeriods,
       goalLog: goalLog,
@@ -16152,6 +16148,7 @@ function App({
       onClose: () => setPersonSheet(null)
     }), completedTasksSheet && /*#__PURE__*/React.createElement(CompletedTasksSheet, {
       tasks: tasks,
+      bonusLog: bonusLog,
       who: completedTasksSheet,
       people: people,
       pointsResetAt: effectiveResetAt,
@@ -53025,6 +53022,7 @@ function PersonSheet({
   onBonus,
   onClose,
   tasks = [],
+  bonusLog = [],
   pointsResetAt = null
 }) {
   const label = who === "shared" ? "Household" : people[who] && people[who].name || who;
@@ -53047,7 +53045,11 @@ function PersonSheet({
   // v360 · Activity tab — completed tasks for the current goal period
   const periodBk = periodBucket(g.period, fp);
   const periodStartDate = periodBk && periodBk.key ? periodBk.key.slice(0, 10) : null;
-  const activityTasks = useMemo(() => collectCompletedTasks(tasks, who, periodStartDate, null, pointsResetAt), [tasks, who, periodStartDate, pointsResetAt]);
+  const activityTasks = useMemo(() => {
+    const t = collectCompletedTasks(tasks, who, periodStartDate, null, pointsResetAt);
+    const b = collectBonusActivity(bonusLog, who, periodStartDate, null, pointsResetAt);
+    return [...t, ...b].sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || ""));
+  }, [tasks, bonusLog, who, periodStartDate, pointsResetAt]);
   return /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
     className: "hb-scrim",
@@ -53356,7 +53358,7 @@ function PersonSheet({
       gap: 8,
       marginBottom: 14
     }
-  }, [[activityTasks.length, C.ink, "Tasks done"], [activityTasks.reduce((s, t) => s + t.points, 0), C.low, "Points earned"], [prog.target, color, "Target"]].map(([n, col, lbl]) => /*#__PURE__*/React.createElement("span", {
+  }, [[activityTasks.filter(t => !t.isBonus).length, C.ink, "Tasks done"], [activityTasks.reduce((s, t) => s + t.points, 0), C.low, "Points earned"], [prog.target, color, "Target"]].map(([n, col, lbl]) => /*#__PURE__*/React.createElement("span", {
     key: lbl,
     style: {
       flex: 1,
@@ -53395,7 +53397,7 @@ function PersonSheet({
       fontSize: 15,
       color: C.inkMute
     }
-  }, "No tasks completed this period")) : /*#__PURE__*/React.createElement("div", {
+  }, "No activity this period")) : /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.card,
       border: `1px solid ${C.rule}`,
@@ -53440,7 +53442,21 @@ function PersonSheet({
       overflow: "hidden",
       textOverflow: "ellipsis"
     }
-  }, t.title), /*#__PURE__*/React.createElement("div", {
+  }, t.title, t.isBonus && /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "inline-block",
+      fontSize: 8,
+      letterSpacing: ".8px",
+      textTransform: "uppercase",
+      background: "rgba(255,193,7,0.15)",
+      color: "#ffc107",
+      borderRadius: 4,
+      padding: "1px 5px",
+      marginLeft: 5,
+      verticalAlign: "middle"
+    }
+  }, "Bonus")), /*#__PURE__*/React.createElement("div", {
     className: "sans",
     style: {
       fontSize: 10,
@@ -53921,11 +53937,44 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd, resetAfter) {
   return results;
 }
 
+// v366 · Collect bonus log entries for the activity timeline.
+// Returns objects shaped like collectCompletedTasks results so they can be merged.
+function collectBonusActivity(bonusLog, who, periodStart, periodEnd, resetAfter) {
+  const results = [];
+  (bonusLog || []).forEach(e => {
+    if (!e || !e.ts) return;
+    const iso = typeof e.ts === "number" ? new Date(e.ts).toISOString() : e.ts;
+    if (resetAfter && iso < resetAfter) return;
+    const dd = toLocalYMD(new Date(iso));
+    if (!dd) return;
+    if (periodStart && dd < periodStart) return;
+    if (periodEnd && dd > periodEnd) return;
+    // Determine points for this person
+    const aw = e.award || {};
+    const myPts = who === "shared" ? (aw.her || 0) + (aw.him || 0) : aw[who] || 0;
+    if (myPts === 0 && who !== "shared") return; // didn't earn anything from this bonus
+    if (e.neg) return; // deductions don't show as activity
+    results.push({
+      title: e.reason || "Bonus",
+      points: myPts,
+      doneAt: iso,
+      doneDate: dd,
+      catIcon: "star",
+      catColor: "#ffc107",
+      category: "Bonus",
+      isBonus: true
+    });
+  });
+  results.sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || ""));
+  return results;
+}
+
 // ─── COMPLETED TASKS SHEET (v360) ────────────────────────────────────────────
 // Opened by tapping a person name on the Tasks tab or Stats tab.
 // Shows ALL completed tasks for that person, all time, most recent first.
 function CompletedTasksSheet({
   tasks,
+  bonusLog = [],
   who,
   people,
   pointsResetAt = null,
@@ -53936,7 +53985,11 @@ function CompletedTasksSheet({
   } = useSwipeToClose(onClose);
   const label = who === "both" ? "Shared" : people[who] && people[who].name || who;
   const color = who === "both" ? C.accent : personColor(people[who].color);
-  const all = collectCompletedTasks(tasks, who, null, null, pointsResetAt);
+  const all = useMemo(() => {
+    const t = collectCompletedTasks(tasks, who, null, null, pointsResetAt);
+    const b = collectBonusActivity(bonusLog, who, null, null, pointsResetAt);
+    return [...t, ...b].sort((a, c) => (c.doneAt || "").localeCompare(a.doneAt || ""));
+  }, [tasks, bonusLog, who, pointsResetAt]);
   const totalPts = all.reduce((s, t) => s + t.points, 0);
   return /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
@@ -53985,14 +54038,14 @@ function CompletedTasksSheet({
       fontSize: 19,
       color: C.ink
     }
-  }, label, "'s completed tasks"), /*#__PURE__*/React.createElement("p", {
+  }, label, "'s activity"), /*#__PURE__*/React.createElement("p", {
     className: "sans",
     style: {
       fontSize: 11,
       color: C.inkMute,
       marginTop: 4
     }
-  }, "All time · ", totalPts, " total points · ", all.length, " tasks")), /*#__PURE__*/React.createElement("div", {
+  }, "All time · ", totalPts, " total points · ", all.filter(t => !t.isBonus).length, " tasks", all.some(t => t.isBonus) ? ` · ${all.filter(t => t.isBonus).length} bonuses` : "")), /*#__PURE__*/React.createElement("div", {
     style: {
       overflowY: "auto",
       padding: "0 16px 22px",
@@ -54055,7 +54108,21 @@ function CompletedTasksSheet({
       overflow: "hidden",
       textOverflow: "ellipsis"
     }
-  }, t.title), /*#__PURE__*/React.createElement("div", {
+  }, t.title, t.isBonus && /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "inline-block",
+      fontSize: 8,
+      letterSpacing: ".8px",
+      textTransform: "uppercase",
+      background: "rgba(255,193,7,0.15)",
+      color: "#ffc107",
+      borderRadius: 4,
+      padding: "1px 5px",
+      marginLeft: 5,
+      verticalAlign: "middle"
+    }
+  }, "Bonus")), /*#__PURE__*/React.createElement("div", {
     className: "sans",
     style: {
       fontSize: 10,
@@ -58420,7 +58487,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v365"))))), diagOpen && (() => {
+  }, "v366"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
