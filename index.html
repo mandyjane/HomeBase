@@ -23393,7 +23393,11 @@ function TaskCard({
         justifyContent: "center",
         flexShrink: 0
       }
-    }, /*#__PURE__*/React.createElement(TrashIcon, null)), task.done && task.doneAt && onSetDoneAt && BILLUI.editPaid && /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement(TrashIcon, null)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1
+      }
+    }), task.done && task.doneAt && onSetDoneAt && BILLUI.editPaid ? /*#__PURE__*/React.createElement("button", {
       onClick: () => setDoneEdit(true),
       "aria-label": "Edit completion date and time",
       className: "sans",
@@ -23439,11 +23443,7 @@ function TaskCard({
       strokeLinecap: "round"
     }, /*#__PURE__*/React.createElement("path", {
       d: "m6 9 6 6 6-6"
-    }))), /*#__PURE__*/React.createElement("span", {
-      style: {
-        flex: 1
-      }
-    }), /*#__PURE__*/React.createElement("button", {
+    }))) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
       type: "button",
       onClick: e => {
         e.stopPropagation();
@@ -23502,7 +23502,7 @@ function TaskCard({
         cursor: "pointer",
         flexShrink: 0
       }
-    }, "Nag"), /*#__PURE__*/React.createElement("button", {
+    }, "Nag")), /*#__PURE__*/React.createElement("button", {
       onClick: () => onEdit(task),
       className: "sans",
       style: {
@@ -56707,7 +56707,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v335"))))), diagOpen && (() => {
+  }, "v336"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
