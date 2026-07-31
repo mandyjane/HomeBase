@@ -6885,9 +6885,12 @@ function App({
   //   "events" — events only (default; an event's time is load-bearing, a chore's isn't)
   //   "all"    — tasks and events
 
-  // ── v343 · CLIENT-SIDE NOTIFICATION SCHEDULING ──────────────────────────────
-  // Phase 2a: fires alerts via service worker showNotification while the app is
-  // open or backgrounded. Requires sw-notif.js deployed alongside index.html.
+  // ── v347 · SERVER PUSH NOTIFICATIONS (Phase 2b) ─────────────────────────────
+  // Client subscribes to push via the service worker, stores the subscription in
+  // Supabase. When alerts change, fire times are upserted into `alert_schedule`.
+  // A Supabase Edge Function (cron every minute) sends push for due alerts.
+  // Client-side setTimeout is kept as a BONUS for when the app is open.
+  const VAPID_PUBLIC = "BG9-5FVxgYGTxkSTHWpxQ-NTKnOQFU6oL1mD7jJxyOijAajvW11G_PDZXAhr-Ry4ti63Uk-QSursRvVo84GhJxM";
   const [notifEnabled, setNotifEnabled] = useState(() => lsGet("hb_notifEnabled", false));
   const [notifPerm, setNotifPerm] = useState(() => {
     try {
@@ -6897,11 +6900,12 @@ function App({
     }
   });
   const notifTimers = useRef([]);
+  const [notifScheduled, setNotifScheduled] = useState(0);
   useEffect(() => {
     lsSet("hb_notifEnabled", notifEnabled);
   }, [notifEnabled]);
 
-  // Register service worker on mount (relative path works on any GitHub Pages layout)
+  // Register service worker on mount
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw-notif.js", {
@@ -6909,38 +6913,79 @@ function App({
       }).catch(e => console.warn("[sw reg]", e.message));
     }
   }, []);
+
+  // Convert VAPID public key to Uint8Array for pushManager.subscribe
+  function urlBase64ToUint8Array(base64String) {
+    const p = "=".repeat((4 - base64String.length % 4) % 4);
+    const b = atob((base64String + p).replace(/-/g, "+").replace(/_/g, "/"));
+    const a = new Uint8Array(b.length);
+    for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
+    return a;
+  }
+
+  // Subscribe to push and store subscription in Supabase
+  async function subscribePush() {
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC)
+        });
+      }
+      if (sbClient && sbHouseholdId && sbUserId) {
+        const keys = sub.toJSON().keys || {};
+        await sbClient.from("push_subscriptions").upsert({
+          endpoint: sub.endpoint,
+          p256dh: keys.p256dh || "",
+          auth: keys.auth || "",
+          household_id: sbHouseholdId,
+          user_id: sbUserId
+        }, {
+          onConflict: "endpoint"
+        });
+      }
+    } catch (e) {
+      console.warn("[push sub]", e);
+    }
+  }
   function toggleNotif() {
     if (notifPerm === "unsupported") return;
     if (!notifEnabled) {
       if (notifPerm === "default" || notifPerm === "prompt") {
         Notification.requestPermission().then(p => {
           setNotifPerm(p);
-          if (p === "granted") setNotifEnabled(true);
+          if (p === "granted") {
+            setNotifEnabled(true);
+            subscribePush();
+          }
         });
       } else if (notifPerm === "granted") {
         setNotifEnabled(true);
+        subscribePush();
       }
     } else {
       setNotifEnabled(false);
     }
   }
 
-  // fireNotif waits for the service worker to be ready before showing.
-  // vibrate + renotify trigger the heads-up banner on Android.
-  // Falls back to new Notification() for desktop browsers without a SW.
+  // fireNotif for client-side (test button + bonus local alerts)
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   async function fireNotif(title, body, tag) {
     try {
       if ("serviceWorker" in navigator) {
         const reg = await navigator.serviceWorker.ready;
-        await reg.showNotification(title, {
+        const opts = {
           body,
           tag,
           icon: "./icon-192.png",
           badge: "./badge-96.png",
-          vibrate: [200, 100, 200],
-          renotify: true,
-          requireInteraction: false
-        });
+          renotify: true
+        };
+        if (!isIOS) opts.vibrate = [200, 100, 200];
+        await reg.showNotification(title, opts);
         return;
       }
     } catch (e) {
@@ -6963,44 +7008,87 @@ function App({
     fireNotif("Home Base", "Notifications are working!", "hb-test");
   }
 
-  // Schedule alerts for the next 24h whenever tasks/events change.
+  // Calculate fire time in ms for an alert
+  function calcFireMs(dateStr, timeStr, a) {
+    const t = a.type === "day_of" && a.time ? a.time : a.type === "at_time" ? timeStr || "09:00" : a.time || timeStr || "09:00";
+    let base = new Date(dateStr + "T" + t + ":00").getTime();
+    if (isNaN(base)) return null;
+    if (a.type === "before" && a.value) {
+      base -= a.value * (a.unit === "minutes" ? 60000 : a.unit === "hours" ? 3600000 : a.unit === "days" ? 86400000 : 0);
+    }
+    return base;
+  }
+
+  // Schedule: upsert to Supabase alert_schedule AND set local timers as bonus.
   useEffect(() => {
     notifTimers.current.forEach(id => clearTimeout(id));
     notifTimers.current = [];
-    if (!notifEnabled || notifPerm !== "granted") return;
+    if (!notifEnabled || notifPerm !== "granted") {
+      setNotifScheduled(0);
+      return;
+    }
     const now = Date.now(),
-      horizon = now + 24 * 60 * 60 * 1000;
-    function schedule(title, body, fireAt, tag) {
-      if (fireAt <= now || fireAt > horizon) return;
-      notifTimers.current.push(setTimeout(() => {
-        fireNotif(title, body, tag);
-      }, fireAt - now));
-    }
-    function calcFire(dateStr, timeStr, a) {
-      const t = a.type === "day_of" && a.time ? a.time : a.type === "at_time" ? timeStr || "09:00" : a.time || timeStr || "09:00";
-      let base = new Date(dateStr + "T" + t + ":00").getTime();
-      if (isNaN(base)) return null;
-      if (a.type === "before" && a.value) {
-        base -= a.value * (a.unit === "minutes" ? 60000 : a.unit === "hours" ? 3600000 : a.unit === "days" ? 86400000 : 0);
-      }
-      return base;
-    }
+      serverHorizon = now + 7 * 24 * 60 * 60 * 1000,
+      localHorizon = now + 24 * 60 * 60 * 1000;
+    const rows = [];
+    let localCount = 0;
     (tasks || []).forEach(t => {
-      if (!t.alerts || !t.alerts.length || t.done) return;
-      if (!t.dueDate) return;
+      if (!t.alerts || !t.alerts.length || t.done || !t.dueDate) return;
       t.alerts.forEach((a, i) => {
-        const ft = calcFire(t.dueDate, t.time, a);
-        if (ft) schedule(t.title, taskCatLabel(t) + " — due " + shortDate(t.dueDate), ft, "hb-t-" + t.id + "-" + i);
+        const ft = calcFireMs(t.dueDate, t.time, a);
+        if (!ft || ft <= now || ft > serverHorizon) return;
+        rows.push({
+          id: "t-" + t.id + "-" + i,
+          fire_at: new Date(ft).toISOString(),
+          title: t.title,
+          body: taskCatLabel(t) + " — due " + shortDate(t.dueDate),
+          household_id: sbHouseholdId,
+          sent: false
+        });
+        if (ft <= localHorizon) {
+          localCount++;
+          notifTimers.current.push(setTimeout(() => {
+            fireNotif(t.title, taskCatLabel(t) + " — due " + shortDate(t.dueDate), "hb-t-" + t.id + "-" + i);
+          }, ft - now));
+        }
       });
     });
     (events || []).forEach(e => {
-      if (!e.alerts || !e.alerts.length) return;
-      if (!e.date) return;
+      if (!e.alerts || !e.alerts.length || !e.date) return;
       e.alerts.forEach((a, i) => {
-        const ft = calcFire(e.date, e.time, a);
-        if (ft) schedule(e.title, (e.category || "Event") + " — " + shortDate(e.date), ft, "hb-e-" + e.id + "-" + i);
+        const ft = calcFireMs(e.date, e.time, a);
+        if (!ft || ft <= now || ft > serverHorizon) return;
+        rows.push({
+          id: "e-" + e.id + "-" + i,
+          fire_at: new Date(ft).toISOString(),
+          title: e.title,
+          body: (e.category || "Event") + " — " + shortDate(e.date),
+          household_id: sbHouseholdId,
+          sent: false
+        });
+        if (ft <= localHorizon) {
+          localCount++;
+          notifTimers.current.push(setTimeout(() => {
+            fireNotif(e.title, (e.category || "Event") + " — " + shortDate(e.date), "hb-e-" + e.id + "-" + i);
+          }, ft - now));
+        }
       });
     });
+    setNotifScheduled(localCount);
+
+    // Upsert to Supabase (server delivers even when app is closed)
+    if (sbClient && sbHouseholdId && rows.length > 0) {
+      (async () => {
+        try {
+          await sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false);
+          await sbClient.from("alert_schedule").upsert(rows, {
+            onConflict: "id"
+          });
+        } catch (e) {
+          console.warn("[alert_schedule]", e);
+        }
+      })();
+    }
     return () => {
       notifTimers.current.forEach(id => clearTimeout(id));
       notifTimers.current = [];
@@ -57113,7 +57201,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v345"))))), diagOpen && (() => {
+  }, "v347"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
