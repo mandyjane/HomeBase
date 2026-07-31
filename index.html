@@ -8302,15 +8302,15 @@ function App({
     setPointsLog([]);
     showToast("Points reset", "info");
   }
-  function updateAlerts(item, alerts, isEvent) {
-    if (isEvent) setEvents(es => es.map(e => e.id === item.id ? {
-      ...e,
-      alerts
-    } : e));else setTasks(ts => ts.map(t => t.id === item.id ? {
-      ...t,
-      alerts
-    } : t));
-  }
+  // v337 · register alert-save callbacks at module scope
+  _saveTaskAlerts = (item, alerts) => setTasks(ts => ts.map(t => t.id === item.id ? {
+    ...t,
+    alerts
+  } : t));
+  _saveEventAlerts = (item, alerts) => setEvents(es => es.map(e => e.id === item.id ? {
+    ...e,
+    alerts
+  } : e));
   function clearRewardHistory() {
     const before = events.length;
     const kept = events.filter(ev => ev.category !== "Reward");
@@ -15893,6 +15893,7 @@ function EventCard({
 }) {
   const [open, setOpen] = useState(false);
   const [delPrompt, setDelPrompt] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
   // v181 · tapToEdit (day-sheet) → a card tap opens the edit modal directly instead of the
   // inline expand panel. Work tab leaves it false, so tap still expands there.
   const cardTap = tapToEdit ? () => onEdit && onEdit(ev) : () => setOpen(o => !o);
@@ -17070,6 +17071,51 @@ function EventCard({
       flex: 1
     }
   }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: e => {
+      e.stopPropagation();
+      setShowNotif(true);
+    },
+    style: {
+      width: 32,
+      height: 32,
+      borderRadius: 9,
+      border: "none",
+      background: "rgba(255,255,255,0.05)",
+      color: C.inkMute,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+      position: "relative",
+      padding: 0
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "15",
+    height: "15",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M13.73 21a2 2 0 0 1-3.46 0"
+  })), (!ev.alerts || ev.alerts.length === 0) && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      width: 20,
+      height: 1.5,
+      background: C.inkMute,
+      transform: "rotate(-45deg)",
+      top: "50%",
+      left: "50%",
+      marginLeft: -10,
+      marginTop: -0.75
+    }
+  })), /*#__PURE__*/React.createElement("button", {
     onClick: () => onEdit(ev),
     className: "sans",
     style: {
@@ -17084,7 +17130,16 @@ function EventCard({
       cursor: "pointer",
       flexShrink: 0
     }
-  }, "Edit")))), delDialog);
+  }, "Edit")))), delDialog, /*#__PURE__*/React.createElement(NotifSheet, {
+    open: showNotif,
+    onClose: () => setShowNotif(false),
+    title: ev.title,
+    alerts: ev.alerts || [],
+    onSave: a => {
+      saveItemAlerts(ev, a, true);
+    },
+    isBill: false
+  }));
 }
 
 // ─── LEVEL-UP BURST (center celebratory pop-over, auto-dismiss) ───────────────
@@ -22673,7 +22728,16 @@ function AgendaRow({
       strokeLinecap: "round",
       strokeLinejoin: "round"
     }))), row.done || celebrate ? bill ? "Paid" : "Done" : bill ? "Mark paid" : "Mark done");
-  })()), /*#__PURE__*/React.createElement(ConfirmDelete, {
+  })()), /*#__PURE__*/React.createElement(NotifSheet, {
+    open: showNotif,
+    onClose: () => setShowNotif(false),
+    title: row.title || t.title,
+    alerts: t.alerts || [],
+    onSave: a => {
+      saveItemAlerts(t, a, !isTask);
+    },
+    isBill: bill
+  }), /*#__PURE__*/React.createElement(ConfirmDelete, {
     open: delPrompt,
     title: recurs ? "Delete which?" : isTask ? bill ? "Delete this bill?" : "Delete this task?" : "Delete this event?",
     body: recurs ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", {
@@ -23518,7 +23582,16 @@ function TaskCard({
         cursor: "pointer",
         flexShrink: 0
       }
-    }, "Edit")))), /*#__PURE__*/React.createElement(DoneEditSheet, {
+    }, "Edit")))), /*#__PURE__*/React.createElement(NotifSheet, {
+      open: showNotif,
+      onClose: () => setShowNotif(false),
+      title: task.title,
+      alerts: task.alerts || [],
+      onSave: a => {
+        saveItemAlerts(task, a, false);
+      },
+      isBill: bill
+    }), /*#__PURE__*/React.createElement(DoneEditSheet, {
       key: "de" + (task._seriesId || task.id) + "@" + (task._occDate || task.dueDate),
       open: doneEdit,
       task: task,
@@ -46380,6 +46453,15 @@ function NotifSheet({
 // `isBill` switches to day-based options + time picker.
 // Stores an array of alert objects on the item: [{type,value,unit,time?}]
 // Max 5 alerts. Phase 1 = UI only; Phase 2 wires push delivery.
+
+// ── ALERT SAVE REGISTRY *(v337)* ─────────────────────────────────────────────
+// Module-scope callbacks set by App so any component can save alerts without
+// prop threading (which caused crashes in v334).
+let _saveTaskAlerts = null;
+let _saveEventAlerts = null;
+function saveItemAlerts(item, alerts, isEvent) {
+  if (isEvent && _saveEventAlerts) _saveEventAlerts(item, alerts);else if (!isEvent && _saveTaskAlerts) _saveTaskAlerts(item, alerts);
+}
 function AlertsEditor({
   alerts = [],
   onChange,
@@ -56707,7 +56789,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v336"))))), diagOpen && (() => {
+  }, "v337"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
