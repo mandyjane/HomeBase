@@ -8808,7 +8808,8 @@ function App({
       previousTreat: prev,
       requestedAt: new Date().toISOString(),
       status: "pending",
-      resolvedBy: null
+      resolvedBy: null,
+      submittedBy: currentUser
     });
     setTreatRequests(next);
     showToast("Sent for approval", "info");
@@ -8893,7 +8894,8 @@ function App({
             requestedAt: new Date().toISOString(),
             status: "pending",
             resolvedBy: null,
-            counterFrom: currentUser === "her" ? "her" : "him"
+            counterFrom: currentUser === "her" ? "her" : "him",
+            submittedBy: currentUser
           });
           showToast("Counter-proposal sent", "info");
         }
@@ -14479,7 +14481,7 @@ function App({
           flexShrink: 0
         }
       }, dl === 0 ? "Last day" : dl <= 1 ? "1d left" : `${dl}d left`);
-    })())))), treatApproval && treatRequests.filter(r => r.status === "pending").map(req => /*#__PURE__*/React.createElement(TreatApprovalCard, {
+    })())))), treatApproval && treatRequests.filter(r => r.status === "pending" && (currentUser === null || r.submittedBy !== currentUser)).map(req => /*#__PURE__*/React.createElement(TreatApprovalCard, {
       key: req.id,
       req: req,
       people: people,
@@ -59921,7 +59923,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v377"))))), diagOpen && (() => {
+  }, "v378"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
