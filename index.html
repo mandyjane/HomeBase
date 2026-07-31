@@ -8302,6 +8302,15 @@ function App({
     setPointsLog([]);
     showToast("Points reset", "info");
   }
+  function updateAlerts(item, alerts, isEvent) {
+    if (isEvent) setEvents(es => es.map(e => e.id === item.id ? {
+      ...e,
+      alerts
+    } : e));else setTasks(ts => ts.map(t => t.id === item.id ? {
+      ...t,
+      alerts
+    } : t));
+  }
   function clearRewardHistory() {
     const before = events.length;
     const kept = events.filter(ev => ev.category !== "Reward");
