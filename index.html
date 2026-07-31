@@ -53869,6 +53869,12 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd) {
       const ex = t.exceptions && t.exceptions[date];
       const award = ex && ex.award ? ex.award : t.award;
       const myPts = award ? award[who] || 0 : assignee === who ? pts : assignee === "both" ? Math.ceil(pts / 2) : 0;
+      // v362 · If assigned to "both" but awarded to only one person, skip for the
+      // person who got nothing. A task with 0 points total still shows for both.
+      if (assignee === "both" && award) {
+        const totalAwarded = (award.her || 0) + (award.him || 0);
+        if (totalAwarded > 0 && (award[who] || 0) === 0) return;
+      }
       results.push({
         title: t.title,
         points: myPts,
@@ -58390,7 +58396,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v361"))))), diagOpen && (() => {
+  }, "v362"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
