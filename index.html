@@ -7591,11 +7591,63 @@ function App({
   const [pointsLog, setPointsLog] = useState(() => lsGet("hb_pointsLog", []));
   // v363 · timestamp of last points reset — completed tasks before this are excluded
   const [pointsResetAt, setPointsResetAt] = useState(() => lsGet("hb_pointsResetAt", null));
-  // v366 · Effective cutoff: only honour an EXPLICIT reset timestamp.
-  // The v365 fallback tried to derive a cutoff from pointsLog or the zero-points
-  // check, but it filtered out real completed tasks. If no explicit reset was ever
-  // recorded, show everything — "too much" is better than "nothing".
-  const effectiveResetAt = pointsResetAt || null;
+  // v366 · Effective cutoff for pre-v363 data (pointsResetAt was never recorded).
+  // Walk all completed tasks + bonuses newest→oldest, accumulate per-person points.
+  // When adding an item would exceed either person's current balance, everything
+  // older is pre-reset. Store the result so this only runs once.
+  const effectiveResetAt = useMemo(() => {
+    if (pointsResetAt) return pointsResetAt;
+    const herPts = points.her || 0,
+      himPts = points.him || 0;
+    if (herPts === 0 && himPts === 0) return new Date().toISOString();
+    // Collect every point-earning event (tasks + bonuses) with per-person split
+    const items = [];
+    (tasks || []).forEach(t => {
+      if (!t || isBill(t)) return;
+      const addItem = (doneAt, date) => {
+        if (!doneAt) return;
+        const ex = t.exceptions && t.exceptions[date];
+        const aw = ex && ex.award ? ex.award : t.award;
+        const pts = t.points || 0;
+        const asgn = t.assignee || "both";
+        const her = aw ? aw.her || 0 : asgn === "her" ? pts : asgn === "both" ? Math.ceil(pts / 2) : 0;
+        const him = aw ? aw.him || 0 : asgn === "him" ? pts : asgn === "both" ? Math.floor(pts / 2) : 0;
+        if (her > 0 || him > 0) items.push({
+          doneAt,
+          her,
+          him
+        });
+      };
+      if (t.done && t.doneAt) addItem(t.doneAt, t.dueDate);
+      if (t.exceptions) Object.entries(t.exceptions).forEach(([d, ex]) => {
+        if (ex && ex.done && !ex.deleted && ex.doneAt) addItem(ex.doneAt, d);
+      });
+    });
+    (bonusLog || []).forEach(e => {
+      if (!e || !e.ts || e.neg) return;
+      const iso = typeof e.ts === "number" ? new Date(e.ts).toISOString() : e.ts;
+      const aw = e.award || {};
+      if ((aw.her || 0) > 0 || (aw.him || 0) > 0) items.push({
+        doneAt: iso,
+        her: aw.her || 0,
+        him: aw.him || 0
+      });
+    });
+    items.sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || ""));
+    // Walk newest→oldest. Track the last item whose cumulative sum fits.
+    let hS = 0,
+      mS = 0,
+      cutoff = null;
+    for (const it of items) {
+      if (hS + it.her > herPts || mS + it.him > himPts) {
+        break;
+      }
+      hS += it.her;
+      mS += it.him;
+      cutoff = it.doneAt;
+    }
+    return cutoff; // null if sum never exceeded = no reset ever happened
+  }, [pointsResetAt, tasks, bonusLog, points.her, points.him]);
   // ── THE BONUS LOG *(v196)* ────────────────────────────────────────────────
   // SEPARATE from pointsLog on purpose. pointsLog stores {date,her,him} and MERGES
   // same-day entries into one row — there is nowhere to hang a reason, and no way to
