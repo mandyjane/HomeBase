@@ -25843,6 +25843,7 @@ function CalendarTab({
     onDeleteTask: onDeleteTask,
     onDeleteEvent: onDeleteEvent,
     onEndRepeatAt: onEndRepeatAt,
+    onNag: onNag,
     workCardTint: workCardTint,
     onChangeType: onChangeType,
     onHistory: onHistory,
@@ -26058,6 +26059,7 @@ function DaySheet({
   onDeleteTask,
   onDeleteEvent,
   onEndRepeatAt,
+  onNag,
   billPayer = true,
   workCardTint = "neutral",
   onEditDayNote,
@@ -57240,7 +57242,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v353"))))), diagOpen && (() => {
+  }, "v354"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
