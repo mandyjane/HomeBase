@@ -7589,6 +7589,8 @@ function App({
     return Number.isInteger(v) && v >= 0 && v <= 6 ? v : REWARD_RESET_DEFAULT;
   })()));
   const [pointsLog, setPointsLog] = useState(() => lsGet("hb_pointsLog", []));
+  // v363 · timestamp of last points reset — completed tasks before this are excluded
+  const [pointsResetAt, setPointsResetAt] = useState(() => lsGet("hb_pointsResetAt", null));
   // ── THE BONUS LOG *(v196)* ────────────────────────────────────────────────
   // SEPARATE from pointsLog on purpose. pointsLog stores {date,her,him} and MERGES
   // same-day entries into one row — there is nowhere to hang a reason, and no way to
@@ -8002,6 +8004,9 @@ function App({
   useEffect(() => {
     lsSet("hb_pointsLog", pointsLog);
   }, [pointsLog]);
+  useEffect(() => {
+    lsSet("hb_pointsResetAt", pointsResetAt);
+  }, [pointsResetAt]);
   useEffect(() => {
     lsSet("hb_bonusLog", bonusLog);
   }, [bonusLog]);
@@ -8562,6 +8567,7 @@ function App({
     });
     setPointsPeriods(freshPeriods(null, rewardReset));
     setPointsLog([]);
+    setPointsResetAt(new Date().toISOString());
     showToast("Points reset", "info");
   }
   // v337 · register alert-save callbacks at module scope
@@ -16115,6 +16121,7 @@ function App({
       rewards: rewards,
       points: points,
       tasks: tasks,
+      pointsResetAt: pointsResetAt,
       pointsPeriods: pointsPeriods,
       goalLog: goalLog,
       rewardReset: rewardReset,
@@ -16137,6 +16144,7 @@ function App({
       tasks: tasks,
       who: completedTasksSheet,
       people: people,
+      pointsResetAt: pointsResetAt,
       onClose: () => setCompletedTasksSheet(null)
     }), pinSheet && /*#__PURE__*/React.createElement(PinSheet, {
       title: pinSheet.title || "Enter PIN",
@@ -53006,7 +53014,8 @@ function PersonSheet({
   onClaim,
   onBonus,
   onClose,
-  tasks = []
+  tasks = [],
+  pointsResetAt = null
 }) {
   const label = who === "shared" ? "Household" : people[who] && people[who].name || who;
   const color = who === "shared" ? C.accent : personColor(people[who].color);
@@ -53028,7 +53037,7 @@ function PersonSheet({
   // v360 · Activity tab — completed tasks for the current goal period
   const periodBk = periodBucket(g.period, fp);
   const periodStartDate = periodBk && periodBk.key ? periodBk.key.slice(0, 10) : null;
-  const activityTasks = useMemo(() => collectCompletedTasks(tasks, who, periodStartDate, null), [tasks, who, periodStartDate]);
+  const activityTasks = useMemo(() => collectCompletedTasks(tasks, who, periodStartDate, null, pointsResetAt), [tasks, who, periodStartDate, pointsResetAt]);
   return /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
     className: "hb-scrim",
@@ -53851,7 +53860,7 @@ function ChangePinSheet({
 // ─── COMPLETED TASKS COLLECTOR (v360) ────────────────────────────────────────
 // Collects all completed tasks for a person, with their points and completion dates.
 // Returns [{title, points, doneAt, doneDate, catIcon, catColor, category}], newest first.
-function collectCompletedTasks(tasks, who, periodStart, periodEnd) {
+function collectCompletedTasks(tasks, who, periodStart, periodEnd, resetAfter) {
   const results = [];
   (tasks || []).forEach(t => {
     if (!t || isBill(t)) return;
@@ -53862,6 +53871,8 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd) {
     const rm = taskMeta(t);
     const add = (doneAt, date) => {
       if (!doneAt) return;
+      // v363 · skip tasks completed before the last points reset
+      if (resetAfter && doneAt < resetAfter) return;
       const dd = toLocalYMD(new Date(doneAt));
       if (!dd) return;
       if (periodStart && dd < periodStart) return;
@@ -53905,6 +53916,7 @@ function CompletedTasksSheet({
   tasks,
   who,
   people,
+  pointsResetAt = null,
   onClose
 }) {
   const {
@@ -53912,7 +53924,7 @@ function CompletedTasksSheet({
   } = useSwipeToClose(onClose);
   const label = who === "both" ? "Shared" : people[who] && people[who].name || who;
   const color = who === "both" ? C.accent : personColor(people[who].color);
-  const all = collectCompletedTasks(tasks, who, null, null);
+  const all = collectCompletedTasks(tasks, who, null, null, pointsResetAt);
   const totalPts = all.reduce((s, t) => s + t.points, 0);
   return /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
@@ -58396,7 +58408,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v362"))))), diagOpen && (() => {
+  }, "v363"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
