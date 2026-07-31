@@ -6884,6 +6884,228 @@ function App({
   //   "never"  — neither
   //   "events" — events only (default; an event's time is load-bearing, a chore's isn't)
   //   "all"    — tasks and events
+
+  // ── v347 · SERVER PUSH NOTIFICATIONS (Phase 2b) ─────────────────────────────
+  // Client subscribes to push via the service worker, stores the subscription in
+  // Supabase. When alerts change, fire times are upserted into `alert_schedule`.
+  // A Supabase Edge Function (cron every minute) sends push for due alerts.
+  // Client-side setTimeout is kept as a BONUS for when the app is open.
+  const VAPID_PUBLIC = "BG9-5FVxgYGTxkSTHWpxQ-NTKnOQFU6oL1mD7jJxyOijAajvW11G_PDZXAhr-Ry4ti63Uk-QSursRvVo84GhJxM";
+  const [notifEnabled, setNotifEnabled] = useState(() => lsGet("hb_notifEnabled", false));
+  const [notifPerm, setNotifPerm] = useState(() => {
+    try {
+      return typeof Notification !== "undefined" ? Notification.permission : "unsupported";
+    } catch {
+      return "unsupported";
+    }
+  });
+  const notifTimers = useRef([]);
+  const [notifScheduled, setNotifScheduled] = useState(0);
+  useEffect(() => {
+    lsSet("hb_notifEnabled", notifEnabled);
+  }, [notifEnabled]);
+
+  // Register service worker on mount
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw-notif.js", {
+        scope: "./"
+      }).catch(e => console.warn("[sw reg]", e.message));
+    }
+  }, []);
+
+  // Convert VAPID public key to Uint8Array for pushManager.subscribe
+  function urlBase64ToUint8Array(base64String) {
+    const p = "=".repeat((4 - base64String.length % 4) % 4);
+    const b = atob((base64String + p).replace(/-/g, "+").replace(/_/g, "/"));
+    const a = new Uint8Array(b.length);
+    for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
+    return a;
+  }
+
+  // Subscribe to push and store subscription in Supabase
+  async function subscribePush() {
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        showToast("Push not supported on this browser", "warn");
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC)
+        });
+      }
+      if (sbClient && sbHouseholdId && sbUserId) {
+        const keys = sub.toJSON().keys || {};
+        const {
+          error
+        } = await sbClient.from("push_subscriptions").upsert({
+          endpoint: sub.endpoint,
+          p256dh: keys.p256dh || "",
+          auth: keys.auth || "",
+          household_id: sbHouseholdId,
+          user_id: sbUserId
+        }, {
+          onConflict: "endpoint"
+        });
+        if (error) showToast("Sub save error: " + error.message, "warn");else showToast("Push subscription saved", "success");
+      } else {
+        showToast("No Supabase connection (sb:" + !!sbClient + " hh:" + !!sbHouseholdId + " u:" + !!sbUserId + ")", "warn");
+      }
+    } catch (e) {
+      showToast("Push sub error: " + e.message, "warn");
+      console.warn("[push sub]", e);
+    }
+  }
+  function toggleNotif() {
+    if (notifPerm === "unsupported") return;
+    if (!notifEnabled) {
+      if (notifPerm === "default" || notifPerm === "prompt") {
+        Notification.requestPermission().then(p => {
+          setNotifPerm(p);
+          if (p === "granted") {
+            setNotifEnabled(true);
+            subscribePush();
+          }
+        });
+      } else if (notifPerm === "granted") {
+        setNotifEnabled(true);
+        subscribePush();
+      }
+    } else {
+      setNotifEnabled(false);
+    }
+  }
+
+  // fireNotif for client-side (test button + bonus local alerts)
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  async function fireNotif(title, body, tag) {
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        const opts = {
+          body,
+          tag,
+          icon: "./icon-192.png",
+          badge: "./badge-96.png",
+          renotify: true
+        };
+        if (!isIOS) opts.vibrate = [200, 100, 200];
+        await reg.showNotification(title, opts);
+        return;
+      }
+    } catch (e) {
+      console.warn("[notif sw]", e);
+    }
+    try {
+      new Notification(title, {
+        body,
+        tag
+      });
+    } catch (e2) {
+      console.warn("[notif fallback]", e2);
+    }
+  }
+  function testNotif() {
+    if (notifPerm !== "granted") {
+      toggleNotif();
+      return;
+    }
+    fireNotif("Home Base", "Notifications are working!", "hb-test");
+  }
+
+  // Calculate fire time in ms for an alert
+  function calcFireMs(dateStr, timeStr, a) {
+    const t = a.type === "day_of" && a.time ? a.time : a.type === "at_time" ? timeStr || "09:00" : a.time || timeStr || "09:00";
+    let base = new Date(dateStr + "T" + t + ":00").getTime();
+    if (isNaN(base)) return null;
+    if (a.type === "before" && a.value) {
+      base -= a.value * (a.unit === "minutes" ? 60000 : a.unit === "hours" ? 3600000 : a.unit === "days" ? 86400000 : 0);
+    }
+    return base;
+  }
+
+  // Schedule: upsert to Supabase alert_schedule AND set local timers as bonus.
+  useEffect(() => {
+    notifTimers.current.forEach(id => clearTimeout(id));
+    notifTimers.current = [];
+    if (!notifEnabled || notifPerm !== "granted") {
+      setNotifScheduled(0);
+      return;
+    }
+    const now = Date.now(),
+      serverHorizon = now + 7 * 24 * 60 * 60 * 1000,
+      localHorizon = now + 24 * 60 * 60 * 1000;
+    const rows = [];
+    let localCount = 0;
+    (tasks || []).forEach(t => {
+      if (!t.alerts || !t.alerts.length || t.done || !t.dueDate) return;
+      t.alerts.forEach((a, i) => {
+        const ft = calcFireMs(t.dueDate, t.time, a);
+        if (!ft || ft <= now || ft > serverHorizon) return;
+        rows.push({
+          id: "t-" + t.id + "-" + i,
+          fire_at: new Date(ft).toISOString(),
+          title: t.title,
+          body: taskCatLabel(t) + " — due " + shortDate(t.dueDate),
+          household_id: sbHouseholdId,
+          sent: false
+        });
+        if (ft <= localHorizon) {
+          localCount++;
+          notifTimers.current.push(setTimeout(() => {
+            fireNotif(t.title, taskCatLabel(t) + " — due " + shortDate(t.dueDate), "hb-t-" + t.id + "-" + i);
+          }, ft - now));
+        }
+      });
+    });
+    (events || []).forEach(e => {
+      if (!e.alerts || !e.alerts.length || !e.date) return;
+      e.alerts.forEach((a, i) => {
+        const ft = calcFireMs(e.date, e.time, a);
+        if (!ft || ft <= now || ft > serverHorizon) return;
+        rows.push({
+          id: "e-" + e.id + "-" + i,
+          fire_at: new Date(ft).toISOString(),
+          title: e.title,
+          body: (e.category || "Event") + " — " + shortDate(e.date),
+          household_id: sbHouseholdId,
+          sent: false
+        });
+        if (ft <= localHorizon) {
+          localCount++;
+          notifTimers.current.push(setTimeout(() => {
+            fireNotif(e.title, (e.category || "Event") + " — " + shortDate(e.date), "hb-e-" + e.id + "-" + i);
+          }, ft - now));
+        }
+      });
+    });
+    setNotifScheduled(localCount);
+
+    // Upsert to Supabase (server delivers even when app is closed)
+    if (sbClient && sbHouseholdId && rows.length > 0) {
+      (async () => {
+        try {
+          await sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false);
+          const {
+            error
+          } = await sbClient.from("alert_schedule").upsert(rows, {
+            onConflict: "id"
+          });
+          if (error) console.warn("[alert_schedule]", error.message);
+        } catch (e) {
+          console.warn("[alert_schedule]", e);
+        }
+      })();
+    }
+    return () => {
+      notifTimers.current.forEach(id => clearTimeout(id));
+      notifTimers.current = [];
+    };
+  }, [notifEnabled, notifPerm, tasks, events]);
   // Always rendered muted grey italic, never the bright accent — for BOTH kinds.
   // Migrated once from the old showTaskTime boolean: true → "all", false → "events"
   // (which reproduces the previous behaviour exactly, since events always showed).
@@ -8319,12 +8541,17 @@ function App({
     ...e,
     alerts
   } : e));
+  // v340 · Clear BOTH reward events AND the goal record log. Before this, the
+  // Record tab in each person's sheet kept showing "Met"/"Missed"/"Claimed" rows
+  // even after tapping "Clear reward history" in Settings → Data.
   function clearRewardHistory() {
     const before = events.length;
     const kept = events.filter(ev => ev.category !== "Reward");
     setEvents(kept);
-    const removed = before - kept.length;
-    showToast(removed ? "Cleared " + removed + " reward" + (removed > 1 ? "s" : "") + " from history" : "No rewards to clear", removed ? "success" : "info");
+    const logBefore = (goalLog || []).length;
+    setGoalLog([]);
+    const removed = before - kept.length + logBefore;
+    showToast(removed ? "Cleared reward history" : "No rewards to clear", removed ? "success" : "info");
   }
 
   // Cash in a met reward goal: create a Reward event for the treat, and bank the
@@ -8458,17 +8685,41 @@ function App({
   // a name and matching on text would rename the wrong row. Only ever touches `treat`;
   // `claimed`, score, target and dates are history and stay put. Called from BOTH save
   // paths (event and task) because a reward can be claimed either way.
-  function syncGoalTreatName(item) {
-    const gid = item && item.goalEntryId,
-      name = (item && item.title || "").trim();
-    if (!gid || !name) return;
+  // v340 · Enhanced with fallback for pre-v273 tasks that lack goalEntryId.
+  // Those tasks were claimed before the linking ID was added, so the primary
+  // match fails silently. The fallback finds the entry by who + old title.
+  function syncGoalTreatName(item, oldTitle) {
+    const name = (item && item.title || "").trim();
+    if (!name) return;
+    const gid = item && item.goalEntryId;
+    const who = item && (item.assignee === "both" ? "shared" : item.assignee);
     setGoalLog(prev => {
       const rows = prev || [];
-      if (!rows.some(e => e.id === gid && e.treat !== name)) return prev; // no-op keeps the reference
-      return rows.map(e => e.id === gid ? {
-        ...e,
-        treat: name
-      } : e);
+      // Primary: match by goalEntryId (v273+)
+      if (gid && rows.some(e => e.id === gid && e.treat !== name)) {
+        return rows.map(e => e.id === gid ? {
+          ...e,
+          treat: name
+        } : e);
+      }
+      // Fallback: pre-v273 tasks without goalEntryId — match by who + old title
+      if (!gid && oldTitle && who) {
+        const oldTrim = oldTitle.trim();
+        if (rows.some(e => e.who === who && e.treat === oldTrim && e.treat !== name)) {
+          let matched = false;
+          return rows.map(e => {
+            if (!matched && e.who === who && e.treat === oldTrim) {
+              matched = true;
+              return {
+                ...e,
+                treat: name
+              };
+            }
+            return e;
+          });
+        }
+      }
+      return prev;
     });
   }
 
@@ -9282,10 +9533,11 @@ function App({
         showToast(savedLabel(clean, "updated"), "success");
         // v273 · a reward claimed AS A TASK and renamed here renames its Record row too.
         // Merged with `orig` for the same reason as the event path: the form drops the link.
+        // v340 · pass orig.title so the fallback can match pre-v273 tasks by old name.
         syncGoalTreatName({
           ...orig,
           ...clean
-        });
+        }, orig && orig.title);
       }
     } else {
       // ── ADDED ALREADY PAID *(v120)* ─────────────────────────────────────────────────
@@ -9686,10 +9938,11 @@ function App({
         showToast("Event updated", "success");
         // v273 · a claimed reward renamed here renames its Record row too. Reads the
         // MERGED item (orig carries goalEntryId; the form does not round-trip it).
+        // v340 · pass orig.title so the fallback can match pre-v273 events by old name.
         syncGoalTreatName({
           ...orig,
           ...clean
-        });
+        }, orig && orig.title);
       }
     } else {
       setEvents(es => [...es, {
@@ -11160,6 +11413,27 @@ function App({
   }));
   // Completed-today tasks (any due date) sorted by when they were done.
   doneTodayTasks.sort((a, b) => (a.doneAt || "").localeCompare(b.doneAt || "")).forEach(t => homeAgenda.push({
+    kind: "task",
+    ref: t,
+    title: t.title,
+    sub: `${taskCatLabel(t)} · ${assigneeName(t.assignee, people)}`,
+    subLabel: taskCatLabel(t),
+    pName: assigneeName(t.assignee, people),
+    pColor: assigneeColor(t.assignee, people),
+    date: t.dueDate,
+    dotColor: taskMeta(t).grad[0],
+    overdue: false,
+    done: true,
+    doneAt: t.doneAt,
+    taskTime: t.time ? fmtTime(t.time) : null
+  }));
+  // v340 · EARLY-DONE TASKS DUE TODAY. The ring counts listTasks where
+  // dueDate===today, so a task due today but completed on a previous day is
+  // counted as "done" in the ring. Without this block the task was invisible on
+  // the agenda, creating a phantom "1 done" the user could not find. Show these
+  // struck-through at the end, after doneTodayTasks and before events.
+  const earlyDoneKeys = new Set([...doneTodayKeys, ...overdueSeriesIds]);
+  listTasks.filter(t => t.dueDate === today && t.done && !earlyDoneKeys.has(occKey(t)) && !doneTodayKeys.has(occKey(t))).sort((a, b) => (a.doneAt || "").localeCompare(b.doneAt || "")).forEach(t => homeAgenda.push({
     kind: "task",
     ref: t,
     title: t.title,
@@ -14064,6 +14338,7 @@ function App({
               deleteEvent(row.ref, scope);
             }
           },
+          onNag: row.kind === "task" && !isBill(row.ref) ? startNag : null,
           onNextDry: adv && adv.wet && adv.nextDry && row.kind === "task" ? () => {
             setTasks(ts => ts.map(t => t.id === row.ref.id ? {
               ...t,
@@ -14495,6 +14770,7 @@ function App({
            not a misfiled completion against today. */,
         onToggle: row.kind === "task" ? (pointsTo, amt, pdate, pphoto) => toggleDone(row.ref, pointsTo, amt, pdate, pphoto) : null,
         tickInExpansion: true,
+        onNag: row.kind === "task" && !isBill(row.ref) ? startNag : null,
         onEdit: () => {
           if (row.kind === "event") {
             setEditEvent(row.ref);
@@ -14577,6 +14853,7 @@ function App({
            long-horizon items and an accidental tick on one is worse than an
            extra tap. The toggle is unchanged; only the circle moved. */,
         tickInExpansion: true,
+        onNag: startNag,
         onToggleSub: subId => toggleSub(t, subId),
         onEdit: () => {
           setEditTask(t);
@@ -14874,6 +15151,7 @@ function App({
       },
       workCardTint: workCardTint,
       onSaveDayNote: saveDayNote,
+      onNag: startNag,
       onChangeType: ev => setRetype(ev),
       onHistory: ev => setHistFor(ev),
       workHist: workHist,
@@ -14887,7 +15165,7 @@ function App({
           [person]: per
         };
       })
-    }), tab === "bills" && /*#__PURE__*/React.createElement(BillsTab, {
+    }), tab === "bills" && /*#__PURE__*/React.createElement(BillsErrorBoundary, null, /*#__PURE__*/React.createElement(BillsTab, {
       billPayer: billPayer,
       q: tabQ,
       tasks: tasks,
@@ -14939,7 +15217,7 @@ function App({
         });
         setShowAdd(true);
       }
-    }), tab === "stats" && /*#__PURE__*/React.createElement(StatsTab, {
+    })), tab === "stats" && /*#__PURE__*/React.createElement(StatsTab, {
       tasks: tasks,
       occs: listTasks,
       events: events,
@@ -15038,7 +15316,11 @@ function App({
       onRewards: () => setShowRewards(true),
       onResetPoints: resetPoints,
       onClearRewards: clearRewardHistory,
-      onRepairSplits: repairSplits
+      onRepairSplits: repairSplits,
+      notifEnabled: notifEnabled,
+      notifPerm: notifPerm,
+      toggleNotif: toggleNotif,
+      testNotif: testNotif
     })), /*#__PURE__*/React.createElement("div", {
       style: {
         position: "fixed",
@@ -21717,6 +21999,7 @@ function AgendaRow({
   onDelete,
   onEndRepeat,
   onEndRepeatAt,
+  onNag,
   onNextDry,
   docSlot,
   compact = false,
@@ -22668,7 +22951,22 @@ function AgendaRow({
       marginLeft: -10,
       marginTop: -0.75
     }
-  })), /*#__PURE__*/React.createElement("button", {
+  })), isTask && !bill && !row.done && onNag && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onNag(t),
+    className: "sans",
+    style: {
+      height: 30,
+      padding: "0 12px",
+      borderRadius: 9,
+      border: "none",
+      background: softTint(personColor(people.her.color)),
+      color: personColor(people.her.color),
+      fontSize: 11.5,
+      fontWeight: 600,
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, "Nag"), /*#__PURE__*/React.createElement("button", {
     onClick: onEdit,
     className: "sans",
     style: {
@@ -23560,7 +23858,7 @@ function TaskCard({
         marginLeft: -10,
         marginTop: -0.75
       }
-    })), !task.done && /*#__PURE__*/React.createElement("button", {
+    })), !task.done && onNag && !bill && /*#__PURE__*/React.createElement("button", {
       onClick: () => onNag(task),
       className: "sans",
       style: {
@@ -24662,6 +24960,7 @@ function CalendarTab({
   onDeleteTask,
   onDeleteEvent,
   onEndRepeatAt,
+  onNag,
   today,
   viewFilter,
   onAdd,
@@ -26146,6 +26445,7 @@ function DaySheet({
     showTimes: showTimes,
     onToggle: (pointsTo, amt, pdate, pphoto) => onToggle(t, pointsTo, amt, pdate, pphoto),
     onToggleSub: onToggleSub ? sid => onToggleSub(t, sid) : null,
+    onNag: !isBill(t) ? onNag : null,
     onEdit: () => onEdit(t),
     onDelete: scope => onDeleteTask && onDeleteTask(t, scope),
     onEndRepeatAt: onEndRepeatAt
@@ -26467,6 +26767,32 @@ function dominantCat(bills, today, months = 6) {
   // Needs at least one other category to be worth splitting FROM.
   if (s.cats.length < 2) return null;
   return bestV / s.sum >= DOMINANT_SHARE ? best : null;
+}
+// v350 · Debug error boundary for BillsTab crash diagnosis
+class BillsErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      error: null
+    };
+  }
+  static getDerivedStateFromError(error) {
+    return {
+      error
+    };
+  }
+  render() {
+    if (this.state.error) return React.createElement("div", {
+      style: {
+        padding: 24,
+        color: "#c00",
+        fontFamily: "monospace",
+        fontSize: 13,
+        whiteSpace: "pre-wrap"
+      }
+    }, "Bills tab error:\n" + this.state.error.message + "\n\n" + this.state.error.stack);
+    return this.props.children;
+  }
 }
 function BillsTab({
   billPayer = true,
@@ -54865,7 +55191,11 @@ function SettingsPage({
   billPace,
   setBillPace,
   billCardStyle,
-  setBillCardStyle
+  setBillCardStyle,
+  notifEnabled,
+  notifPerm,
+  toggleNotif,
+  testNotif
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClearRewards, setConfirmClearRewards] = useState(false);
@@ -56419,7 +56749,119 @@ function SettingsPage({
       textOverflow: "ellipsis",
       whiteSpace: "nowrap"
     }
-  }, location.name), /*#__PURE__*/React.createElement(Chev, null)))), showPoints && /*#__PURE__*/React.createElement(SGroup, {
+  }, location.name), /*#__PURE__*/React.createElement(Chev, null)))), /*#__PURE__*/React.createElement(SGroup, {
+    q: q,
+    label: "Notifications",
+    GroupLabel: GroupLabel
+  }, /*#__PURE__*/React.createElement(SRow, {
+    hb: "notifications alerts push bell reminder"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: toggleNotif,
+    style: {
+      ...rowBase
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: notifEnabled && notifPerm === "granted" ? C.lowSoft : C.accentSoft,
+      color: notifEnabled && notifPerm === "granted" ? C.low : C.inkMute
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "17",
+    height: "17",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.9",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M13.73 21a2 2 0 0 1-3.46 0"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Push notifications"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "block",
+      fontSize: 11,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, notifPerm === "unsupported" ? "Not supported on this browser" : notifPerm === "denied" ? "Blocked — enable in browser settings" : notifEnabled ? "Alerts fire while the app is open" : "Alerts for tasks, bills, and events")), notifPerm !== "unsupported" && /*#__PURE__*/React.createElement(Toggle, {
+    on: notifEnabled && notifPerm === "granted"
+  }))), notifEnabled && notifPerm === "granted" && /*#__PURE__*/React.createElement(SRow, {
+    hb: "test notification"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: testNotif,
+    style: {
+      ...rowBase
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.accentSoft,
+      color: C.accent
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "17",
+    height: "17",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.9",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M22 11.08V12a10 10 0 1 1-5.93-9.14"
+  }), /*#__PURE__*/React.createElement("polyline", {
+    points: "22 4 12 14.01 9 11.01"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Send test notification"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "block",
+      fontSize: 11,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, "Verify notifications are working"))))), showPoints && /*#__PURE__*/React.createElement(SGroup, {
     q: q,
     label: "Data",
     GroupLabel: GroupLabel
@@ -56797,7 +57239,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v339test"))))), diagOpen && (() => {
+  }, "v351"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
