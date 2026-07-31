@@ -13028,7 +13028,7 @@ function App({
       const bk = periodBucket(p, fp);
       const end = bk ? periodEnd(p, bk.key) : null;
       const dl = end ? Math.max(0, Math.round((end - new Date()) / 864e5)) : 0;
-      const cur = who === "shared" ? (bk.her || 0) + (bk.him || 0) : bk[key] || 0;
+      const cur = bk[key] || 0;
       return /*#__PURE__*/React.createElement("div", {
         className: "sans",
         style: {
