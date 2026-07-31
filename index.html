@@ -7630,6 +7630,10 @@ function App({
   const [location, setLocation] = useState(() => lsGet("hb_location", DEFAULT_LOCATION));
   const [showLocation, setShowLocation] = useState(false);
   const [rewards, setRewards] = useState(() => lsGet("hb_rewards", DEFAULT_REWARDS));
+  // v360 · PIN-gated treat approval toggle
+  const [goalPin, setGoalPin] = useState(() => lsGet("hb_goalPin", "0000"));
+  const [treatApproval, setTreatApproval] = useState(() => lsGet("hb_treatApproval", false));
+  const [pinSheet, setPinSheet] = useState(null); // null | {action:"toggle"|"changePin"}
   // Which weekday a WEEKLY/FORTNIGHTLY reward period rolls over on. 0=Sun…6=Sat.
   // Default 1 (Monday) = the old hard-coded behaviour, so upgrading changes nothing.
   // THIS IS NOT weekStart AND NOT otWeekKey. See the note at REWARD_RESET_DEFAULT.
@@ -8199,6 +8203,12 @@ function App({
   useEffect(() => {
     lsSet("hb_rewards", rewards);
   }, [rewards]);
+  useEffect(() => {
+    lsSet("hb_goalPin", goalPin);
+  }, [goalPin]);
+  useEffect(() => {
+    lsSet("hb_treatApproval", treatApproval);
+  }, [treatApproval]);
 
   // Fetch the forecast whenever the location changes.
   useEffect(() => {
@@ -52270,14 +52280,69 @@ function GoalCard({
       fontWeight: 700,
       color: C.rewardGold
     }
-  }, claimedThisPeriod ? "Claimed — resets next period" : met ? "Goal met — claim it on the Record tab" : "Goal met!")), /*#__PURE__*/React.createElement(L, null, "Period"), /*#__PURE__*/React.createElement("div", {
+  }, claimedThisPeriod ? "Claimed — resets next period" : met ? "Goal met — claim it on the Record tab" : "Goal met!")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 14,
+      paddingBottom: 12,
+      borderBottom: `1px solid ${C.ruleSoft}`
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: 600,
+      color: g.locked ? C.low : C.inkMute
+    }
+  }, g.locked ? "Goal locked" : "Goal not locked"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSet(who, "locked", !g.locked),
+    className: "sans",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      background: g.locked ? C.lowSoft : `rgba(${C.mood === "sleek" ? "255,255,255" : "0,0,0"},0.04)`,
+      border: `1px solid ${g.locked ? C.low : C.rule}`,
+      borderRadius: 10,
+      padding: "7px 12px",
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: "pointer",
+      color: g.locked ? C.low : C.inkMute
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "12",
+    height: "12",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "11",
+    width: "18",
+    height: "11",
+    rx: "2"
+  }), g.locked ? /*#__PURE__*/React.createElement("path", {
+    d: "M7 11V7a5 5 0 0 1 10 0v4"
+  }) : /*#__PURE__*/React.createElement("path", {
+    d: "M7 11V7a5 5 0 0 1 5-5 5 5 0 0 1 5 5"
+  })), g.locked ? "Locked" : "Lock")), /*#__PURE__*/React.createElement(L, null, "Period"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       background: C.ruleSoft,
       borderRadius: 10,
       padding: 3,
       gap: 3,
-      marginBottom: 6
+      marginBottom: 6,
+      ...(g.locked ? {
+        opacity: .45,
+        pointerEvents: "none"
+      } : {})
     }
   }, REWARD_PERIODS.map(([val, lbl]) => {
     const on = period === val;
@@ -52359,7 +52424,11 @@ function GoalCard({
     style: {
       display: "flex",
       gap: 4,
-      marginBottom: 10
+      marginBottom: 10,
+      ...(g.locked ? {
+        opacity: .45,
+        pointerEvents: "none"
+      } : {})
     }
   }, DOW_INITIAL.map((d, i) => {
     const on = rewardReset === i;
@@ -52426,19 +52495,34 @@ function GoalCard({
       background: daysLeft <= 1 ? softTint(C.urgent) : C.ruleSoft,
       color: daysLeft <= 1 ? C.urgent : C.inkMute
     }
-  }, daysLabel(daysLeft))), /*#__PURE__*/React.createElement(L, null, "The treat"), /*#__PURE__*/React.createElement("input", {
+  }, daysLabel(daysLeft))), /*#__PURE__*/React.createElement(L, null, "The treat ", g.locked && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 8,
+      color: C.low,
+      fontWeight: 800,
+      marginLeft: 4,
+      letterSpacing: .5
+    }
+  }, "EDITABLE")), /*#__PURE__*/React.createElement("input", {
     value: g.treat,
     onChange: e => onSet(who, "treat", e.target.value),
     placeholder: "e.g. Friday takeaway night",
     style: {
       fontFamily: "'Fraunces',serif !important",
       fontSize: "15px !important",
-      marginBottom: 12
+      marginBottom: 12,
+      ...(g.locked ? {
+        borderColor: rgbaFromHex(C.low, 0.3)
+      } : {})
     }
   }), /*#__PURE__*/React.createElement(L, null, "Points target"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 6
+      gap: 6,
+      ...(g.locked ? {
+        opacity: .45,
+        pointerEvents: "none"
+      } : {})
     }
   }, [25, 50, 75, 100, 150, 200].map(v => /*#__PURE__*/React.createElement("button", {
     key: v,
@@ -57465,7 +57549,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v359"))))), diagOpen && (() => {
+  }, "v360"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
