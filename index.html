@@ -750,6 +750,11 @@ function applyTheme(key) {
   if (bg != null) {
     Object.assign(C, deriveBg(t.tokens.mood, bg));
   }
+  // v357 · iPhone safe area: html background matches page colour so the home
+  // indicator area never shows a mismatched bar behind bottom sheets.
+  try {
+    document.documentElement.style.background = C.page;
+  } catch (e) {}
 }
 function setCustomAccent(mood, hex) {
   CUSTOM_ACCENT[mood] = hex;
@@ -57271,7 +57276,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v357"))))), diagOpen && (() => {
+  }, "v358"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
