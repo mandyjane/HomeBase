@@ -7591,6 +7591,16 @@ function App({
   const [pointsLog, setPointsLog] = useState(() => lsGet("hb_pointsLog", []));
   // v363 · timestamp of last points reset — completed tasks before this are excluded
   const [pointsResetAt, setPointsResetAt] = useState(() => lsGet("hb_pointsResetAt", null));
+  // v365 · Effective cutoff: if pointsResetAt is null (pre-v363 reset), derive from
+  // the oldest pointsLog entry. If pointsLog is also empty and points are 0, everything
+  // was reset and nothing should show. If points > 0 with no log, no reset ever happened.
+  const effectiveResetAt = useMemo(() => {
+    if (pointsResetAt) return pointsResetAt;
+    if (pointsLog.length > 0) return pointsLog[0].date + "T00:00:00";
+    // No log, no timestamp: if points are 0 for both, treat as just-reset
+    if ((points.her || 0) === 0 && (points.him || 0) === 0) return new Date().toISOString();
+    return null; // no reset ever happened
+  }, [pointsResetAt, pointsLog, points.her, points.him]);
   // ── THE BONUS LOG *(v196)* ────────────────────────────────────────────────
   // SEPARATE from pointsLog on purpose. pointsLog stores {date,her,him} and MERGES
   // same-day entries into one row — there is nowhere to hang a reason, and no way to
@@ -16121,7 +16131,7 @@ function App({
       rewards: rewards,
       points: points,
       tasks: tasks,
-      pointsResetAt: pointsResetAt,
+      pointsResetAt: effectiveResetAt,
       pointsPeriods: pointsPeriods,
       goalLog: goalLog,
       rewardReset: rewardReset,
@@ -16144,7 +16154,7 @@ function App({
       tasks: tasks,
       who: completedTasksSheet,
       people: people,
-      pointsResetAt: pointsResetAt,
+      pointsResetAt: effectiveResetAt,
       onClose: () => setCompletedTasksSheet(null)
     }), pinSheet && /*#__PURE__*/React.createElement(PinSheet, {
       title: pinSheet.title || "Enter PIN",
@@ -53865,8 +53875,6 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd, resetAfter) {
   (tasks || []).forEach(t => {
     if (!t || isBill(t)) return;
     const assignee = t.assignee || "both";
-    const matches = assignee === who || assignee === "both" || who === "shared";
-    if (!matches) return;
     const pts = t.points || 0;
     const rm = taskMeta(t);
     const add = (doneAt, date) => {
@@ -53879,13 +53887,17 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd, resetAfter) {
       if (periodEnd && dd > periodEnd) return;
       const ex = t.exceptions && t.exceptions[date];
       const award = ex && ex.award ? ex.award : t.award;
-      const myPts = award ? award[who] || 0 : assignee === who ? pts : assignee === "both" ? Math.ceil(pts / 2) : 0;
-      // v362 · If assigned to "both" but awarded to only one person, skip for the
-      // person who got nothing. A task with 0 points total still shows for both.
-      if (assignee === "both" && award) {
+      // v365 · Match by WHO ACTUALLY GOT POINTS, not just assignee.
+      // A task assigned to Liam but completed by Mandy (award.her>0) shows for Mandy.
+      const actuallyGotPts = award && (award[who] || 0) > 0;
+      const assigneeMatch = assignee === who || assignee === "both" || who === "shared";
+      if (!assigneeMatch && !actuallyGotPts) return;
+      // Skip tasks where another person got ALL the points (both-assigned only)
+      if (who !== "shared" && award) {
         const totalAwarded = (award.her || 0) + (award.him || 0);
         if (totalAwarded > 0 && (award[who] || 0) === 0) return;
       }
+      const myPts = who === "shared" ? award ? (award.her || 0) + (award.him || 0) : pts : award ? award[who] || 0 : assignee === who ? pts : assignee === "both" ? Math.ceil(pts / 2) : 0;
       results.push({
         title: t.title,
         points: myPts,
@@ -58408,7 +58420,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v363"))))), diagOpen && (() => {
+  }, "v365"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
