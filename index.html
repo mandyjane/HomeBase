@@ -5971,7 +5971,7 @@ function onStorageFull(fn) {
 }
 function lsSet(key, val) {
   const ok = _lsSetOrig(key, val);
-  if (ok && key.startsWith("hb_")) sbPush(key, val);
+  if (ok && key.startsWith("hb_") && !APPEARANCE_KEYS.has(key.replace(/_[0-9a-f-]+$/, ""))) sbPush(key, val);
   return ok;
 }
 // Roughly how much of the store is used. Every char of a UTF-16 string is ~2 bytes, but
@@ -5994,6 +5994,14 @@ const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 let sbClient = null;
 let sbHouseholdId = null;
 let sbUserId = null;
+
+// v339 · Per-user appearance keys. Appearance (mood, accent, bg, deadline) is personal
+// preference — Mandy and Liam can each have their own mood without overwriting the other.
+// Falls back to the shared key when not logged in (pre-auth boot).
+const APPEARANCE_KEYS = new Set(["hb_theme", "hb_accentSleek", "hb_accentBold", "hb_bgSleek", "hb_bgBold", "hb_deadlineMode", "hb_deadlineSleek", "hb_deadlineBold"]);
+function userKey(k) {
+  return sbUserId && APPEARANCE_KEYS.has(k) ? k + "_" + sbUserId : k;
+}
 let sbUserName = null;
 let sbReady = false;
 let sbSyncListeners = new Set();
@@ -6064,7 +6072,7 @@ async function sbSeedAll() {
   const rows = [];
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k && k.startsWith("hb_")) {
+    if (k && k.startsWith("hb_") && !APPEARANCE_KEYS.has(k.replace(/_[0-9a-f-]+$/, ""))) {
       try {
         rows.push({
           household_id: sbHouseholdId,
@@ -6867,10 +6875,10 @@ function App({
   const [nameShared, setNameShared] = useState(() => lsGet("hb_nameShared", false));
   // Deadline colour: "theme" follows the accent, "custom" uses a per-mood hex.
   // Overdue deadlines always render red regardless — that's an urgency signal.
-  const [deadlineColorMode, setDeadlineColorMode] = useState(() => lsGet("hb_deadlineMode", "custom"));
+  const [deadlineColorMode, setDeadlineColorMode] = useState(() => lsGet(userKey("hb_deadlineMode"), "custom"));
   const [deadlineHex, setDeadlineHex] = useState(() => ({
-    sleek: lsGet("hb_deadlineSleek", "#FF8A3D"),
-    bold: lsGet("hb_deadlineBold", "#E67321")
+    sleek: lsGet(userKey("hb_deadlineSleek"), "#FF8A3D"),
+    bold: lsGet(userKey("hb_deadlineBold"), "#E67321")
   }));
   // Which times appear on the COLLAPSED row (they always show when expanded):
   //   "never"  — neither
@@ -7136,8 +7144,8 @@ function App({
   }
   const [accents, setAccentsState] = useState(() => {
     const a = {
-      sleek: lsGet("hb_accentSleek", null),
-      bold: lsGet("hb_accentBold", null)
+      sleek: lsGet(userKey("hb_accentSleek"), null),
+      bold: lsGet(userKey("hb_accentBold"), null)
     };
     setCustomAccent("sleek", a.sleek);
     setCustomAccent("bold", a.bold);
@@ -7148,15 +7156,15 @@ function App({
   // frame late is a visible flash of the wrong colour on every launch.
   const [bgs, setBgsState] = useState(() => {
     const b = {
-      sleek: lsGet("hb_bgSleek", null),
-      bold: lsGet("hb_bgBold", null)
+      sleek: lsGet(userKey("hb_bgSleek"), null),
+      bold: lsGet(userKey("hb_bgBold"), null)
     };
     setCustomBg("sleek", b.sleek);
     setCustomBg("bold", b.bold);
     return b;
   });
   const [theme, setThemeState] = useState(() => {
-    let saved = lsGet("hb_theme", DEFAULT_THEME);
+    let saved = lsGet(userKey("hb_theme"), DEFAULT_THEME);
     if (!THEMES[saved]) saved = DEFAULT_THEME; // migrate old 8-theme keys → default mood
     applyTheme(saved); // apply immediately so first render uses it
     return saved;
@@ -7166,12 +7174,12 @@ function App({
   function setTheme(key) {
     applyTheme(key);
     setThemeState(key);
-    lsSet("hb_theme", key);
+    lsSet(userKey("hb_theme"), key);
   }
   // Set (or reset with null) a mood's background position, re-derive, persist, re-render.
   function setBg(mood, v) {
     setCustomBg(mood, v);
-    lsSet(mood === "sleek" ? "hb_bgSleek" : "hb_bgBold", v);
+    lsSet(userKey(mood === "sleek" ? "hb_bgSleek" : "hb_bgBold"), v);
     setBgsState(b => ({
       ...b,
       [mood]: v
@@ -7182,7 +7190,7 @@ function App({
   // Set (or reset with null) a mood's accent colour, re-derive, persist, re-render.
   function setAccent(mood, hex) {
     setCustomAccent(mood, hex);
-    lsSet(mood === "sleek" ? "hb_accentSleek" : "hb_accentBold", hex);
+    lsSet(userKey(mood === "sleek" ? "hb_accentSleek" : "hb_accentBold"), hex);
     setAccentsState(a => ({
       ...a,
       [mood]: hex
@@ -7849,11 +7857,11 @@ function App({
     lsSet("hb_nameShared", nameShared);
   }, [nameShared]);
   useEffect(() => {
-    lsSet("hb_deadlineMode", deadlineColorMode);
+    lsSet(userKey("hb_deadlineMode"), deadlineColorMode);
   }, [deadlineColorMode]);
   // Set a mood's custom deadline colour (persist + bump so C re-resolves).
   function setDeadlineColor(mood, hex) {
-    lsSet(mood === "sleek" ? "hb_deadlineSleek" : "hb_deadlineBold", hex);
+    lsSet(userKey(mood === "sleek" ? "hb_deadlineSleek" : "hb_deadlineBold"), hex);
     setDeadlineHex(d => ({
       ...d,
       [mood]: hex
@@ -56789,7 +56797,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v338"))))), diagOpen && (() => {
+  }, "v339"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
