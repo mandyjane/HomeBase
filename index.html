@@ -6886,8 +6886,8 @@ function App({
   //   "all"    — tasks and events
 
   // ── v342 · CLIENT-SIDE NOTIFICATION SCHEDULING ──────────────────────────────
-  // Phase 2a: fires alerts via `new Notification()` while the app is open or
-  // backgrounded. Does NOT require a service worker or server push.
+  // Phase 2a: fires alerts via service worker showNotification while the app is
+  // open or backgrounded. Requires sw-notif.js deployed alongside index.html.
   const [notifEnabled, setNotifEnabled] = useState(() => lsGet("hb_notifEnabled", false));
   const [notifPerm, setNotifPerm] = useState(() => {
     try {
@@ -6897,13 +6897,23 @@ function App({
     }
   });
   const notifTimers = useRef([]);
+  const swReg = useRef(null);
   useEffect(() => {
     lsSet("hb_notifEnabled", notifEnabled);
   }, [notifEnabled]);
+
+  // Register service worker on mount
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw-notif.js").then(reg => {
+        swReg.current = reg;
+      }).catch(e => console.warn("[sw]", e));
+    }
+  }, []);
   function toggleNotif() {
     if (notifPerm === "unsupported") return;
     if (!notifEnabled) {
-      if (notifPerm === "default") {
+      if (notifPerm === "default" || notifPerm === "prompt") {
         Notification.requestPermission().then(p => {
           setNotifPerm(p);
           if (p === "granted") setNotifEnabled(true);
@@ -6911,10 +6921,36 @@ function App({
       } else if (notifPerm === "granted") {
         setNotifEnabled(true);
       }
-      // "denied" — can't do anything, toggle stays off
     } else {
       setNotifEnabled(false);
     }
+  }
+  function fireNotif(title, body, tag) {
+    const reg = swReg.current;
+    if (reg && reg.showNotification) {
+      reg.showNotification(title, {
+        body,
+        tag,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png"
+      });
+    } else {
+      try {
+        new Notification(title, {
+          body,
+          tag
+        });
+      } catch (e) {
+        console.warn("[notif]", e);
+      }
+    }
+  }
+  function testNotif() {
+    if (notifPerm !== "granted") {
+      toggleNotif();
+      return;
+    }
+    fireNotif("Home Base", "Notifications are working!", "hb-test");
   }
 
   // Schedule alerts for the next 24h whenever tasks/events change.
@@ -6926,19 +6962,9 @@ function App({
       horizon = now + 24 * 60 * 60 * 1000;
     function schedule(title, body, fireAt, tag) {
       if (fireAt <= now || fireAt > horizon) return;
-      notifTimers.current.push(setTimeout(() => {
-        try {
-          new Notification(title, {
-            body,
-            tag,
-            icon: "/icon-192.png"
-          });
-        } catch (e) {
-          console.warn("[notif]", e);
-        }
-      }, fireAt - now));
+      notifTimers.current.push(setTimeout(() => fireNotif(title, body, tag), fireAt - now));
     }
-    function fireTime(dateStr, timeStr, a) {
+    function calcFire(dateStr, timeStr, a) {
       const t = a.type === "day_of" && a.time ? a.time : a.type === "at_time" ? timeStr || "09:00" : a.time || timeStr || "09:00";
       let base = new Date(dateStr + "T" + t + ":00").getTime();
       if (isNaN(base)) return null;
@@ -6947,21 +6973,19 @@ function App({
       }
       return base;
     }
-    // Scan tasks (including bills)
     (tasks || []).forEach(t => {
       if (!t.alerts || !t.alerts.length || t.done) return;
       if (!t.dueDate) return;
       t.alerts.forEach((a, i) => {
-        const ft = fireTime(t.dueDate, t.time, a);
+        const ft = calcFire(t.dueDate, t.time, a);
         if (ft) schedule(t.title, taskCatLabel(t) + " — due " + shortDate(t.dueDate), ft, "hb-t-" + t.id + "-" + i);
       });
     });
-    // Scan events
     (events || []).forEach(e => {
       if (!e.alerts || !e.alerts.length) return;
       if (!e.date) return;
       e.alerts.forEach((a, i) => {
-        const ft = fireTime(e.date, e.time, a);
+        const ft = calcFire(e.date, e.time, a);
         if (ft) schedule(e.title, (e.category || "Event") + " — " + shortDate(e.date), ft, "hb-e-" + e.id + "-" + i);
       });
     });
@@ -15183,7 +15207,8 @@ function App({
       onRepairSplits: repairSplits,
       notifEnabled: notifEnabled,
       notifPerm: notifPerm,
-      toggleNotif: toggleNotif
+      toggleNotif: toggleNotif,
+      testNotif: testNotif
     })), /*#__PURE__*/React.createElement("div", {
       style: {
         position: "fixed",
@@ -55031,7 +55056,8 @@ function SettingsPage({
   setBillCardStyle,
   notifEnabled,
   notifPerm,
-  toggleNotif
+  toggleNotif,
+  testNotif
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClearRewards, setConfirmClearRewards] = useState(false);
@@ -56644,7 +56670,60 @@ function SettingsPage({
     }
   }, notifPerm === "unsupported" ? "Not supported on this browser" : notifPerm === "denied" ? "Blocked — enable in browser settings" : notifEnabled ? "Alerts fire while the app is open" : "Alerts for tasks, bills, and events")), notifPerm !== "unsupported" && /*#__PURE__*/React.createElement(Toggle, {
     on: notifEnabled && notifPerm === "granted"
-  })))), showPoints && /*#__PURE__*/React.createElement(SGroup, {
+  }))), notifEnabled && notifPerm === "granted" && /*#__PURE__*/React.createElement(SRow, {
+    hb: "test notification"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: testNotif,
+    style: {
+      ...rowBase
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.accentSoft,
+      color: C.accent
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "17",
+    height: "17",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.9",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M22 11.08V12a10 10 0 1 1-5.93-9.14"
+  }), /*#__PURE__*/React.createElement("polyline", {
+    points: "22 4 12 14.01 9 11.01"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Send test notification"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "block",
+      fontSize: 11,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, "Verify notifications are working"))))), showPoints && /*#__PURE__*/React.createElement(SGroup, {
     q: q,
     label: "Data",
     GroupLabel: GroupLabel
@@ -57022,7 +57101,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v342"))))), diagOpen && (() => {
+  }, "v343"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
