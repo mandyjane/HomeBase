@@ -52939,12 +52939,16 @@ function GoalCard({
       boxSizing: "border-box",
       opacity: pendingReq ? 0.5 : 1
     }
-  }), treatDraft !== null && treatDraft !== g.treat && !pendingReq && /*#__PURE__*/React.createElement("button", {
+  }), !pendingReq && !resolvedReq && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      onSubmitTreat(who, treatDraft);
-      setTreatDraft(null);
+      const val = treatDraft !== null ? treatDraft : g.treat;
+      if (val && val !== g.treat) {
+        onSubmitTreat(who, val);
+        setTreatDraft(null);
+      }
     },
     className: "sans",
+    disabled: treatDraft === null || treatDraft === g.treat,
     style: {
       marginTop: 8,
       width: "100%",
@@ -52952,14 +52956,15 @@ function GoalCard({
       alignItems: "center",
       justifyContent: "center",
       gap: 6,
-      background: `linear-gradient(135deg,${C.low},${C.mood === "sleek" ? "#3dd6b8" : "#f48fb1"})`,
-      color: C.mood === "sleek" ? "#0e1513" : "#fff",
+      background: treatDraft !== null && treatDraft !== g.treat ? `linear-gradient(135deg,${C.low},${C.mood === "sleek" ? "#3dd6b8" : "#f48fb1"})` : C.ruleSoft,
+      color: treatDraft !== null && treatDraft !== g.treat ? C.mood === "sleek" ? "#0e1513" : "#fff" : C.inkMute,
       border: "none",
       borderRadius: 12,
       padding: "10px 20px",
       fontSize: 13,
       fontWeight: 700,
-      cursor: "pointer"
+      cursor: treatDraft !== null && treatDraft !== g.treat ? "pointer" : "default",
+      opacity: treatDraft !== null && treatDraft !== g.treat ? 1 : 0.5
     }
   }, /*#__PURE__*/React.createElement("svg", {
     width: "13",
@@ -59053,7 +59058,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v368"))))), diagOpen && (() => {
+  }, "v369"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
