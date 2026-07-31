@@ -8463,17 +8463,41 @@ function App({
   // a name and matching on text would rename the wrong row. Only ever touches `treat`;
   // `claimed`, score, target and dates are history and stay put. Called from BOTH save
   // paths (event and task) because a reward can be claimed either way.
-  function syncGoalTreatName(item) {
-    const gid = item && item.goalEntryId,
-      name = (item && item.title || "").trim();
-    if (!gid || !name) return;
+  // v340 · Enhanced with fallback for pre-v273 tasks that lack goalEntryId.
+  // Those tasks were claimed before the linking ID was added, so the primary
+  // match fails silently. The fallback finds the entry by who + old title.
+  function syncGoalTreatName(item, oldTitle) {
+    const name = (item && item.title || "").trim();
+    if (!name) return;
+    const gid = item && item.goalEntryId;
+    const who = item && (item.assignee === "both" ? "shared" : item.assignee);
     setGoalLog(prev => {
       const rows = prev || [];
-      if (!rows.some(e => e.id === gid && e.treat !== name)) return prev; // no-op keeps the reference
-      return rows.map(e => e.id === gid ? {
-        ...e,
-        treat: name
-      } : e);
+      // Primary: match by goalEntryId (v273+)
+      if (gid && rows.some(e => e.id === gid && e.treat !== name)) {
+        return rows.map(e => e.id === gid ? {
+          ...e,
+          treat: name
+        } : e);
+      }
+      // Fallback: pre-v273 tasks without goalEntryId — match by who + old title
+      if (!gid && oldTitle && who) {
+        const oldTrim = oldTitle.trim();
+        if (rows.some(e => e.who === who && e.treat === oldTrim && e.treat !== name)) {
+          let matched = false;
+          return rows.map(e => {
+            if (!matched && e.who === who && e.treat === oldTrim) {
+              matched = true;
+              return {
+                ...e,
+                treat: name
+              };
+            }
+            return e;
+          });
+        }
+      }
+      return prev;
     });
   }
 
@@ -9287,10 +9311,11 @@ function App({
         showToast(savedLabel(clean, "updated"), "success");
         // v273 · a reward claimed AS A TASK and renamed here renames its Record row too.
         // Merged with `orig` for the same reason as the event path: the form drops the link.
+        // v340 · pass orig.title so the fallback can match pre-v273 tasks by old name.
         syncGoalTreatName({
           ...orig,
           ...clean
-        });
+        }, orig && orig.title);
       }
     } else {
       // ── ADDED ALREADY PAID *(v120)* ─────────────────────────────────────────────────
@@ -9691,10 +9716,11 @@ function App({
         showToast("Event updated", "success");
         // v273 · a claimed reward renamed here renames its Record row too. Reads the
         // MERGED item (orig carries goalEntryId; the form does not round-trip it).
+        // v340 · pass orig.title so the fallback can match pre-v273 events by old name.
         syncGoalTreatName({
           ...orig,
           ...clean
-        });
+        }, orig && orig.title);
       }
     } else {
       setEvents(es => [...es, {
@@ -56845,7 +56871,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v340"))))), diagOpen && (() => {
+  }, "v341"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
