@@ -11867,10 +11867,8 @@ function App({
         @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         @keyframes slideUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
         @keyframes sheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
-        /* v355 · iPhone safe area — extend all bottom sheets behind the home indicator.
-           Every sheet overlay is position:fixed + align-items:flex-end; its direct child
-           is the panel. This one rule covers every modal/sheet without editing each. */
-        [style*="flex-end"][style*="fixed"]>div{padding-bottom:env(safe-area-inset-bottom,0px)!important}
+        /* v356 · iPhone safe area — extend all bottom sheets behind the home indicator */
+        .hb-sa{padding-bottom:env(safe-area-inset-bottom,0px)!important}
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
         @keyframes drawtick{to{stroke-dashoffset:0}}
         @keyframes cbpop{0%{transform:scale(1)}45%{transform:scale(1.25)}100%{transform:scale(1)}}
@@ -21124,6 +21122,7 @@ function AddChooser({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       maxHeight: "calc(100vh - 40px)",
@@ -25904,6 +25903,7 @@ function MonthPicker({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       maxHeight: "calc(100vh - 40px)",
@@ -26220,6 +26220,7 @@ function DaySheet({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -31612,6 +31613,7 @@ function WorkChooser({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -32626,6 +32628,7 @@ function PlanWeekSheet({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -33840,6 +33843,7 @@ function RotaModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -34422,6 +34426,7 @@ function DayOffModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -35013,6 +35018,7 @@ function ExceptionModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -35594,6 +35600,7 @@ function OvertimeModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -36037,6 +36044,7 @@ function WorkSettingsSheet({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -39161,6 +39169,7 @@ function MortgageSettingsSheet({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -39720,6 +39729,7 @@ function BillSettingsSheet({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -40601,6 +40611,7 @@ function RdoWorkedPrompt({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.card,
       borderRadius: "22px 22px 0 0",
@@ -40902,6 +40913,7 @@ function DayActionsSheet({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.card,
       borderRadius: "22px 22px 0 0",
@@ -41431,6 +41443,7 @@ function WorkStatsSheet({
     onClick: e => e.target === e.currentTarget && onClose()
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -44079,6 +44092,7 @@ function StatsTab({
         justifyContent: "center"
       }
     }, /*#__PURE__*/React.createElement(ScrollLock, null), /*#__PURE__*/React.createElement("div", {
+      className: "hb-sa",
       style: {
         background: C.page,
         borderRadius: "26px 26px 0 0",
@@ -47680,6 +47694,7 @@ function TaskModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -49882,6 +49897,7 @@ function TaskModal({
       justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "hb-sa",
     style: {
       background: C.card,
       borderRadius: "22px 22px 0 0",
@@ -50732,6 +50748,7 @@ function CategoryModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -51651,6 +51668,7 @@ function LocationModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -52447,6 +52465,7 @@ function BonusSheet({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -52709,6 +52728,7 @@ function PersonSheet({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -53051,6 +53071,7 @@ function RewardsModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -53338,6 +53359,7 @@ function CatchUpModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "22px 22px 0 0",
@@ -53814,6 +53836,7 @@ function LevelsModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -54159,6 +54182,7 @@ function ThemeModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -54746,6 +54770,7 @@ function AppearanceModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -57246,7 +57271,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v356"))))), diagOpen && (() => {
+  }, "v357"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -58377,6 +58402,7 @@ function SettingsModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -58572,6 +58598,7 @@ function WorkHistorySheet({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -58821,6 +58848,7 @@ function ShiftModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -59269,6 +59297,7 @@ function ShiftModal({
       justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "hb-sa",
     style: {
       background: C.card,
       borderRadius: "22px 22px 0 0",
@@ -59570,6 +59599,7 @@ function EventModal({
     }
   }, /*#__PURE__*/React.createElement("div", {
     ref: sheetRef,
+    className: "hb-sa",
     style: {
       background: C.page,
       borderRadius: "26px 26px 0 0",
@@ -60190,6 +60220,7 @@ function EventModal({
       justifyContent: "center"
     }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "hb-sa",
     style: {
       background: C.card,
       borderRadius: "22px 22px 0 0",
