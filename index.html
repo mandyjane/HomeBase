@@ -28233,7 +28233,13 @@ function BillsTab({
     // a "Statement ready" chip prompts recording the real figure.
     const isCard = isCardBill(r.bill);
     const cardHist = isCard ? billHistory(r.bill) : [];
-    const avgAmt = isCard && !r.paid ? billAverage(cardHist, billAvgMethod) : 0;
+    // v359 · AVERAGE FALLBACK FOR ANY BILL WITH $0 AMOUNT. Credit cards always show
+    // the average when unpaid (the amount is the statement balance, unknown until
+    // recorded). Regular bills show their history average when the series amount is
+    // $0 or empty — a cleared amount means "I don't know what it costs, show me the
+    // average". Once paid, the recorded amount speaks for itself.
+    const regHist = !isCard && !r.paid && !(parseAmt(r.bill.amount) > 0) ? billHistory(r.bill) : [];
+    const avgAmt = isCard && !r.paid ? billAverage(cardHist, billAvgMethod) : !r.paid && !(parseAmt(r.bill.amount) > 0) ? billAverage(regHist, billAvgMethod) : 0;
     const showAvgPre = avgAmt > 0;
     const lastStmtTo = cardHist.filter(h => h.stmtTo).sort((a, b) => b.stmtTo.localeCompare(a.stmtTo))[0]?.stmtTo;
     const predictedClose = lastStmtTo ? addMonths(lastStmtTo, 1) : null;
