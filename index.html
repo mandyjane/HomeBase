@@ -11174,6 +11174,27 @@ function App({
     doneAt: t.doneAt,
     taskTime: t.time ? fmtTime(t.time) : null
   }));
+  // v340 · EARLY-DONE TASKS DUE TODAY. The ring counts listTasks where
+  // dueDate===today, so a task due today but completed on a previous day is
+  // counted as "done" in the ring. Without this block the task was invisible on
+  // the agenda, creating a phantom "1 done" the user could not find. Show these
+  // struck-through at the end, after doneTodayTasks and before events.
+  const earlyDoneKeys = new Set([...doneTodayKeys, ...overdueSeriesIds]);
+  listTasks.filter(t => t.dueDate === today && t.done && !earlyDoneKeys.has(occKey(t)) && !doneTodayKeys.has(occKey(t))).sort((a, b) => (a.doneAt || "").localeCompare(b.doneAt || "")).forEach(t => homeAgenda.push({
+    kind: "task",
+    ref: t,
+    title: t.title,
+    sub: `${taskCatLabel(t)} · ${assigneeName(t.assignee, people)}`,
+    subLabel: taskCatLabel(t),
+    pName: assigneeName(t.assignee, people),
+    pColor: assigneeColor(t.assignee, people),
+    date: t.dueDate,
+    dotColor: taskMeta(t).grad[0],
+    overdue: false,
+    done: true,
+    doneAt: t.doneAt,
+    taskTime: t.time ? fmtTime(t.time) : null
+  }));
   nextEvents.filter(e => e.date === today).forEach(e => homeAgenda.push({
     kind: "event",
     ref: e,
