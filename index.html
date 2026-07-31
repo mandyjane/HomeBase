@@ -15180,7 +15180,10 @@ function App({
       onRewards: () => setShowRewards(true),
       onResetPoints: resetPoints,
       onClearRewards: clearRewardHistory,
-      onRepairSplits: repairSplits
+      onRepairSplits: repairSplits,
+      notifEnabled: notifEnabled,
+      notifPerm: notifPerm,
+      toggleNotif: toggleNotif
     })), /*#__PURE__*/React.createElement("div", {
       style: {
         position: "fixed",
@@ -55025,7 +55028,10 @@ function SettingsPage({
   billPace,
   setBillPace,
   billCardStyle,
-  setBillCardStyle
+  setBillCardStyle,
+  notifEnabled,
+  notifPerm,
+  toggleNotif
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClearRewards, setConfirmClearRewards] = useState(false);
