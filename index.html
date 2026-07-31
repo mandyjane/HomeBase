@@ -23858,7 +23858,7 @@ function TaskCard({
         marginLeft: -10,
         marginTop: -0.75
       }
-    })), !task.done && /*#__PURE__*/React.createElement("button", {
+    })), !task.done && onNag && !bill && /*#__PURE__*/React.createElement("button", {
       onClick: () => onNag(task),
       className: "sans",
       style: {
@@ -57213,7 +57213,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v349"))))), diagOpen && (() => {
+  }, "v350"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
