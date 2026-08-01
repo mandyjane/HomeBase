@@ -9505,6 +9505,49 @@ function App({
     const label = newPointsTo === "split" ? "split" : newPointsTo === "her" ? people.her?.name : "him" ? people.him?.name : newPointsTo;
     showToast("Points updated", "success");
   }
+
+  // ── RESTORE / PURGE OCCURRENCE *(v398)* ────────────────────────────────────
+  // Soft-deleted occurrences carry {deleted:true}. Restore clears that flag,
+  // bringing the occurrence back. Purge replaces it with {purged:true} — gone
+  // from all views with no way back. For test data, duplicates, or mistakes.
+  function restoreOccurrence(seriesId, occDate) {
+    setTasks(ts => ts.map(t => {
+      if (t.id !== seriesId) return t;
+      const ex = {
+        ...(t.exceptions || {})
+      };
+      if (ex[occDate]) {
+        const {
+          deleted: _,
+          ...rest
+        } = ex[occDate];
+        ex[occDate] = Object.keys(rest).length ? rest : {};
+        // If the exception is now empty, remove it entirely
+        if (!Object.keys(ex[occDate]).length) delete ex[occDate];
+      }
+      return {
+        ...t,
+        exceptions: ex
+      };
+    }));
+    showToast("Occurrence restored", "success");
+  }
+  function purgeOccurrence(seriesId, occDate) {
+    setTasks(ts => ts.map(t => {
+      if (t.id !== seriesId) return t;
+      const ex = {
+        ...(t.exceptions || {})
+      };
+      ex[occDate] = {
+        purged: true
+      };
+      return {
+        ...t,
+        exceptions: ex
+      };
+    }));
+    showToast("Permanently removed", "info");
+  }
   function deleteDoc(seriesId, occDate) {
     setTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
@@ -10057,7 +10100,7 @@ function App({
   // deleteTask: scope "one" (skip this date) | "series" | undefined(one-off)
   function deleteTask(occ, scope) {
     const seriesId = occ && occ._seriesId || occ && occ.id || occ;
-    if (scope === "one" && occ && occ._occDate) {
+    if ((scope === "one" || scope === "one-purge") && occ && occ._occDate) {
       const d = occ._occDate;
       // DELETING AN OCCURRENCE MUST NOT LEAVE ITS PAYMENT BEHIND *(v105)*
       //
@@ -10076,16 +10119,20 @@ function App({
       // no payer, so the exception is REPLACED with a bare tombstone rather than merged
       // into the old one. If the money genuinely was spent, the occurrence should be kept
       // and left paid — deleting it is the user saying it should never have been there.
+      // v398 · TWO-TIER DELETE. "one" = soft (restorable), "one-purge" = permanent.
+      const purge = scope === "one-purge";
       setTasks(ts => ts.map(t => t.id === seriesId ? {
         ...t,
         exceptions: {
           ...(t.exceptions || {}),
-          [d]: {
+          [d]: purge ? {
+            purged: true
+          } : {
             deleted: true
           }
         }
       } : t));
-      showToast("Occurrence removed", "info");
+      showToast(purge ? "Permanently removed" : "Occurrence removed", "info");
     } else {
       setTasks(ts => ts.filter(t => t.id !== seriesId));
       showToast("Task removed", "info");
@@ -15742,6 +15789,8 @@ function App({
       onDeleteLink: deleteLink,
       onEditPayment: editPayment,
       onQuickUpdate: quickBillUpdate,
+      onRestore: restoreOccurrence,
+      onPurge: purgeOccurrence,
       onDeletePayment: deletePayment,
       onEndRepeat: endRepeat,
       onEndRepeatAt: endRepeatAt,
@@ -23929,7 +23978,11 @@ function AgendaRow({
     options: recurs ? [{
       key: "one",
       label: "Just this one",
-      sub: shortDate(isTask ? t.dueDate : t.date) + " only · the rest of the series stays"
+      sub: shortDate(isTask ? t.dueDate : t.date) + " only · can be restored from history"
+    }, {
+      key: "one-purge",
+      label: "Permanently delete this one",
+      sub: shortDate(isTask ? t.dueDate : t.date) + " only · gone forever"
     },
     // THE GAP THIS FIXES: a recurring bill could only be deleted one-at-a-time or
     // ENTIRELY — so the only way to stop it was to destroy its whole payment
@@ -23964,7 +24017,7 @@ function AgendaRow({
       sub: "Every occurrence, past and future · permanent"
     }] : null,
     onConfirm: scope => {
-      if (scope === "future") onEndRepeatAt && onEndRepeatAt(t._seriesId || t.id, t._occDate || (isTask ? t.dueDate : t.date));else if (scope === "end") onEndRepeat && onEndRepeat(t._seriesId || t.id);else onDelete(scope === true ? undefined : scope);
+      if (scope === "future") onEndRepeatAt && onEndRepeatAt(t._seriesId || t.id, t._occDate || (isTask ? t.dueDate : t.date));else if (scope === "end") onEndRepeat && onEndRepeat(t._seriesId || t.id);else if (scope === "one-purge") onDelete("one-purge");else onDelete(scope === true ? undefined : scope);
       setDelPrompt(false);
     },
     onCancel: () => setDelPrompt(false)
@@ -27684,6 +27737,8 @@ function BillsTab({
   onDeleteLink,
   onEditPayment,
   onQuickUpdate,
+  onRestore,
+  onPurge,
   onDeletePayment,
   onEndRepeat,
   onEndRepeatAt,
@@ -29419,7 +29474,7 @@ function BillsTab({
         _seriesId: r.bill.id,
         _isOccurrence: true
       }),
-      onDelete: scope => onDelete(scope === "one" ? r.occ : r.bill, scope),
+      onDelete: scope => onDelete(scope === "one" || scope === "one-purge" ? r.occ : r.bill, scope),
       onEndRepeat: onEndRepeat,
       onEndRepeatAt: onEndRepeatAt,
       docSlot: /*#__PURE__*/React.createElement(BillDocRow, {
@@ -29429,7 +29484,10 @@ function BillsTab({
       })
     })), /*#__PURE__*/React.createElement(BillHistory, {
       hist: hist,
-      today: today
+      today: today,
+      bill: r.bill,
+      onRestore: onRestore,
+      onPurge: onPurge
     })));
   }
   return /*#__PURE__*/React.createElement("div", {
@@ -31306,7 +31364,10 @@ function BillsTab({
 }
 function BillHistory({
   hist,
-  today
+  today,
+  bill,
+  onRestore,
+  onPurge
 }) {
   if (!hist.length) return /*#__PURE__*/React.createElement("p", {
     className: "sans",
@@ -31434,7 +31495,95 @@ function BillHistory({
         fontWeight: 600
       }
     }, fmtMoney(h.amount))));
-  }));
+  }), bill && (() => {
+    const ex = bill.exceptions || {};
+    const deleted = Object.keys(ex).filter(d => ex[d] && ex[d].deleted && !ex[d].purged).sort().reverse();
+    if (!deleted.length) return null;
+    return deleted.map(d => {
+      const dt = new Date(d + "T00:00:00");
+      return /*#__PURE__*/React.createElement("div", {
+        key: "del" + d,
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "6px 0",
+          borderTop: `1px solid ${C.ruleSoft}`,
+          opacity: .55
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 8,
+          fontWeight: 800,
+          letterSpacing: .5,
+          textTransform: "uppercase",
+          color: "#ff6b6b",
+          background: "#ff6b6b18",
+          padding: "2px 6px",
+          borderRadius: 4
+        }
+      }, "Deleted"), /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 11,
+          color: C.inkMute,
+          textDecoration: "line-through"
+        }
+      }, dt.getDate(), " ", MON[dt.getMonth()], " ", dt.getFullYear()), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1
+        }
+      }), onRestore && /*#__PURE__*/React.createElement("button", {
+        onClick: () => onRestore(bill.id, d),
+        className: "sans",
+        style: {
+          fontSize: 10,
+          fontWeight: 700,
+          color: C.low,
+          background: C.lowSoft,
+          border: `1px solid ${rgbaFromHex(C.low, 0.3)}`,
+          padding: "3px 9px",
+          borderRadius: 8,
+          cursor: "pointer"
+        }
+      }, "Restore"), onPurge && /*#__PURE__*/React.createElement("button", {
+        onClick: () => onPurge(bill.id, d),
+        className: "sans",
+        style: {
+          width: 26,
+          height: 26,
+          borderRadius: 8,
+          border: `1px solid ${C.rule}`,
+          background: "transparent",
+          color: C.inkFaint,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          flexShrink: 0
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "12",
+        height: "12",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "2",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }, /*#__PURE__*/React.createElement("polyline", {
+        points: "3 6 5 6 21 6"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M10 11v6"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M14 11v6"
+      }))));
+    });
+  })());
 }
 
 // ─── STATS ────────────────────────────────────────────────────────────────────
@@ -60328,7 +60477,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v397"))))), diagOpen && (() => {
+  }, "v398"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
