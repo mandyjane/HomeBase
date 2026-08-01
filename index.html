@@ -8220,6 +8220,7 @@ function App({
     setTreatRequests(lsGet("hb_treatRequests", []));
     setRewards(lsGet("hb_rewards", DEFAULT_REWARDS));
     setTreatApproval(lsGet("hb_treatApproval", false));
+    setPointsResetAt(lsGet("hb_pointsResetAt", null));
   }, [syncVersion]);
   // ROLL OVER — AND RECORD WHAT JUST CLOSED.
   //
@@ -12217,6 +12218,7 @@ function App({
            installable app" fell back to system fonts the moment there was no signal —
            and pinged Google each time it opened. Nothing to fetch now. */
         *{box-sizing:border-box;margin:0;padding:0}
+        html,body{background:${C.page} !important}
         /* v225 · The task action row is nowrap, so on the narrowest phones the "Done"
            WORD is dropped and the button becomes clock + chevron. That is self-evident
            beside a completed task and buys ~30px — enough for the ⚡ to stay on the line.
@@ -12281,7 +12283,7 @@ function App({
         .lbl{font-family:'Roboto Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:${C.inkMute}}
         .card-tap{cursor:pointer;transition:transform 0.16s,box-shadow 0.16s}
         .card-tap:active{transform:scale(0.99)}
-        input,select,textarea{background:${C.pageWarm} !important;color:${C.ink} !important;border:1.5px solid ${C.rule} !important;border-radius:12px !important;padding:11px 13px !important;font-family:'Roboto Condensed',sans-serif !important;font-size:14px !important;width:100%;outline:none !important;transition:border-color 0.18s}
+        input,select,textarea{background:${C.pageWarm} !important;color:${C.ink} !important;border:1.5px solid ${C.rule} !important;border-radius:12px !important;padding:11px 13px !important;font-family:'Roboto Condensed',sans-serif !important;font-size:14px !important;width:100%;max-width:100% !important;box-sizing:border-box !important;outline:none !important;transition:border-color 0.18s}
         input:focus,select:focus,textarea:focus{border-color:${C.accent} !important}
         /* THE GLOBAL input RULE ABOVE IS ALL !important, AND A STYLESHEET !important BEATS AN
            INLINE ONE. So an input that must NOT look like a form field cannot opt out inline —
@@ -49900,13 +49902,7 @@ function TaskModal({
       borderRadius: 14,
       padding: "14px"
     }
-  }, !cardForm && /*#__PURE__*/React.createElement("span", {
-    className: "lbl",
-    style: {
-      display: "block",
-      margin: "0 0 11px"
-    }
-  }, "When"), /*#__PURE__*/React.createElement(L, null, "Due date"), /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement(L, null, "Due date"), /*#__PURE__*/React.createElement("input", {
     type: "date",
     value: form.dueDate,
     onChange: e => set("dueDate", e.target.value)
@@ -49925,13 +49921,7 @@ function TaskModal({
       borderRadius: 14,
       padding: "14px"
     }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "lbl",
-    style: {
-      display: "block",
-      margin: "0 0 11px"
-    }
-  }, "When"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "1fr 1fr",
@@ -53694,11 +53684,15 @@ function PersonSheet({
   // v360 · Activity tab — completed tasks for the current goal period
   const periodBk = periodBucket(g.period, fp);
   const periodStartDate = periodBk && periodBk.key ? periodBk.key.slice(0, 10) : null;
+  // v379 · For shared/household activity, the period start date IS the boundary —
+  // effectiveResetAt is based on personal point balances and can incorrectly
+  // filter out tasks that belong to the current household period.
+  const resetFilter = who === "shared" ? null : pointsResetAt;
   const activityTasks = useMemo(() => {
-    const t = collectCompletedTasks(tasks, who, periodStartDate, null, pointsResetAt);
-    const b = collectBonusActivity(bonusLog, who, periodStartDate, null, pointsResetAt);
+    const t = collectCompletedTasks(tasks, who, periodStartDate, null, resetFilter);
+    const b = collectBonusActivity(bonusLog, who, periodStartDate, null, resetFilter);
     return [...t, ...b].sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || ""));
-  }, [tasks, bonusLog, who, periodStartDate, pointsResetAt]);
+  }, [tasks, bonusLog, who, periodStartDate, resetFilter]);
   return /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
     className: "hb-scrim",
@@ -59923,7 +59917,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v378"))))), diagOpen && (() => {
+  }, "v380"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -61597,13 +61591,7 @@ function ShiftModal({
       borderRadius: 14,
       padding: "14px"
     }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "lbl",
-    style: {
-      display: "block",
-      margin: "0 0 11px"
-    }
-  }, "When"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(L, null, "Date"), /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(L, null, "Date"), /*#__PURE__*/React.createElement("input", {
     type: "date",
     value: form.date,
     onChange: e => set("date", e.target.value)
