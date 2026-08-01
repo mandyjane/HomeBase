@@ -53724,12 +53724,11 @@ function PersonSheet({
   // effectiveResetAt is based on personal point balances and can incorrectly
   // filter out tasks that belong to the current household period.
   const resetFilter = who === "shared" ? null : pointsResetAt;
-  const sharedPeriodStart = who === "shared" ? null : periodStartDate;
   const activityTasks = useMemo(() => {
-    const t = collectCompletedTasks(tasks, who, sharedPeriodStart, null, resetFilter);
-    const b = collectBonusActivity(bonusLog, who, sharedPeriodStart, null, resetFilter);
+    const t = collectCompletedTasks(tasks, who, periodStartDate, null, resetFilter);
+    const b = collectBonusActivity(bonusLog, who, periodStartDate, null, resetFilter);
     return [...t, ...b].sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || ""));
-  }, [tasks, bonusLog, who, sharedPeriodStart, resetFilter]);
+  }, [tasks, bonusLog, who, periodStartDate, resetFilter]);
   return /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
     className: "hb-scrim",
@@ -53795,7 +53794,7 @@ function PersonSheet({
       fontSize: 12,
       color: who === "shared" ? "rgba(6,35,28,0.7)" : "rgba(255,255,255,0.85)"
     }
-  }, who === "shared" ? "Shared goal" : `Level ${levelInfo(points[who] || 0).level} \u00b7 ${points[who] || 0} points`)), who !== "shared" && onBonus && /*#__PURE__*/React.createElement("button", {
+  }, who === "shared" ? `${prog.current} / ${prog.target} · Shared goal` : `Level ${levelInfo(points[who] || 0).level} \u00b7 ${points[who] || 0} points`)), who !== "shared" && onBonus && /*#__PURE__*/React.createElement("button", {
     onClick: () => onBonus(who),
     className: "sans",
     "aria-label": `Award bonus points to ${label}`,
@@ -59954,7 +59953,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v389"))))), diagOpen && (() => {
+  }, "v390"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
