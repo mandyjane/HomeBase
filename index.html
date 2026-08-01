@@ -8047,20 +8047,6 @@ function App({
     const meta = document.querySelector('meta[name="viewport"]');
     if (meta) meta.setAttribute("content", "width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover");
   }, []);
-
-  // v385 · Block native undo/redo entirely on iOS.
-  // React controlled inputs don't support native undo — it fights React state
-  // and causes stale values. iOS keeps undo history even after blur, so shaking
-  // the phone on the dashboard triggers "Undo Typing" from old form inputs.
-  // Blocking beforeinput historyUndo/Redo prevents the action AND suppresses
-  // the dialog on iOS Safari.
-  useEffect(() => {
-    const block = e => {
-      if (e.inputType === "historyUndo" || e.inputType === "historyRedo") e.preventDefault();
-    };
-    document.addEventListener("beforeinput", block);
-    return () => document.removeEventListener("beforeinput", block);
-  }, []);
   useEffect(() => {
     lsSet("hb_tasks", tasks);
   }, [tasks]);
@@ -12232,7 +12218,7 @@ function App({
            installable app" fell back to system fonts the moment there was no signal —
            and pinged Google each time it opened. Nothing to fetch now. */
         *{box-sizing:border-box;margin:0;padding:0}
-        html,body{background:${C.page} !important}
+        html,body{background:${C.page} !important;overflow-x:hidden !important;max-width:100vw !important}
         /* v225 · The task action row is nowrap, so on the narrowest phones the "Done"
            WORD is dropped and the button becomes clock + chevron. That is self-evident
            beside a completed task and buys ~30px — enough for the ⚡ to stay on the line.
@@ -59934,7 +59920,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v385"))))), diagOpen && (() => {
+  }, "v386"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
