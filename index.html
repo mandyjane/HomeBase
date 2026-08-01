@@ -8047,6 +8047,23 @@ function App({
     const meta = document.querySelector('meta[name="viewport"]');
     if (meta) meta.setAttribute("content", "width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover");
   }, []);
+
+  // v383 · Blur inputs on tap-away to clear iOS undo history.
+  // iOS keeps undo state for the last focused input even after navigation,
+  // so shaking the phone on the dashboard triggers "Undo Typing" from a
+  // form you left minutes ago. Blurring on outside tap clears that state.
+  useEffect(() => {
+    const handler = e => {
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) {
+        if (!e.target.closest("input,textarea,select")) ae.blur();
+      }
+    };
+    document.addEventListener("touchstart", handler, {
+      passive: true
+    });
+    return () => document.removeEventListener("touchstart", handler);
+  }, []);
   useEffect(() => {
     lsSet("hb_tasks", tasks);
   }, [tasks]);
@@ -59920,7 +59937,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v382"))))), diagOpen && (() => {
+  }, "v383"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
