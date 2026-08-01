@@ -8048,28 +8048,18 @@ function App({
     if (meta) meta.setAttribute("content", "width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover");
   }, []);
 
-  // v383 · Blur inputs on tap-away to clear iOS undo history.
-  // iOS keeps undo state for the last focused input even after navigation,
-  // so shaking the phone on the dashboard triggers "Undo Typing" from a
-  // form you left minutes ago. Blurring on outside tap clears that state.
+  // v385 · Block native undo/redo entirely on iOS.
+  // React controlled inputs don't support native undo — it fights React state
+  // and causes stale values. iOS keeps undo history even after blur, so shaking
+  // the phone on the dashboard triggers "Undo Typing" from old form inputs.
+  // Blocking beforeinput historyUndo/Redo prevents the action AND suppresses
+  // the dialog on iOS Safari.
   useEffect(() => {
-    const handler = e => {
-      const ae = document.activeElement;
-      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT")) {
-        if (!e.target.closest("input,textarea,select")) {
-          // Clear iOS undo buffer by resetting the native value before blur.
-          // Just blurring is not enough — iOS keeps undo history after blur.
-          const v = ae.value;
-          ae.value = "";
-          ae.value = v;
-          ae.blur();
-        }
-      }
+    const block = e => {
+      if (e.inputType === "historyUndo" || e.inputType === "historyRedo") e.preventDefault();
     };
-    document.addEventListener("touchstart", handler, {
-      passive: true
-    });
-    return () => document.removeEventListener("touchstart", handler);
+    document.addEventListener("beforeinput", block);
+    return () => document.removeEventListener("beforeinput", block);
   }, []);
   useEffect(() => {
     lsSet("hb_tasks", tasks);
@@ -12254,7 +12244,7 @@ function App({
         @keyframes slideUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
         @keyframes sheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
         /* v356 · iPhone safe area — extend all bottom sheets behind the home indicator */
-        .hb-sa{padding-bottom:env(safe-area-inset-bottom,0px)!important}
+        .hb-sa{padding-bottom:env(safe-area-inset-bottom,0px)!important;overflow-x:hidden!important}
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
         @keyframes drawtick{to{stroke-dashoffset:0}}
         @keyframes cbpop{0%{transform:scale(1)}45%{transform:scale(1.25)}100%{transform:scale(1)}}
@@ -12308,7 +12298,7 @@ function App({
         .card-tap{cursor:pointer;transition:transform 0.16s,box-shadow 0.16s}
         .card-tap:active{transform:scale(0.99)}
         input,select,textarea{background:${C.pageWarm} !important;color:${C.ink} !important;border:1.5px solid ${C.rule} !important;border-radius:12px !important;padding:11px 13px !important;font-family:'Roboto Condensed',sans-serif !important;font-size:14px !important;width:100%;max-width:100% !important;box-sizing:border-box !important;outline:none !important;transition:border-color 0.18s}
-        input[type="date"],input[type="time"]{-webkit-min-logical-width:0 !important;min-width:0 !important;width:100% !important;max-width:100% !important;overflow:hidden !important;-webkit-appearance:textfield !important;appearance:textfield !important}
+        input[type="date"],input[type="time"]{-webkit-min-logical-width:0 !important;min-width:0 !important;width:100% !important;max-width:100% !important;overflow:hidden !important}
         input:focus,select:focus,textarea:focus{border-color:${C.accent} !important}
         /* THE GLOBAL input RULE ABOVE IS ALL !important, AND A STYLESHEET !important BEATS AN
            INLINE ONE. So an input that must NOT look like a form field cannot opt out inline —
@@ -59944,7 +59934,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v384"))))), diagOpen && (() => {
+  }, "v385"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
