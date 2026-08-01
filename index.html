@@ -54584,7 +54584,12 @@ function ChangePinSheet({
 function collectCompletedTasks(tasks, who, periodStart, periodEnd, resetAfter) {
   const results = [];
   (tasks || []).forEach(t => {
-    if (!t || isBill(t)) return;
+    if (!t) return;
+    // v392 · Bills award points but were excluded from activity, so the
+    // household goal showed points with no matching activity. Include bills
+    // for "shared" so the numbers add up. Individual activity still hides
+    // bills — they have their own tab.
+    if (isBill(t) && who !== "shared") return;
     const assignee = t.assignee || "both";
     const pts = t.points || 0;
     const rm = taskMeta(t);
@@ -59963,7 +59968,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v391"))))), diagOpen && (() => {
+  }, "v392"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
