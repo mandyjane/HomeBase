@@ -19951,6 +19951,283 @@ function Clip() {
 // "this bill arrived, here is the actual amount" — the full TaskModal is overkill for
 // that, and the scope dialog ("new price or one-off?") is confusing when you just want
 // to record what you received. Saves ALWAYS write to this occurrence only.
+// ── BILL CATCH-UP MODE *(v399)* ──────────────────────────────────────────────
+// When a recurring bill has 2+ overdue months, this walks through them oldest-first
+// so you can enter each amount and mark paid without hunting through the calendar.
+function overdueBillDates(series, today) {
+  if (!series.recur || series.recur === "none") return [];
+  const dates = seriesDates(series, "dueDate", series.dueDate, today);
+  const ex = series.exceptions || {};
+  return dates.filter(d => d < today && !(ex[d] && (ex[d].done || ex[d].deleted || ex[d].purged))).sort();
+}
+function BillCatchUp({
+  bill,
+  overdueDates,
+  onPay,
+  onExit
+}) {
+  const [step, setStep] = useState(0);
+  const [amt, setAmt] = useState(String(bill.amount || ""));
+  const [paying, setPaying] = useState(false);
+  const total = overdueDates.length;
+  const date = overdueDates[step];
+  const allDone = step >= total;
+
+  // Reset amount field when step changes
+  useEffect(() => {
+    setAmt(String(bill.amount || ""));
+    setPaying(false);
+  }, [step]);
+  if (allDone) {
+    // Show completion, then auto-exit after a moment
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: "14px 0 6px",
+        textAlign: "center"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 14,
+        fontWeight: 700,
+        color: C.low,
+        marginBottom: 6
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "16",
+      height: "16",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2.5",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      style: {
+        verticalAlign: "-3px",
+        marginRight: 6
+      }
+    }, /*#__PURE__*/React.createElement("polyline", {
+      points: "20 6 9 17 4 12"
+    })), "All caught up · ", total, " months paid"), /*#__PURE__*/React.createElement("button", {
+      onClick: onExit,
+      className: "sans",
+      style: {
+        fontSize: 11,
+        color: C.inkMute,
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: 6
+      }
+    }, "Done"));
+  }
+  function doPay() {
+    if (paying) return;
+    setPaying(true);
+    const parsed = parseAmt(amt);
+    // Build a materialized occurrence for this date
+    const occ = materialize(bill, date, "dueDate");
+    // Call onPay which triggers toggleDone with amount
+    onPay(occ, parsed, date);
+    // Advance to next step after a brief pause for the state to settle
+    setTimeout(() => setStep(s => s + 1), 300);
+  }
+  const dt = new Date(date + "T00:00:00");
+  const monthLabel = MON[dt.getMonth()] + " " + dt.getFullYear();
+  const lbl = {
+    fontSize: 10.5,
+    fontWeight: 600,
+    color: C.inkMute,
+    textTransform: "uppercase",
+    letterSpacing: .4,
+    width: 62,
+    flexShrink: 0
+  };
+  const inp = {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: 600,
+    padding: "9px 11px",
+    borderRadius: 10,
+    background: C.page,
+    border: `1px solid ${C.rule}`,
+    color: C.ink,
+    fontFamily: "inherit"
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 0 6px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: mixHex(C.card, C.page, 0.5),
+      border: `1.5px solid ${rgbaFromHex(C.low, 0.2)}`,
+      borderRadius: 14,
+      padding: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 4,
+      marginBottom: 12
+    }
+  }, overdueDates.map((_, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      width: 8,
+      height: 8,
+      borderRadius: "50%",
+      background: i < step ? C.low : i === step ? BILL_COLOR : "#333",
+      boxShadow: i === step ? `0 0 6px ${BILL_COLOR}66` : "none",
+      transition: "all .2s"
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: BILL_COLOR
+    }
+  }, monthLabel), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      color: C.inkMute
+    }
+  }, step + 1, " of ", total)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: lbl
+  }, "Amount"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "decimal",
+    step: "0.01",
+    value: amt,
+    onChange: e => setAmt(e.target.value),
+    className: "sans",
+    style: {
+      ...inp,
+      maxWidth: 160
+    },
+    placeholder: "0.00"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 2
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: lbl
+  }, "Due date"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      color: C.ink,
+      fontWeight: 500
+    }
+  }, shortDate(date))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: doPay,
+    disabled: paying,
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: "11px 12px",
+      borderRadius: 10,
+      border: "none",
+      background: `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
+      color: "#fff",
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: paying ? "default" : "pointer",
+      opacity: paying ? .6 : 1,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "13",
+    height: "13",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("polyline", {
+    points: "20 6 9 17 4 12"
+  })), step < total - 1 ? "Paid · next month" : "Paid · finish"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setStep(s => s + 1),
+    className: "sans",
+    style: {
+      padding: "11px 16px",
+      borderRadius: 10,
+      border: `1px solid ${C.rule}`,
+      background: "transparent",
+      color: C.inkMute,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Skip")), step > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.inkMute,
+      marginTop: 10,
+      paddingTop: 8,
+      borderTop: `1px solid ${C.ruleSoft}`
+    }
+  }, overdueDates.slice(0, step).map((d, i) => {
+    const ex = (bill.exceptions || {})[d];
+    const paid = ex && ex.done;
+    const dt2 = new Date(d + "T00:00:00");
+    return /*#__PURE__*/React.createElement("span", {
+      key: d,
+      style: {
+        color: paid ? C.low : C.inkFaint
+      }
+    }, i > 0 ? " · " : "", MON[dt2.getMonth()], " ", paid ? "done" : "skipped");
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      paddingTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onExit,
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: 6
+    }
+  }, "Exit catch-up")));
+}
 function BillQuickEdit({
   bill,
   occDate,
@@ -27754,6 +28031,7 @@ function BillsTab({
   mortShowPropVal = true
 }) {
   const [openId, setOpenId] = useState(null);
+  const [billCatchUpId, setBillCatchUpId] = useState(null); // v399: which bill is in catch-up mode
   // v307: view is lifted to App (billsView/onBillsView) so the header can read it.
   // Keep local aliases for backward compat with all existing references.
   const view = billsView;
@@ -29435,24 +29713,96 @@ function BillsTab({
         padding: "0 14px 14px"
       },
       onClick: e => e.stopPropagation()
-    }, r.recurring && !r.paid && onQuickUpdate && /*#__PURE__*/React.createElement("div", {
-      style: {
-        borderTop: `1px solid ${C.ruleSoft}`
-      }
-    }, /*#__PURE__*/React.createElement(BillQuickEdit, {
-      bill: r.bill,
-      occDate: r.date,
-      occAmount: r.amount,
-      seriesAmount: r.bill.amount,
-      onSave: onQuickUpdate,
-      onFullEdit: () => onEdit({
-        ...r.bill,
-        dueDate: r.date,
-        _occDate: r.date,
-        _seriesId: r.bill.id,
-        _isOccurrence: true
-      })
-    })), /*#__PURE__*/React.createElement("div", {
+    }, r.recurring && !r.paid && (() => {
+      const overdueDates = overdueBillDates(r.bill, today);
+      const inCatchUp = billCatchUpId === r.bill.id;
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          borderTop: `1px solid ${C.ruleSoft}`
+        }
+      }, inCatchUp ? /*#__PURE__*/React.createElement(BillCatchUp, {
+        bill: r.bill,
+        overdueDates: overdueDates,
+        onPay: (occ, amt, date) => onToggle(occ, null, amt, date),
+        onExit: () => setBillCatchUpId(null)
+      }) : /*#__PURE__*/React.createElement(React.Fragment, null, overdueDates.length >= 2 && /*#__PURE__*/React.createElement("div", {
+        onClick: () => setBillCatchUpId(r.bill.id),
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 0",
+          cursor: "pointer",
+          margin: "4px 0"
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          width: 32,
+          height: 32,
+          borderRadius: 9,
+          background: softTint(BILL_COLOR),
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "16",
+        height: "16",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: BILL_COLOR,
+        strokeWidth: "2",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }, /*#__PURE__*/React.createElement("polyline", {
+        points: "13 17 18 12 13 7"
+      }), /*#__PURE__*/React.createElement("polyline", {
+        points: "6 17 11 12 6 7"
+      }))), /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1,
+          minWidth: 0
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "sans",
+        style: {
+          fontSize: 13,
+          fontWeight: 700,
+          color: BILL_COLOR
+        }
+      }, "Catch up on ", overdueDates.length, " months"), /*#__PURE__*/React.createElement("div", {
+        className: "sans",
+        style: {
+          fontSize: 10,
+          color: C.inkMute
+        }
+      }, "Enter amounts from ", shortDate(overdueDates[0]), " to ", shortDate(overdueDates[overdueDates.length - 1]))), /*#__PURE__*/React.createElement("svg", {
+        width: "14",
+        height: "14",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: C.inkFaint,
+        strokeWidth: "2",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }, /*#__PURE__*/React.createElement("polyline", {
+        points: "9 18 15 12 9 6"
+      }))), onQuickUpdate && /*#__PURE__*/React.createElement(BillQuickEdit, {
+        bill: r.bill,
+        occDate: r.date,
+        occAmount: r.amount,
+        seriesAmount: r.bill.amount,
+        onSave: onQuickUpdate,
+        onFullEdit: () => onEdit({
+          ...r.bill,
+          dueDate: r.date,
+          _occDate: r.date,
+          _seriesId: r.bill.id,
+          _isOccurrence: true
+        })
+      })));
+    })(), /*#__PURE__*/React.createElement("div", {
       style: {
         borderTop: `1px solid ${C.ruleSoft}`,
         marginBottom: hist.length ? 10 : 0
@@ -60477,7 +60827,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v398"))))), diagOpen && (() => {
+  }, "v399"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
