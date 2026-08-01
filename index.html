@@ -12284,6 +12284,7 @@ function App({
         .card-tap{cursor:pointer;transition:transform 0.16s,box-shadow 0.16s}
         .card-tap:active{transform:scale(0.99)}
         input,select,textarea{background:${C.pageWarm} !important;color:${C.ink} !important;border:1.5px solid ${C.rule} !important;border-radius:12px !important;padding:11px 13px !important;font-family:'Roboto Condensed',sans-serif !important;font-size:14px !important;width:100%;max-width:100% !important;box-sizing:border-box !important;outline:none !important;transition:border-color 0.18s}
+        input[type="date"],input[type="time"]{-webkit-min-logical-width:0 !important;min-width:0 !important;overflow:hidden !important}
         input:focus,select:focus,textarea:focus{border-color:${C.accent} !important}
         /* THE GLOBAL input RULE ABOVE IS ALL !important, AND A STYLESHEET !important BEATS AN
            INLINE ONE. So an input that must NOT look like a form field cannot opt out inline —
@@ -59917,7 +59918,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v380"))))), diagOpen && (() => {
+  }, "v381"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
