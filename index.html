@@ -9420,6 +9420,27 @@ function App({
     }));
     showToast("Document attached", "success");
   }
+
+  // ── QUICK BILL UPDATE *(v394)* ────────────────────────────────────────────
+  // Inline edit from the expanded bill card. Writes amount (and potentially other
+  // fields) as an exception for this occurrence. No scope dialog — always "this one."
+  function quickBillUpdate(bill, occDate, updates) {
+    setTasks(ts => ts.map(t => {
+      if (t.id !== bill.id) return t;
+      const ex = {
+        ...(t.exceptions || {})
+      };
+      ex[occDate] = {
+        ...(ex[occDate] || {}),
+        ...updates
+      };
+      return {
+        ...t,
+        exceptions: ex
+      };
+    }));
+    showToast("Bill updated", "success");
+  }
   function deleteDoc(seriesId, occDate) {
     setTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
@@ -15654,6 +15675,7 @@ function App({
       onAttachLink: attachLink,
       onDeleteLink: deleteLink,
       onEditPayment: editPayment,
+      onQuickUpdate: quickBillUpdate,
       onDeletePayment: deletePayment,
       onEndRepeat: endRepeat,
       onEndRepeatAt: endRepeatAt,
@@ -19809,6 +19831,161 @@ function Clip() {
 // corner, so it costs NO extra height — the avg/count line that lived there moved under
 // the chart.
 //
+// ── BILL QUICK EDIT *(v394)* ─────────────────────────────────────────────
+// Inline amount + due date editor inside the expanded bill card. The common act is
+// "this bill arrived, here is the actual amount" — the full TaskModal is overkill for
+// that, and the scope dialog ("new price or one-off?") is confusing when you just want
+// to record what you received. Saves ALWAYS write to this occurrence only.
+function BillQuickEdit({
+  bill,
+  occDate,
+  occAmount: initAmt,
+  seriesAmount,
+  onSave,
+  onFullEdit
+}) {
+  const [amt, setAmt] = useState(initAmt != null ? String(initAmt) : "");
+  const [saved, setSaved] = useState(false);
+  const parsed = parseAmt(amt);
+  const seriesParsed = parseAmt(seriesAmount);
+  const changed = parsed !== parseAmt(initAmt);
+  const showWas = seriesParsed > 0 && parsed !== seriesParsed;
+  function doSave() {
+    if (!changed) return;
+    onSave(bill, occDate, {
+      amount: parsed
+    });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  }
+  const C = useContext(ThemeCtx);
+  const lbl = {
+    fontSize: 10.5,
+    fontWeight: 600,
+    color: C.inkMute,
+    textTransform: "uppercase",
+    letterSpacing: .4,
+    width: 62,
+    flexShrink: 0
+  };
+  const inp = {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: 600,
+    padding: "9px 11px",
+    borderRadius: 10,
+    background: C.page,
+    border: `1px solid ${C.rule}`,
+    color: C.ink,
+    fontFamily: "inherit"
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "12px 0 8px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: showWas ? 4 : 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: lbl
+  }, "Amount"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "decimal",
+    step: "0.01",
+    value: amt,
+    onChange: e => {
+      setAmt(e.target.value);
+      setSaved(false);
+    },
+    className: "sans",
+    style: {
+      ...inp,
+      maxWidth: 160
+    },
+    placeholder: "$0.00"
+  })), showWas && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.inkFaint,
+      marginBottom: 10,
+      paddingLeft: 72
+    }
+  }, "was ", fmtMoney(seriesParsed)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 2
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: lbl
+  }, "Due date"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      color: C.ink,
+      fontWeight: 500
+    }
+  }, shortDate(occDate))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: doSave,
+    disabled: !changed || saved,
+    className: "sans",
+    style: {
+      padding: "8px 18px",
+      borderRadius: 10,
+      border: "none",
+      background: saved ? "#2a6" : !changed ? C.ruleSoft : `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
+      color: saved || changed ? "#fff" : C.inkFaint,
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: changed ? "pointer" : "default",
+      opacity: !changed && !saved ? .5 : 1,
+      transition: "all .2s"
+    }
+  }, saved ? "Saved" : "Save"), /*#__PURE__*/React.createElement("button", {
+    onClick: onFullEdit,
+    className: "sans",
+    style: {
+      padding: "8px 14px",
+      borderRadius: 10,
+      border: `1px solid ${C.rule}`,
+      background: "transparent",
+      color: C.inkMute,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: 5
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "11",
+    height: "11",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.4",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"
+  })), "Full edit")));
+}
+
 // Two states: no document → a dashed, muted "Attach" clip. Has one → a solid,
 // bill-coloured "Bill" clip. So a glance tells you which bills you have paperwork for.
 // Replace and Remove live inside the viewer — there is only room for one pill here, and
@@ -27335,6 +27512,7 @@ function BillsTab({
   onAttachLink,
   onDeleteLink,
   onEditPayment,
+  onQuickUpdate,
   onDeletePayment,
   onEndRepeat,
   onEndRepeatAt,
@@ -29026,7 +29204,24 @@ function BillsTab({
         padding: "0 14px 14px"
       },
       onClick: e => e.stopPropagation()
-    }, /*#__PURE__*/React.createElement("div", {
+    }, r.recurring && !r.paid && onQuickUpdate && /*#__PURE__*/React.createElement("div", {
+      style: {
+        borderTop: `1px solid ${C.ruleSoft}`
+      }
+    }, /*#__PURE__*/React.createElement(BillQuickEdit, {
+      bill: r.bill,
+      occDate: r.date,
+      occAmount: r.amount,
+      seriesAmount: r.bill.amount,
+      onSave: onQuickUpdate,
+      onFullEdit: () => onEdit({
+        ...r.bill,
+        dueDate: r.date,
+        _occDate: r.date,
+        _seriesId: r.bill.id,
+        _isOccurrence: true
+      })
+    })), /*#__PURE__*/React.createElement("div", {
       style: {
         borderTop: `1px solid ${C.ruleSoft}`,
         marginBottom: hist.length ? 10 : 0
@@ -29041,7 +29236,7 @@ function BillsTab({
       showTimes: showTimes,
       onToggle: (pointsTo, amt, pdate, pphoto) => onToggle(r.occ, pointsTo, amt, pdate, pphoto),
       onToggleSub: sid => onToggleSub(r.occ, sid),
-      onEdit: () => onEdit({
+      onEdit: r.recurring ? null : () => onEdit({
         ...r.bill,
         dueDate: r.date,
         _occDate: r.date,
@@ -59980,7 +60175,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v393"))))), diagOpen && (() => {
+  }, "v394"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
