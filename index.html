@@ -28623,7 +28623,13 @@ function BillsTab({
     const bc = billCat(r.bill);
     return /*#__PURE__*/React.createElement("div", {
       key: "chg" + r.bill.id + "@" + r.date,
-      onClick: () => onEdit && onEdit(r.bill),
+      onClick: () => onEdit && onEdit({
+        ...r.bill,
+        dueDate: r.date,
+        _occDate: r.date,
+        _seriesId: r.bill.id,
+        _isOccurrence: true
+      }),
       style: {
         display: "flex",
         alignItems: "flex-start",
@@ -29035,7 +29041,13 @@ function BillsTab({
       showTimes: showTimes,
       onToggle: (pointsTo, amt, pdate, pphoto) => onToggle(r.occ, pointsTo, amt, pdate, pphoto),
       onToggleSub: sid => onToggleSub(r.occ, sid),
-      onEdit: () => onEdit(r.bill),
+      onEdit: () => onEdit({
+        ...r.bill,
+        dueDate: r.date,
+        _occDate: r.date,
+        _seriesId: r.bill.id,
+        _isOccurrence: true
+      }),
       onDelete: scope => onDelete(scope === "one" ? r.occ : r.bill, scope),
       onEndRepeat: onEndRepeat,
       onEndRepeatAt: onEndRepeatAt,
@@ -59968,7 +59980,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v392"))))), diagOpen && (() => {
+  }, "v393"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
