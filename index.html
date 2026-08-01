@@ -19845,16 +19845,21 @@ function BillQuickEdit({
   onFullEdit
 }) {
   const [amt, setAmt] = useState(initAmt != null ? String(initAmt) : "");
+  const initDate = bill.exceptions && bill.exceptions[occDate] && bill.exceptions[occDate].dueDate || occDate;
+  const [dt, setDt] = useState(initDate);
   const [saved, setSaved] = useState(false);
   const parsed = parseAmt(amt);
   const seriesParsed = parseAmt(seriesAmount);
-  const changed = parsed !== parseAmt(initAmt);
+  const amtChanged = parsed !== parseAmt(initAmt);
+  const dtChanged = dt !== initDate;
+  const changed = amtChanged || dtChanged;
   const showWas = seriesParsed > 0 && parsed !== seriesParsed;
   function doSave() {
     if (!changed) return;
-    onSave(bill, occDate, {
-      amount: parsed
-    });
+    const updates = {};
+    if (amtChanged) updates.amount = parsed;
+    if (dtChanged) updates.dueDate = dt;
+    onSave(bill, occDate, updates);
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
   }
@@ -19925,14 +19930,21 @@ function BillQuickEdit({
   }, /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: lbl
-  }, "Due date"), /*#__PURE__*/React.createElement("span", {
+  }, "Due date"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: dt,
+    onChange: e => {
+      setDt(e.target.value);
+      setSaved(false);
+    },
     className: "sans",
     style: {
-      fontSize: 13,
-      color: C.ink,
-      fontWeight: 500
+      ...inp,
+      fontSize: 14,
+      fontWeight: 500,
+      maxWidth: 180
     }
-  }, shortDate(occDate))), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -28892,7 +28904,12 @@ function BillsTab({
   function renderBill(r) {
     const isOpen = openId === r.bill.id && !r._preview;
     const hist = billHistory(r.bill);
-    const overdue = !r.paid && r.date < today;
+    // v394 · A dueDate override in exceptions means "the actual bill says this date."
+    // The occurrence key (r.date) stays as the predicted date for exception lookups;
+    // displayDate is what the card header and overdue logic use.
+    const dueDateOverride = r.bill.exceptions && r.bill.exceptions[r.date] && r.bill.exceptions[r.date].dueDate || null;
+    const displayDate = dueDateOverride || r.date;
+    const overdue = !r.paid && displayDate < today;
     const bc = billCat(r.bill);
     // A PREVIEW CARD CANNOT BE TICKED, AND MUST NOT OPEN *(v127)*.
     //
@@ -29001,7 +29018,7 @@ function BillsTab({
       }
     }, r.bill.title), (() => {
       if (r.paid) return null;
-      const late = lateLabel(r.date, today);
+      const late = lateLabel(displayDate, today);
       if (late) return /*#__PURE__*/React.createElement("span", {
         className: "sans",
         style: {
@@ -29038,7 +29055,7 @@ function BillsTab({
         fontSize: 10.5,
         color: overdue ? C.urgent : C.inkMute
       }
-    }, r.paid ? `Paid ${relLabel(r.date, today)}` : `Due ${relLabel(r.date, today)}`, (() => {
+    }, r.paid ? `Paid ${relLabel(displayDate, today)}` : `Due ${relLabel(displayDate, today)}`, (() => {
       const rl = r.recurring ? recurLabel(r.bill.recur) : "";
       return rl ? ` · ${rl}` : null;
     })(), (() => {
