@@ -12065,7 +12065,24 @@ function App({
   // (materialised occurrences with exceptions applied), never the raw series, for
   // the same reason overdueTasks is: a recurring series' dueDate is the series
   // START, permanently in the past.
-  const overdueBills = listTasks.filter(t => isBill(t) && !t.done && t.dueDate < today);
+  // v399 · Include recurring bills with missed months, not just bills whose displayed
+  // occurrence is past due. A monthly bill starting in March with no payments shows
+  // "Due 15 Aug" (the next occurrence) but has 3+ months overdue behind it.
+  const overdueBills = (() => {
+    const direct = listTasks.filter(t => isBill(t) && !t.done && t.dueDate < today);
+    const directIds = new Set(direct.map(t => t._seriesId || t.id));
+    // Find recurring bills with overdue backlogs not already in the direct list
+    const withBacklog = tasks.filter(t => isBill(t) && t.recur && t.recur !== "none" && !directIds.has(t.id) && overdueBillDates(t, today).length > 0);
+    // Materialize each backlog bill so it has the right shape for the dashboard
+    return [...direct, ...withBacklog.map(b => {
+      const dates = overdueBillDates(b, today);
+      return {
+        ...b,
+        _overdueCount: dates.length,
+        _overdueLabel: `${dates.length} month${dates.length > 1 ? "s" : ""} overdue`
+      };
+    })];
+  })();
   // v276 · CARD-CHARGED BILLS DO NOT COUNT TOWARDS WHAT YOU STILL OWE. The card bill
   // already carries their money, so adding them again is the double-count this feature
   // exists to remove. Applied to FORWARD-LOOKING totals only (overdue / due / owed).
@@ -12075,7 +12092,11 @@ function App({
   // fix; excluding from what you SPENT would be a new bug.
   const cardList = useMemo(() => cardBills(tasks), [tasks]);
   const owed = t => !isOnCard(t, cardList);
-  const overdueBillTotal = overdueBills.filter(owed).reduce((s, b) => s + parseAmt(b.amount), 0);
+  const overdueBillTotal = overdueBills.filter(owed).reduce((s, b) => {
+    // A backlog bill has _overdueCount months; multiply by series amount as an estimate
+    const count = b._overdueCount || 1;
+    return s + parseAmt(b.amount) * count;
+  }, 0);
 
   // Bills are pulled OUT of the main agenda so they can be grouped (or summarised)
   // rather than jumbled in with the chores. Partitioned AFTER homeAgenda is built, so
@@ -14285,7 +14306,7 @@ function App({
         textOverflow: "ellipsis",
         whiteSpace: "nowrap"
       }
-    }, overdueBills.map(b => b.title).join(", "))), /*#__PURE__*/React.createElement("span", {
+    }, overdueBills.map(b => b._overdueCount ? `${b.title} (${b._overdueCount})` : b.title).join(", "))), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
         flexShrink: 0,
@@ -29403,6 +29424,9 @@ function BillsTab({
     const dueDateOverride = r.bill.exceptions && r.bill.exceptions[r.date] && r.bill.exceptions[r.date].dueDate || null;
     const displayDate = dueDateOverride || r.date;
     const overdue = !r.paid && displayDate < today;
+    // v399 · Count ALL overdue occurrences, not just the displayed one
+    const overdueCount = r.recurring ? overdueBillDates(r.bill, today).length : 0;
+    const hasOverdue = overdue || overdueCount > 0;
     const bc = billCat(r.bill);
     // A PREVIEW CARD CANNOT BE TICKED, AND MUST NOT OPEN *(v127)*.
     //
@@ -29440,12 +29464,12 @@ function BillsTab({
     //     the list would visibly jog as bills fall due.
     // An inset shadow paints inside the border box and costs no layout at all. It sits
     // alongside the existing drop shadow rather than replacing it.
-    const cardShadow = overdue ? `inset 4px 0 0 ${C.urgent}, ${C.shadowSm}` : C.shadowSm;
+    const cardShadow = hasOverdue ? `inset 4px 0 0 ${C.urgent}, ${C.shadowSm}` : C.shadowSm;
     return /*#__PURE__*/React.createElement("div", {
       key: r._key || r.bill.id,
       style: {
         background: C.card,
-        border: `1px solid ${overdue ? C.urgent : C.rule}`,
+        border: `1px solid ${hasOverdue ? C.urgent : C.rule}`,
         borderRadius: 16,
         marginBottom: 9,
         boxShadow: cardShadow,
@@ -29546,9 +29570,9 @@ function BillsTab({
       className: "sans",
       style: {
         fontSize: 10.5,
-        color: overdue ? C.urgent : C.inkMute
+        color: hasOverdue ? C.urgent : C.inkMute
       }
-    }, r.paid ? `Paid ${relLabel(displayDate, today)}` : `Due ${relLabel(displayDate, today)}`, (() => {
+    }, overdueCount > 0 ? `${overdueCount} month${overdueCount > 1 ? "s" : ""} overdue · Due ${relLabel(displayDate, today)}` : r.paid ? `Paid ${relLabel(displayDate, today)}` : `Due ${relLabel(displayDate, today)}`, (() => {
       const rl = r.recurring ? recurLabel(r.bill.recur) : "";
       return rl ? ` · ${rl}` : null;
     })(), (() => {
@@ -60827,7 +60851,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v399"))))), diagOpen && (() => {
+  }, "v400"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
