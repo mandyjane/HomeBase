@@ -6029,7 +6029,6 @@ const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 let sbClient = null;
 let sbHouseholdId = null;
 let sbUserId = null;
-let sbPartnerId = null; // v414 · partner's Supabase user ID for targeted push
 
 // v339 · Per-user appearance keys. Appearance (mood, accent, bg, deadline) is personal
 // preference — Mandy and Liam can each have their own mood without overwriting the other.
@@ -6210,12 +6209,6 @@ function LoginScreen({
         sbHouseholdId = prof.household_id;
         sbUserId = data.user.id;
         sbUserName = prof.name;
-        // v414 · fetch partner's user ID for targeted push
-        sb.from("profiles").select("id").eq("household_id", prof.household_id).neq("id", data.user.id).single().then(({
-          data: p
-        }) => {
-          if (p) sbPartnerId = p.id;
-        });
         sbReady = true;
         onLogin({
           name: prof.name,
@@ -6671,12 +6664,6 @@ function AppRoot() {
             sbHouseholdId = prof.household_id;
             sbUserId = session.user.id;
             sbUserName = prof.name;
-            // v414 · fetch partner's user ID for targeted push
-            sb.from("profiles").select("id").eq("household_id", prof.household_id).neq("id", session.user.id).single().then(({
-              data: p
-            }) => {
-              if (p) sbPartnerId = p.id;
-            });
             sbReady = true;
             // Pull remote data, then seed local data up, THEN show the app
             sbPullAll().then(() => {
@@ -8864,7 +8851,7 @@ function App({
         title: "Treat request",
         body: requesterName + " wants to set a new treat: " + newTreat,
         household_id: sbHouseholdId,
-        target_user_id: sbPartnerId || null,
+        exclude_user_id: sbUserId || null,
         sent: false
       }], {
         onConflict: "id"
@@ -8897,7 +8884,7 @@ function App({
           title: "Treat approved!",
           body: approverName + " approved the treat: " + r.treat,
           household_id: sbHouseholdId,
-          target_user_id: sbPartnerId || null,
+          exclude_user_id: sbUserId || null,
           sent: false
         }], {
           onConflict: "id"
@@ -8956,7 +8943,7 @@ function App({
           title: counterProposal ? "Counter-proposal" : "Treat denied",
           body: denierName + (counterProposal ? " counter-proposed: " + counterProposal : " denied the treat" + (denied ? " - " + denied.treat : "")),
           household_id: sbHouseholdId,
-          target_user_id: sbPartnerId || null,
+          exclude_user_id: sbUserId || null,
           sent: false
         }], {
           onConflict: "id"
@@ -61777,7 +61764,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v415"))))), diagOpen && (() => {
+  }, "v416"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
