@@ -7932,7 +7932,14 @@ function App({
   const [billPayer, setBillPayer] = useState(() => lsGet("hb_billPayer", true));
   // How bills appear on the DASHBOARD: "rows" = their own section, still tickable in
   // place; "card" = one summary line that taps through to the Bills tab.
-  const [billHomeStyle, setBillHomeStyle] = useState(() => lsGet("hb_billHome", "rows"));
+  const [billHomeStyle, setBillHomeStyle] = useState(() => {
+    const v = lsGet("hb_billHome", "smart");
+    return v === "rows" || v === "card" ? "smart" : v === "strip" ? "smart" : v;
+  });
+  const [billShowStrip, setBillShowStrip] = useState(() => {
+    const v = lsGet("hb_billHome", "smart");
+    return v === "strip" ? true : lsGet("hb_billStrip", false);
+  });
   const [billPaidStyle, setBillPaidStyle] = useState(() => lsGet("hb_billPaidStyle", "collapsed"));
   // v276 · HOW CARD-CHARGED BILLS SIT IN THE BILLS LIST. Named mode, not a boolean —
   // same shape as billHomeStyle/billPaidStyle above, so the settings row reads the same.
@@ -7945,6 +7952,7 @@ function App({
   // last state"), so a collapsed card stays collapsed across launches.
   const [cardOpen, setCardOpen] = useState(() => lsGet("hb_cardOpen", {}));
   const [paidOpen, setPaidOpen] = useState(false);
+  const [dueOpen, setDueOpen] = useState(false);
   const [billCats, setBillCats] = useState(() => lsGet("hb_billCats", DEFAULT_BILL_CATS));
   // DISMISSED UNRECORDED-DD NUDGES *(v126)* — an array of bill IDs, not a single flag.
   // Dismissing Power must not silence Internet: the banner is a SWEEP, and one global
@@ -8018,6 +8026,9 @@ function App({
   useEffect(() => {
     lsSet("hb_billHome", billHomeStyle);
   }, [billHomeStyle]);
+  useEffect(() => {
+    lsSet("hb_billStrip", billShowStrip);
+  }, [billShowStrip]);
   useEffect(() => {
     lsSet("hb_billPaidStyle", billPaidStyle);
   }, [billPaidStyle]);
@@ -12330,8 +12341,26 @@ function App({
   // "Strip" mode: three figures, fixed height no matter how many bills exist.
   // Paid-this-month is read from billHistory (the same source the Bills tab uses), so
   // the dashboard can never disagree with it.
-  const homeBillOverdue = homeBillRows.filter(r => r.date < today && owed(r.ref)).reduce((a, r) => a + parseAmt(r.ref.amount), 0);
-  const homeBillWeek = homeBillRows.filter(r => r.date >= today && r.date <= addDays(today, 7) && owed(r.ref)).reduce((a, r) => a + parseAmt(r.ref.amount), 0);
+  const homeBillOverdue = overdueBillTotal;
+  const homeBillWeek = (() => {
+    const we = addDays(today, 7);
+    let tot = 0;
+    tasks.filter(isBill).forEach(t => {
+      if (isOnCard(t, cardList)) return;
+      const ex = t.exceptions || {};
+      if (!t.recur || t.recur === "none") {
+        if (!t.done && t.dueDate >= today && t.dueDate <= we) tot += parseAmt(t.amount);
+        return;
+      }
+      seriesDates(t, "dueDate", today, we).forEach(d => {
+        if (d < today || d > we) return;
+        const e = ex[d];
+        if (e && (e.done || e.deleted)) return;
+        tot += parseAmt(occAmount(t, d));
+      });
+    });
+    return tot;
+  })();
   const homeBillPaidMo = tasks.filter(isBill).reduce((a, b) => a + billHistory(b).filter(h => spendYM(h) === today.slice(0, 7)).reduce((x, h) => x + h.amount, 0), 0);
 
   // SEARCH — everything except settings, including completed and past. It reads the
@@ -15123,103 +15152,7 @@ function App({
         y1: "12",
         x2: "19",
         y2: "12"
-      })), "Add")), (homeBillRows.length > 0 || homeBillPaid.length > 0) && billHomeStyle === "card" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-        onClick: () => setTab("bills"),
-        className: "sans",
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 11,
-          width: "100%",
-          textAlign: "left",
-          background: `linear-gradient(150deg,${softTint(BILL_COLOR)},${C.card})`,
-          border: `1px solid ${BILL_COLOR}`,
-          borderRadius: 16,
-          padding: "13px 15px",
-          cursor: "pointer"
-        }
-      }, (() => {
-        const shown = billPaidStyle === "ticked" ? [...homeBillRows, ...homeBillPaid] : homeBillRows;
-        const solo = shown.length === 1 ? shown[0].ref : null;
-        const bc = solo ? billCat(solo) : null;
-        return /*#__PURE__*/React.createElement("span", {
-          style: {
-            width: 32,
-            height: 32,
-            borderRadius: 9,
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: bc ? softTint(bc.color) : BILL_COLOR,
-            color: bc ? bc.color : "#fff"
-          }
-        }, bc ? /*#__PURE__*/React.createElement(EventIcon, {
-          name: bc.icon,
-          size: 17
-        }) : /*#__PURE__*/React.createElement("svg", {
-          width: "16",
-          height: "16",
-          viewBox: "0 0 24 24",
-          fill: "none",
-          stroke: "currentColor",
-          strokeWidth: "1.8",
-          strokeLinecap: "round",
-          strokeLinejoin: "round"
-        }, /*#__PURE__*/React.createElement("rect", {
-          x: "3",
-          y: "4.5",
-          width: "18",
-          height: "16",
-          rx: "2"
-        }), /*#__PURE__*/React.createElement("path", {
-          d: "M3 9h18M8 2.5v4M16 2.5v4"
-        }), /*#__PURE__*/React.createElement("path", {
-          d: "M12 11.5v6M13.8 13c-.4-.5-1-.8-1.8-.8-1 0-1.9.5-1.9 1.3s.9 1.2 1.9 1.2 1.9.4 1.9 1.2-.9 1.3-1.9 1.3c-.8 0-1.4-.3-1.8-.8"
-        })));
-      })(), /*#__PURE__*/React.createElement("span", {
-        style: {
-          flex: 1,
-          minWidth: 0
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        className: numClass(),
-        style: {
-          display: "block",
-          fontSize: 16,
-          color: C.ink
-        }
-      }, fmtMoney(homeBillTotal), " due", billPaidStyle === "ticked" && homeBillPaid.length > 0 ? ` · ${fmtMoney(homeBillPaidTotal)} paid` : ""), /*#__PURE__*/React.createElement("span", {
-        className: "sans",
-        style: {
-          display: "block",
-          fontSize: 10,
-          color: C.inkMute,
-          marginTop: 1,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap"
-        }
-      }, (billPaidStyle === "ticked" ? [...homeBillRows, ...homeBillPaid] : homeBillRows).map(r => r.title).join(" · ") || "All paid")), /*#__PURE__*/React.createElement("span", {
-        className: "sans",
-        style: {
-          flexShrink: 0,
-          fontSize: 10,
-          fontWeight: 800,
-          color: BILL_COLOR
-        }
-      }, billPaidStyle === "ticked" ? homeBillAll.length : homeBillRows.length, " →")), /*#__PURE__*/React.createElement(PaidBills, {
-        rows: homeBillPaid,
-        total: homeBillPaidTotal,
-        style: billPaidStyle,
-        open: paidOpen,
-        setOpen: setPaidOpen,
-        renderRows: renderRows
-      }), /*#__PURE__*/React.createElement("div", {
-        style: {
-          height: 14
-        }
-      })), billHomeStyle === "strip" && (homeBillRows.length > 0 || homeBillPaidMo > 0) && /*#__PURE__*/React.createElement("div", {
+      })), "Add")), billShowStrip && (homeBillAll.length > 0 || homeBillPaidMo > 0) && /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
           gap: 7,
@@ -15259,72 +15192,7 @@ function App({
           color: C.inkMute,
           marginTop: 2
         }
-      }, k)))), (homeBillRows.length > 0 || homeBillPaid.length > 0) && billHomeStyle === "rows" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          margin: "2px 2px 6px"
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        className: "lbl",
-        style: {
-          color: BILL_COLOR
-        }
-      }, billPaidStyle === "ticked" ? "Bills" : "Bills due"), /*#__PURE__*/React.createElement("span", {
-        style: {
-          background: softTint(BILL_COLOR),
-          color: BILL_COLOR,
-          borderRadius: 20,
-          padding: "1px 8px",
-          fontSize: 11,
-          fontWeight: 700
-        }
-      }, billPaidStyle === "ticked" ? homeBillAll.length : homeBillRows.length), /*#__PURE__*/React.createElement("span", {
-        className: numClass(),
-        style: {
-          marginLeft: "auto",
-          fontSize: 13.5,
-          fontWeight: 600,
-          color: BILL_COLOR
-        }
-      }, fmtMoney(homeBillTotal), billPaidStyle === "ticked" && homeBillPaid.length > 0 ? ` · ${fmtMoney(homeBillPaidTotal)} paid` : "")), /*#__PURE__*/React.createElement("div", null, renderRows(billPaidStyle === "ticked" ? [...homeBillRows, ...homeBillPaid] : homeBillRows)), /*#__PURE__*/React.createElement(PaidBills, {
-        rows: homeBillPaid,
-        total: homeBillPaidTotal,
-        style: billPaidStyle,
-        open: paidOpen,
-        setOpen: setPaidOpen,
-        renderRows: renderRows
-      }), /*#__PURE__*/React.createElement("div", {
-        style: {
-          height: 14
-        }
-      })), (() => {
-        const rows = billHomeStyle === "smart" ? [...homeOtherRows, ...homeBillUrgent, ...(billPaidStyle === "ticked" ? homeBillPaid : [])].sort((a, b) => (a.date || "").localeCompare(b.date || "")) : homeOtherRows;
-        return rows.length > 0 ? /*#__PURE__*/React.createElement("div", null, renderRows(rows)) : null;
-      })(), homeEventRows.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          margin: "18px 0 6px"
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        className: "sans",
-        style: {
-          fontSize: 9,
-          fontWeight: 800,
-          letterSpacing: 1.6,
-          textTransform: "uppercase",
-          color: isSleek ? C.accent : C.inkMute
-        }
-      }, "Events · Today"), /*#__PURE__*/React.createElement("span", {
-        style: {
-          flex: 1,
-          height: 1,
-          background: C.rule
-        }
-      })), /*#__PURE__*/React.createElement("div", null, renderRows(homeEventRows))), billHomeStyle === "smart" && homeBillLater.length > 0 && /*#__PURE__*/React.createElement("button", {
+      }, k)))), homeBillLater.length > 0 && /*#__PURE__*/React.createElement("button", {
         onClick: () => setTab("bills"),
         className: "sans",
         style: {
@@ -15378,7 +15246,75 @@ function App({
           flexShrink: 0,
           fontVariantNumeric: "tabular-nums"
         }
-      }, fmtMoney(homeBillLaterTotal))), billHomeStyle === "smart" && /*#__PURE__*/React.createElement(PaidBills, {
+      }, fmtMoney(homeBillLaterTotal))), homeBillRows.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginTop: 8
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: () => setDueOpen(!dueOpen),
+        className: "sans",
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          width: "100%",
+          textAlign: "left",
+          background: C.card,
+          border: "none",
+          borderLeft: `2px solid ${BILL_COLOR}`,
+          borderRadius: dueOpen ? "12px 12px 0 0" : 12,
+          padding: "9px 11px",
+          cursor: "pointer"
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          width: 15,
+          height: 15,
+          borderRadius: "50%",
+          background: softTint(BILL_COLOR),
+          flexShrink: 0
+        }
+      }), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1,
+          minWidth: 0,
+          fontSize: 11,
+          color: C.inkSoft,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
+        }
+      }, "Due · ", homeBillRows.length), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 11,
+          fontWeight: 700,
+          color: C.inkMute,
+          flexShrink: 0,
+          fontVariantNumeric: "tabular-nums"
+        }
+      }, fmtMoney(homeBillTotal)), /*#__PURE__*/React.createElement("svg", {
+        width: "12",
+        height: "12",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: C.inkMute,
+        strokeWidth: "2.4",
+        strokeLinecap: "round",
+        style: {
+          flexShrink: 0,
+          transform: dueOpen ? "rotate(180deg)" : "none",
+          transition: "transform .2s ease"
+        }
+      }, /*#__PURE__*/React.createElement("path", {
+        d: "m6 9 6 6 6-6"
+      }))), dueOpen && /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: C.ruleSoft,
+          borderLeft: `2px solid ${BILL_COLOR}`,
+          borderRadius: "0 0 12px 12px",
+          padding: "6px 6px 2px"
+        }
+      }, renderRows(homeBillRows))), /*#__PURE__*/React.createElement(PaidBills, {
         rows: homeBillPaid,
         total: homeBillPaidTotal,
         style: billPaidStyle,
@@ -16003,6 +15939,8 @@ function App({
       setBillPace: setBillPace,
       billHomeStyle: billHomeStyle,
       setBillHomeStyle: setBillHomeStyle,
+      billShowStrip: billShowStrip,
+      setBillShowStrip: setBillShowStrip,
       billPaidStyle: billPaidStyle,
       setBillPaidStyle: setBillPaidStyle,
       billCardStyle: billCardStyle,
@@ -59514,6 +59452,8 @@ function SettingsPage({
   onRepairSplits,
   billHomeStyle,
   setBillHomeStyle,
+  billShowStrip,
+  setBillShowStrip,
   billPaidStyle,
   setBillPaidStyle,
   billKeypad,
@@ -60733,7 +60673,7 @@ function SettingsPage({
   }))), /*#__PURE__*/React.createElement("span", {
     style: {
       flex: 1,
-      minWidth: 110
+      minWidth: 0
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -60742,43 +60682,37 @@ function SettingsPage({
       fontWeight: 600,
       color: C.ink
     }
-  }, "Bills on dashboard"), /*#__PURE__*/React.createElement("span", {
+  }, "Bill strip"), /*#__PURE__*/React.createElement("span", {
     style: {
       display: "block",
       fontSize: 11.5,
       color: C.inkMute,
       marginTop: 1
     }
-  }, billHomeStyle === "card" ? "One summary line — tap through to Bills" : billHomeStyle === "smart" ? "Only overdue or due within 3 days" : billHomeStyle === "strip" ? "Overdue / this week / paid, at a glance" : "Their own section — tick them from Home")), /*#__PURE__*/React.createElement("span", {
+  }, "Overdue / this week / paid at a glance")), /*#__PURE__*/React.createElement("span", {
+    onClick: () => setBillShowStrip(p => !p),
     style: {
-      display: "flex",
-      width: "100%",
-      background: C.pageWarm,
-      border: `1.5px solid ${C.rule}`,
-      borderRadius: 11,
-      padding: 2,
-      gap: 2,
-      marginTop: 10
+      width: 42,
+      height: 22,
+      borderRadius: 20,
+      background: billShowStrip ? C.accent : C.rule,
+      position: "relative",
+      cursor: "pointer",
+      flexShrink: 0,
+      transition: "background 0.18s"
     }
-  }, [["rows", "Rows"], ["card", "Card"], ["smart", "Smart"], ["strip", "Strip"]].map(([v, lbl]) => {
-    const on = billHomeStyle === v;
-    return /*#__PURE__*/React.createElement("button", {
-      key: v,
-      onClick: () => setBillHomeStyle(v),
-      className: "sans",
-      style: {
-        flex: 1,
-        minWidth: 0,
-        padding: "7px 4px",
-        borderRadius: 8,
-        border: "none",
-        cursor: "pointer",
-        fontSize: 11.5,
-        fontWeight: 700,
-        background: on ? BILL_COLOR : "transparent",
-        color: on ? "#fff" : C.inkMute
-      }
-    }, lbl);
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 2.5,
+      left: billShowStrip ? 18.5 : 2.5,
+      width: 17,
+      height: 17,
+      borderRadius: "50%",
+      background: "#fff",
+      transition: "left 0.18s",
+      boxShadow: "0 1px 2px rgba(0,0,0,0.2)"
+    }
   })))), billHomeStyle !== "strip" && /*#__PURE__*/React.createElement(SRow, {
     hb: "paid bills section ticked collapsed"
   }, /*#__PURE__*/React.createElement("div", {
@@ -61708,7 +61642,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v433"))))), diagOpen && (() => {
+  }, "v434"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
