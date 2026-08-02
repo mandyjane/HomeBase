@@ -20255,6 +20255,7 @@ function BillQuickEdit({
   occAmount: initAmt,
   seriesAmount,
   onSave,
+  onPay,
   onFullEdit
 }) {
   const [amt, setAmt] = useState(initAmt != null ? String(initAmt) : "");
@@ -20364,32 +20365,62 @@ function BillQuickEdit({
       gap: 8,
       marginTop: 14
     }
-  }, /*#__PURE__*/React.createElement("button", {
+  }, onPay && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onPay(parsed),
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: "10px 14px",
+      borderRadius: 10,
+      border: "none",
+      background: `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
+      color: "#fff",
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "13",
+    height: "13",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("polyline", {
+    points: "20 6 9 17 4 12"
+  })), "Paid"), /*#__PURE__*/React.createElement("button", {
     onClick: doSave,
     disabled: !changed || saved,
     className: "sans",
     style: {
-      padding: "8px 18px",
+      padding: "10px 14px",
       borderRadius: 10,
       border: "none",
-      background: saved ? "#2a6" : !changed ? C.ruleSoft : `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
-      color: saved || changed ? "#fff" : C.inkFaint,
+      background: saved ? "#2a6" : !changed ? C.ruleSoft : C.card,
+      color: saved ? "#fff" : changed ? C.ink : C.inkFaint,
       fontSize: 13,
       fontWeight: 700,
       cursor: changed ? "pointer" : "default",
       opacity: !changed && !saved ? .5 : 1,
-      transition: "all .2s"
+      transition: "all .2s",
+      border: `1px solid ${saved ? "#2a6" : C.rule}`
     }
   }, saved ? "Saved" : "Save"), /*#__PURE__*/React.createElement("button", {
     onClick: onFullEdit,
     className: "sans",
     style: {
-      padding: "8px 14px",
+      padding: "10px 12px",
       borderRadius: 10,
       border: `1px solid ${C.rule}`,
       background: "transparent",
       color: C.inkMute,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: 600,
       cursor: "pointer",
       display: "flex",
@@ -29818,6 +29849,7 @@ function BillsTab({
         occAmount: r.amount,
         seriesAmount: r.bill.amount,
         onSave: onQuickUpdate,
+        onPay: paidAmt => onToggle(r.occ, null, paidAmt, r.date),
         onFullEdit: () => onEdit({
           ...r.bill,
           dueDate: r.date,
@@ -29839,7 +29871,7 @@ function BillsTab({
       people: people,
       today: today,
       showTimes: showTimes,
-      onToggle: (pointsTo, amt, pdate, pphoto) => onToggle(r.occ, pointsTo, amt, pdate, pphoto),
+      onToggle: r.recurring ? null : (pointsTo, amt, pdate, pphoto) => onToggle(r.occ, pointsTo, amt, pdate, pphoto),
       onToggleSub: sid => onToggleSub(r.occ, sid),
       onEdit: r.recurring ? null : () => onEdit({
         ...r.bill,
@@ -60851,7 +60883,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v400"))))), diagOpen && (() => {
+  }, "v401"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
