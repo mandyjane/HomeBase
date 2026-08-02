@@ -24434,11 +24434,11 @@ function AgendaRow({
     const pstyle = (active, col) => ({
       display: "inline-flex",
       alignItems: "center",
-      gap: 5,
-      fontSize: 12,
+      gap: 3,
+      fontSize: 10,
       fontWeight: 600,
-      padding: "7px 14px",
-      borderRadius: 20,
+      padding: "4px 10px",
+      borderRadius: 14,
       cursor: "pointer",
       border: `1.5px solid ${active ? col : C.rule}`,
       color: active ? col : C.inkFaint,
@@ -24447,6 +24447,9 @@ function AgendaRow({
     });
     return /*#__PURE__*/React.createElement("div", {
       style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
         marginBottom: 10
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -24457,13 +24460,13 @@ function AgendaRow({
         color: C.inkMute,
         textTransform: "uppercase",
         letterSpacing: .5,
-        marginBottom: 6
+        flexShrink: 0
       }
     }, "Completed by"), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        gap: 6,
-        flexWrap: "wrap"
+        gap: 5,
+        flexWrap: "nowrap"
       }
     }, /*#__PURE__*/React.createElement("button", {
       onClick: () => onChangeCompletedBy("her"),
@@ -61642,7 +61645,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v406"))))), diagOpen && (() => {
+  }, "v407"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
