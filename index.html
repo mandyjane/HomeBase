@@ -13229,7 +13229,7 @@ function App({
       style: {
         display: "flex",
         justifyContent: "space-between",
-        alignItems: "baseline"
+        alignItems: "center"
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "sans",
@@ -13253,73 +13253,84 @@ function App({
     }), label), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        fontSize: 10,
-        fontWeight: 800,
-        letterSpacing: .5,
-        textTransform: "uppercase",
-        color: C.accent
-      }
-    }, "Lv ", lv.level)), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "baseline",
-        gap: 4,
-        marginTop: 4
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "serif",
-      style: {
-        fontSize: 20,
-        color: C.ink,
-        lineHeight: 1
-      }
-    }, points[key]), /*#__PURE__*/React.createElement("span", {
-      className: "sans",
-      style: {
-        fontSize: 8.5,
+        fontSize: 8,
         fontWeight: 700,
-        letterSpacing: .8,
-        textTransform: "uppercase",
-        color: C.inkMute
+        padding: "2px 6px",
+        borderRadius: 5,
+        background: softTint(col),
+        color: col
       }
-    }, "pts")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 6,
-        borderRadius: 6,
-        background: C.ruleSoft,
-        marginTop: 8,
-        overflow: "hidden"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 6,
-        borderRadius: 6,
-        width: `${lv.pct * 100}%`,
-        background: `linear-gradient(90deg,${col},${mixHex(col, C.accent, 0.4)})`,
-        boxShadow: isSleek ? C.glow : "none",
-        transition: "width 0.6s ease"
-      }
-    })), (() => {
+    }, "Lv ", lv.level)), (() => {
       const g = rewards[key] || DEFAULT_REWARDS[key];
       const p = migratePeriod(g.period);
       const bk = periodBucket(p, fp);
+      const earned = bk ? bk[key] || 0 : 0;
+      const target = g.target || 100;
+      const pct = Math.min(earned / target, 1);
       const end = bk ? periodEnd(p, bk.key) : null;
       const dl = end ? Math.max(0, Math.round((end - new Date()) / 864e5)) : 0;
-      return /*#__PURE__*/React.createElement("div", {
-        className: "sans",
+      return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
-          alignItems: "center",
+          alignItems: "baseline",
           justifyContent: "space-between",
           marginTop: 5
         }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "baseline",
+          gap: 3
+        }
       }, /*#__PURE__*/React.createElement("span", {
+        className: "serif",
+        style: {
+          fontSize: 22,
+          fontWeight: 700,
+          color: C.accent,
+          lineHeight: 1
+        }
+      }, earned), /*#__PURE__*/React.createElement("span", {
+        className: "sans",
         style: {
           fontSize: 9,
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: .4,
+          color: C.inkFaint
+        }
+      }, "pts")), /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 11,
           fontWeight: 600,
           color: C.inkFaint
         }
-      }, lv.toNext, " pts to Lv ", lv.level + 1), /*#__PURE__*/React.createElement("span", {
+      }, "/ ", target)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          height: 6,
+          borderRadius: 6,
+          background: C.ruleSoft,
+          marginTop: 8,
+          overflow: "hidden"
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          height: 6,
+          borderRadius: 6,
+          width: `${pct * 100}%`,
+          background: `linear-gradient(90deg,${col},${mixHex(col, C.accent, 0.4)})`,
+          boxShadow: isSleek ? C.glow : "none",
+          transition: "width 0.6s ease"
+        }
+      })), /*#__PURE__*/React.createElement("div", {
+        className: "sans",
+        style: {
+          display: "flex",
+          justifyContent: "flex-end",
+          marginTop: 5
+        }
+      }, /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: 8,
           fontWeight: 700,
@@ -13328,7 +13339,7 @@ function App({
           background: softTint(dl <= 1 ? C.urgent : C.low),
           color: dl <= 1 ? C.urgent : C.low
         }
-      }, dl === 0 ? "Last day" : dl <= 1 ? "1d left" : `${dl}d left`));
+      }, dl === 0 ? "Last day" : dl <= 1 ? "1d left" : `${dl}d left`)));
     })())))))) : tab === "settings" ? null :
     /*#__PURE__*/
     /* Tab heading for non-home tabs */
@@ -15496,7 +15507,7 @@ function App({
     })), list.map((t, i) => {
       const rm = taskMeta(t);
       const late = t.dueDate < today;
-      const dlLabel = deadlineCountdown(t.dueDate, today);
+      const dlLabel = deadlineCountdown(t.dueDate, t.done && t.doneAt ? toLocalYMD(new Date(t.doneAt)) : today);
       const row = {
         kind: "task",
         ref: t,
@@ -24854,7 +24865,7 @@ function TaskCard({
   const isOverdue = !task.done && task.dueDate < today;
   const isDeadline = isDeadlineTask(task); // v132: covers project too
   // Deadline chip label: overdue after the end date, else "By <date>" or a range.
-  const deadlineLabel = isDeadline ? deadlineCountdown(task.dueDate, today) : null;
+  const deadlineLabel = isDeadline ? deadlineCountdown(task.dueDate, task.done && task.doneAt ? toLocalYMD(new Date(task.doneAt)) : today) : null;
   const recurring = task._isOccurrence;
   const shared = task.assignee === "both";
   function runComplete(pointsTo) {
@@ -26677,7 +26688,7 @@ function taskRow(t, people, today) {
     done: !!t.done,
     doneAt: t.doneAt,
     taskTime: t.time ? fmtTime(t.time) : null,
-    deadlineLabel: isDeadline ? deadlineCountdown(t.dueDate, today) : null
+    deadlineLabel: isDeadline ? deadlineCountdown(t.dueDate, t.done && t.doneAt ? toLocalYMD(new Date(t.doneAt)) : today) : null
   };
 }
 function eventRow(e, people) {
@@ -47010,20 +47021,7 @@ function OutdoorToggle({
       color: C.inkMute,
       marginTop: 1
     }
-  }, inheriting ? `Following “${catName}” (${catDefault ? "outdoor" : "indoor"})` : effective ? "Rain warnings on" : "Rain warnings off", !inheriting && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onChange(undefined),
-    className: "sans",
-    style: {
-      background: "none",
-      border: "none",
-      color: C.accent,
-      fontSize: 10.5,
-      fontWeight: 700,
-      cursor: "pointer",
-      marginLeft: 6,
-      padding: 0
-    }
-  }, "reset"))), /*#__PURE__*/React.createElement("button", {
+  }, inheriting ? `Following “${catName}” (${catDefault ? "outdoor" : "indoor"})` : effective ? "Rain warnings on" : "Rain warnings off")), /*#__PURE__*/React.createElement("button", {
     onClick: () => onChange(!effective),
     style: {
       width: 38,
@@ -56641,7 +56639,7 @@ function TreatApprovalCard({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, "Deny"), /*#__PURE__*/React.createElement("button", {
+  }, "Deny"), req.who === "shared" && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowCounter(true),
     className: "sans",
     style: {
@@ -61763,7 +61761,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v421"))))), diagOpen && (() => {
+  }, "v425"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
