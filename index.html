@@ -28905,6 +28905,96 @@ function BillsTab({
   // fresh identity every render, so React would tear the expanded editor down mid-tap
   // and drop focus from the amount field. BillRow, Goal and L2 each learned this.
   function renderPmt(pmt, i) {
+    // v404 · SOFT-DELETED OCCURRENCE — show as faded with Restore/Purge
+    if (pmt._deleted) {
+      const bc = billCat(pmt.bill);
+      const dt = new Date(pmt._occDate + "T00:00:00");
+      return /*#__PURE__*/React.createElement("div", {
+        key: "del" + pmt._seriesId + "@" + pmt._occDate,
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          background: C.card,
+          border: `1px dashed ${C.rule}`,
+          borderRadius: 14,
+          padding: "10px 13px",
+          marginBottom: 8,
+          opacity: .5
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 8,
+          fontWeight: 800,
+          letterSpacing: .5,
+          textTransform: "uppercase",
+          color: "#ff6b6b",
+          background: "#ff6b6b18",
+          padding: "2px 6px",
+          borderRadius: 4,
+          flexShrink: 0
+        }
+      }, "Deleted"), /*#__PURE__*/React.createElement("span", {
+        className: "serif",
+        style: {
+          flex: 1,
+          fontSize: 13,
+          color: C.inkMute,
+          textDecoration: "line-through",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
+        }
+      }, pmt.title), onRestore && /*#__PURE__*/React.createElement("button", {
+        onClick: () => onRestore(pmt._seriesId, pmt._occDate),
+        className: "sans",
+        style: {
+          fontSize: 10,
+          fontWeight: 700,
+          color: C.low,
+          background: C.lowSoft,
+          border: `1px solid ${rgbaFromHex(C.low, 0.3)}`,
+          padding: "3px 9px",
+          borderRadius: 8,
+          cursor: "pointer",
+          flexShrink: 0
+        }
+      }, "Restore"), onPurge && /*#__PURE__*/React.createElement("button", {
+        onClick: () => onPurge(pmt._seriesId, pmt._occDate),
+        className: "sans",
+        style: {
+          width: 26,
+          height: 26,
+          borderRadius: 8,
+          border: `1px solid ${C.rule}`,
+          background: "transparent",
+          color: C.inkFaint,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          flexShrink: 0
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "12",
+        height: "12",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "2",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }, /*#__PURE__*/React.createElement("polyline", {
+        points: "3 6 5 6 21 6"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M10 11v6"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M14 11v6"
+      }))));
+    }
     const bc = billCat(pmt.bill);
     const chg = changeFor(pmt);
     // The row and its inline editor are siblings, so they need a
@@ -29582,6 +29672,36 @@ function BillsTab({
     }
     g.rows.push(pmt);
   });
+  // v404 · Inject soft-deleted occurrences into pastGroups so they show in the monthly breakdown
+  bills.forEach(b => {
+    if (!b.recur || b.recur === "none") return;
+    const ex = b.exceptions || {};
+    Object.keys(ex).forEach(d => {
+      if (!ex[d] || !ex[d].deleted || ex[d].purged) return;
+      if (catFilter && (b.billCat || "Other") !== catFilter) return;
+      const k = d.slice(0, 7); // YYYY-MM from the occurrence date
+      let g = pastGroups.find(x => x.key === k);
+      if (!g) {
+        g = {
+          key: k,
+          rows: []
+        };
+        pastGroups.push(g);
+      }
+      g.rows.push({
+        _deleted: true,
+        _seriesId: b.id,
+        _occDate: d,
+        bill: b,
+        date: d,
+        amount: 0,
+        title: b.title,
+        billCat: b.billCat || "Other"
+      });
+    });
+  });
+  pastGroups.sort((a, b) => b.key.localeCompare(a.key));
+
   // The dominant category (Mortgage, Rent, whatever it happens to be) — detected on
   // share of total, never hard-coded to a name.
   const bigCat = billSplitBig ? dominantCat(bills, today, 6) : null;
@@ -61165,7 +61285,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v404"))))), diagOpen && (() => {
+  }, "v405"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
