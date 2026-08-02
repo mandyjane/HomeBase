@@ -6229,22 +6229,48 @@ function LoginScreen({
       alignItems: "center",
       justifyContent: "center",
       padding: 24,
-      background: "#F6F1E7",
+      background: "#0F1117",
       fontFamily: "'Roboto Condensed',sans-serif"
     }
-  }, React.createElement("div", {
+  }, React.createElement("svg", {
+    width: 52,
+    height: 52,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    strokeWidth: 1.6,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    style: {
+      marginBottom: 14
+    }
+  }, React.createElement("defs", null, React.createElement("linearGradient", {
+    id: "hg",
+    x1: 0,
+    y1: 0,
+    x2: 1,
+    y2: 1
+  }, React.createElement("stop", {
+    offset: "0%",
+    stopColor: "#5EE7B4"
+  }), React.createElement("stop", {
+    offset: "100%",
+    stopColor: "#22c3dc"
+  }))), React.createElement("path", {
+    d: "M3 11l9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+    stroke: "url(#hg)"
+  })), React.createElement("div", {
     style: {
       fontSize: 28,
       fontWeight: 800,
-      marginBottom: 4,
-      color: "#4A3F35",
-      fontFamily: "Fraunces,Georgia,serif",
-      fontStyle: "italic"
+      marginBottom: 2,
+      color: "#e0ddd4",
+      fontFamily: "'Roboto Condensed',sans-serif",
+      letterSpacing: -0.5
     }
-  }, "Home Base"), React.createElement("div", {
+  }, "HomeBase"), React.createElement("div", {
     style: {
       fontSize: 13,
-      color: "#8C8172",
+      color: "#6a6860",
       marginBottom: 28
     }
   }, "Sign in to sync"), React.createElement("input", {
@@ -6257,10 +6283,11 @@ function LoginScreen({
       maxWidth: 300,
       padding: "12px 14px",
       borderRadius: 12,
-      border: "1.5px solid #D9D1C3",
+      border: "1.5px solid rgba(255,255,255,0.1)",
       fontSize: 15,
       marginBottom: 10,
-      background: "#fff",
+      background: "#171A22",
+      color: "#e0ddd4",
       fontFamily: "'Roboto Condensed',sans-serif",
       outline: "none"
     }
@@ -6274,10 +6301,11 @@ function LoginScreen({
       maxWidth: 300,
       padding: "12px 14px",
       borderRadius: 12,
-      border: "1.5px solid #D9D1C3",
+      border: "1.5px solid rgba(255,255,255,0.1)",
       fontSize: 15,
       marginBottom: 16,
-      background: "#fff",
+      background: "#171A22",
+      color: "#e0ddd4",
       fontFamily: "'Roboto Condensed',sans-serif",
       outline: "none"
     }
@@ -9983,7 +10011,8 @@ function App({
               // while the documents tab still lists the old series' attachments. Payments
               // are historical facts about the BILL, not about a particular series segment.
               const paidEx = {};
-              const oldEx = t.exceptions || {};
+              const src = ts.find(x => x.id === orig.id);
+              const oldEx = src && src.exceptions || {};
               Object.keys(oldEx).forEach(k => {
                 if (k < d && oldEx[k] && oldEx[k].done && !oldEx[k].deleted) paidEx[k] = {
                   ...oldEx[k]
@@ -13268,15 +13297,7 @@ function App({
         boxShadow: isSleek ? C.glow : "none",
         transition: "width 0.6s ease"
       }
-    })), /*#__PURE__*/React.createElement("p", {
-      className: "sans",
-      style: {
-        fontSize: 9,
-        fontWeight: 600,
-        color: C.inkFaint,
-        marginTop: 5
-      }
-    }, lv.toNext, " pts to Lv ", lv.level + 1), (() => {
+    })), (() => {
       const g = rewards[key] || DEFAULT_REWARDS[key];
       const p = migratePeriod(g.period);
       const bk = periodBucket(p, fp);
@@ -13287,10 +13308,16 @@ function App({
         style: {
           display: "flex",
           alignItems: "center",
-          justifyContent: "flex-end",
+          justifyContent: "space-between",
           marginTop: 5
         }
       }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 9,
+          fontWeight: 600,
+          color: C.inkFaint
+        }
+      }, lv.toNext, " pts to Lv ", lv.level + 1), /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: 8,
           fontWeight: 700,
@@ -14583,10 +14610,10 @@ function App({
         marginBottom: 10
       }
     }, /*#__PURE__*/React.createElement("span", {
-      className: "serif",
+      className: cardTitleClass(),
       style: {
         fontSize: 16,
-        fontStyle: "italic",
+        fontStyle: cardTitleClass() === "serif" ? "italic" : "normal",
         color: C.ink
       }
     }, "Household reward goal", sharedGoal.period && sharedGoal.period !== "lifetime" ? ` · ${periodLabel[sharedGoal.period]}` : ""), /*#__PURE__*/React.createElement("span", {
@@ -30633,6 +30660,7 @@ function BillsTab({
         opacity: .5
       }
     })), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
       style: {
         display: "flex",
         justifyContent: "space-between",
@@ -61733,7 +61761,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v409"))))), diagOpen && (() => {
+  }, "v414"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
