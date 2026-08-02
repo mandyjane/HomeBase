@@ -29864,17 +29864,20 @@ function BillsTab({
   // A charge is drawn as a compact line, not a full card: it is a breakdown of the card
   // above it, and repeating the full card treatment would restate the header — the v272
   // lesson. Tapping it opens the real bill, so nothing is lost.
+  // v406 · renderCharge: click EXPANDS (BillExpansion / AgendaRow) instead of
+  // opening the full edit form. Subtitle shows category + date, with AUTO badge
+  // when autoPay — never "Direct debit" for a card-charged bill.
   function renderCharge(r) {
     const bc = billCat(r.bill);
+    const isChgOpen = openId === "chg:" + r.bill.id;
+    const chgHist = billHistory(r.bill);
+    const recurring = r.bill.recur && r.bill.recur !== "none";
+    const chgOcc = recurring ? materialize(r.bill, r.date, "dueDate") : r.bill;
+    const chgAuto = autoPayState(r.bill, today);
     return /*#__PURE__*/React.createElement("div", {
-      key: "chg" + r.bill.id + "@" + r.date,
-      onClick: () => onEdit && onEdit({
-        ...r.bill,
-        dueDate: r.date,
-        _occDate: r.date,
-        _seriesId: r.bill.id,
-        _isOccurrence: true
-      }),
+      key: "chg" + r.bill.id + "@" + r.date
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: () => setOpenId(isChgOpen ? null : "chg:" + r.bill.id),
       style: {
         display: "flex",
         alignItems: "flex-start",
@@ -29918,7 +29921,9 @@ function BillsTab({
     }, r.bill.title), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        display: "block",
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
         fontSize: 9.5,
         fontWeight: 700,
         letterSpacing: .4,
@@ -29926,7 +29931,18 @@ function BillsTab({
         color: C.inkSoft,
         marginTop: 2
       }
-    }, r.bill.autoPay ? "Direct debit" : "On card", " · ", shortDate(r.date))), /*#__PURE__*/React.createElement("span", {
+    }, r.bill.billCat || "Bill", " · ", shortDate(r.date), chgAuto === "auto" && /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 8.5,
+        fontWeight: 700,
+        letterSpacing: .3,
+        borderRadius: 5,
+        padding: "1px 5px",
+        background: softTint(BILL_COLOR),
+        color: BILL_COLOR
+      }
+    }, "AUTO"))), /*#__PURE__*/React.createElement("span", {
       className: numClass(),
       style: {
         flexShrink: 0,
@@ -29936,7 +29952,80 @@ function BillsTab({
         marginTop: 3,
         whiteSpace: "nowrap"
       }
-    }, fmtMoney(r.amount)));
+    }, fmtMoney(r.amount))), isChgOpen && (recurring && !chgOcc.done ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginLeft: 16,
+        borderLeft: `2px solid ${rgbaFromHex(CARD_TINT_OF(BILL_CATS), 0.45)}`
+      }
+    }, /*#__PURE__*/React.createElement(BillExpansion, {
+      bill: r.bill,
+      occ: chgOcc,
+      occDate: r.date,
+      occAmount: r.amount,
+      seriesAmount: r.bill.amount,
+      today: today,
+      people: people,
+      onSave: onQuickUpdate,
+      onPay: (payOcc, payAmt, payDate) => onToggle(payOcc, null, payAmt, payDate),
+      onDelete: onDelete,
+      onEndRepeat: onEndRepeat,
+      onEndRepeatAt: onEndRepeatAt,
+      onAttachDoc: onAttachDoc,
+      onDeleteDoc: onDeleteDoc,
+      showTimes: showTimes,
+      billPayer: billPayer,
+      hist: chgHist,
+      onAddPast: onAddPast,
+      onRestore: onRestore,
+      onPurge: onPurge,
+      overdueDates: overdueBillDates(r.bill, today),
+      billCatchUpId: billCatchUpId,
+      setBillCatchUpId: setBillCatchUpId
+    })) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: "0 14px 14px",
+        marginLeft: 16,
+        borderLeft: `2px solid ${rgbaFromHex(CARD_TINT_OF(BILL_CATS), 0.45)}`
+      },
+      onClick: e => e.stopPropagation()
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        borderTop: `1px solid ${C.ruleSoft}`,
+        marginBottom: chgHist.length ? 10 : 0
+      }
+    }, /*#__PURE__*/React.createElement(AgendaRow, {
+      billPayer: billPayer,
+      key: "bill" + r.bill.id + "@" + r.date,
+      compact: true,
+      row: taskRow(chgOcc, people, today),
+      people: people,
+      today: today,
+      showTimes: showTimes,
+      onToggle: (pointsTo, amt, pdate, pphoto) => onToggle(chgOcc, pointsTo, amt, pdate, pphoto),
+      onToggleSub: sid => onToggleSub(chgOcc, sid),
+      onEdit: () => onEdit({
+        ...r.bill,
+        dueDate: r.date,
+        _occDate: r.date,
+        _seriesId: r.bill.id,
+        _isOccurrence: true
+      }),
+      onDelete: scope => onDelete(scope === "one" || scope === "one-purge" ? chgOcc : r.bill, scope),
+      onEndRepeat: onEndRepeat,
+      onEndRepeatAt: onEndRepeatAt,
+      docSlot: /*#__PURE__*/React.createElement(BillDocRow, {
+        occ: chgOcc,
+        onAttach: onAttachDoc,
+        onDelete: onDeleteDoc
+      })
+    })), /*#__PURE__*/React.createElement(BillHistory, {
+      hist: chgHist,
+      today: today,
+      bill: r.bill,
+      onAddPast: onAddPast,
+      onRestore: onRestore,
+      onPurge: onPurge
+    }))));
   }
 
   // NOT a component — a render helper, called as renderBill(r).
