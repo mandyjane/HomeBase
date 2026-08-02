@@ -9424,32 +9424,6 @@ function App({
   // ── QUICK BILL UPDATE *(v394)* ────────────────────────────────────────────
   // Inline edit from the expanded bill card. Writes amount (and potentially other
   // fields) as an exception for this occurrence. No scope dialog — always "this one."
-  // v406 · ADD PAST PAYMENT. Records a historical payment at an arbitrary date,
-  // stored as a done exception — same shape toggleDone writes. No points awarded
-  // (this is a record of money already spent, not an achievement earned now).
-  function addPastPayment(bill, date, amount, paidOn, paidBy) {
-    const [y, m, d] = (paidOn || date).split("-").map(Number);
-    const stamp = new Date(y, m - 1, d, 12, 0, 0, 0).toISOString();
-    setTasks(ts => ts.map(t => {
-      if (t.id !== bill.id) return t;
-      const ex = {
-        ...(t.exceptions || {})
-      };
-      ex[date] = {
-        ...(ex[date] || {}),
-        done: true,
-        doneAt: stamp,
-        amount: parseAmt(amount != null && amount !== "" ? amount : t.amount),
-        paidBy: paidBy || fallbackPayer(t.assignee),
-        subDone: (t.subtasks || []).map(x => x.id)
-      };
-      return {
-        ...t,
-        exceptions: ex
-      };
-    }));
-    showToast("Past payment added", "success");
-  }
   function quickBillUpdate(bill, occDate, updates) {
     setTasks(ts => ts.map(t => {
       if (t.id !== bill.id) return t;
@@ -9977,23 +9951,11 @@ function App({
                 ...t,
                 recurEnd: addDays(d, -1)
               } : t);
-              // v406 · CARRY PAID HISTORY FORWARD. The old series keeps its exceptions
-              // (and its recurEnd), but the NEW series must inherit the paid records —
-              // otherwise billHistory on the active card shows 'No payments recorded yet'
-              // while the documents tab still lists the old series' attachments. Payments
-              // are historical facts about the BILL, not about a particular series segment.
-              const paidEx = {};
-              const oldEx = t.exceptions || {};
-              Object.keys(oldEx).forEach(k => {
-                if (k < d && oldEx[k] && oldEx[k].done && !oldEx[k].deleted) paidEx[k] = {
-                  ...oldEx[k]
-                };
-              });
               return [...ended, {
                 ...clean,
                 id: uid(),
                 dueDate: newStart,
-                exceptions: paidEx,
+                exceptions: {},
                 done: false
               }];
             });
@@ -15848,7 +15810,6 @@ function App({
       onDeleteLink: deleteLink,
       onEditPayment: editPayment,
       onQuickUpdate: quickBillUpdate,
-      onAddPast: addPastPayment,
       onRestore: restoreOccurrence,
       onPurge: purgeOccurrence,
       onDeletePayment: deletePayment,
@@ -20311,7 +20272,6 @@ function BillExpansion({
   showTimes,
   billPayer,
   hist,
-  onAddPast,
   onRestore,
   onPurge,
   overdueDates,
@@ -20825,7 +20785,6 @@ function BillExpansion({
     hist: hist,
     today: today,
     bill: bill,
-    onAddPast: onAddPast,
     onRestore: onRestore,
     onPurge: onPurge
   }));
@@ -24434,11 +24393,11 @@ function AgendaRow({
     const pstyle = (active, col) => ({
       display: "inline-flex",
       alignItems: "center",
-      gap: 3,
-      fontSize: 10,
+      gap: 5,
+      fontSize: 12,
       fontWeight: 600,
-      padding: "4px 10px",
-      borderRadius: 14,
+      padding: "7px 14px",
+      borderRadius: 20,
       cursor: "pointer",
       border: `1.5px solid ${active ? col : C.rule}`,
       color: active ? col : C.inkFaint,
@@ -24447,9 +24406,6 @@ function AgendaRow({
     });
     return /*#__PURE__*/React.createElement("div", {
       style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
         marginBottom: 10
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -24460,13 +24416,13 @@ function AgendaRow({
         color: C.inkMute,
         textTransform: "uppercase",
         letterSpacing: .5,
-        flexShrink: 0
+        marginBottom: 6
       }
     }, "Completed by"), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        gap: 5,
-        flexWrap: "nowrap"
+        gap: 6,
+        flexWrap: "wrap"
       }
     }, /*#__PURE__*/React.createElement("button", {
       onClick: () => onChangeCompletedBy("her"),
@@ -28459,7 +28415,6 @@ function BillsTab({
   onDeleteLink,
   onEditPayment,
   onQuickUpdate,
-  onAddPast,
   onRestore,
   onPurge,
   onDeletePayment,
@@ -29867,20 +29822,17 @@ function BillsTab({
   // A charge is drawn as a compact line, not a full card: it is a breakdown of the card
   // above it, and repeating the full card treatment would restate the header — the v272
   // lesson. Tapping it opens the real bill, so nothing is lost.
-  // v406 · renderCharge: click EXPANDS (BillExpansion / AgendaRow) instead of
-  // opening the full edit form. Subtitle shows category + date, with AUTO badge
-  // when autoPay — never "Direct debit" for a card-charged bill.
   function renderCharge(r) {
     const bc = billCat(r.bill);
-    const isChgOpen = openId === "chg:" + r.bill.id;
-    const chgHist = billHistory(r.bill);
-    const recurring = r.bill.recur && r.bill.recur !== "none";
-    const chgOcc = recurring ? materialize(r.bill, r.date, "dueDate") : r.bill;
-    const chgAuto = autoPayState(r.bill, today);
     return /*#__PURE__*/React.createElement("div", {
-      key: "chg" + r.bill.id + "@" + r.date
-    }, /*#__PURE__*/React.createElement("div", {
-      onClick: () => setOpenId(isChgOpen ? null : "chg:" + r.bill.id),
+      key: "chg" + r.bill.id + "@" + r.date,
+      onClick: () => onEdit && onEdit({
+        ...r.bill,
+        dueDate: r.date,
+        _occDate: r.date,
+        _seriesId: r.bill.id,
+        _isOccurrence: true
+      }),
       style: {
         display: "flex",
         alignItems: "flex-start",
@@ -29924,9 +29876,7 @@ function BillsTab({
     }, r.bill.title), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
+        display: "block",
         fontSize: 9.5,
         fontWeight: 700,
         letterSpacing: .4,
@@ -29934,18 +29884,7 @@ function BillsTab({
         color: C.inkSoft,
         marginTop: 2
       }
-    }, r.bill.billCat || "Bill", " · ", shortDate(r.date), chgAuto === "auto" && /*#__PURE__*/React.createElement("span", {
-      className: "sans",
-      style: {
-        fontSize: 8.5,
-        fontWeight: 700,
-        letterSpacing: .3,
-        borderRadius: 5,
-        padding: "1px 5px",
-        background: softTint(BILL_COLOR),
-        color: BILL_COLOR
-      }
-    }, "AUTO"))), /*#__PURE__*/React.createElement("span", {
+    }, r.bill.autoPay ? "Direct debit" : "On card", " · ", shortDate(r.date))), /*#__PURE__*/React.createElement("span", {
       className: numClass(),
       style: {
         flexShrink: 0,
@@ -29955,80 +29894,7 @@ function BillsTab({
         marginTop: 3,
         whiteSpace: "nowrap"
       }
-    }, fmtMoney(r.amount))), isChgOpen && (recurring && !chgOcc.done ? /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginLeft: 16,
-        borderLeft: `2px solid ${rgbaFromHex(CARD_TINT_OF(BILL_CATS), 0.45)}`
-      }
-    }, /*#__PURE__*/React.createElement(BillExpansion, {
-      bill: r.bill,
-      occ: chgOcc,
-      occDate: r.date,
-      occAmount: r.amount,
-      seriesAmount: r.bill.amount,
-      today: today,
-      people: people,
-      onSave: onQuickUpdate,
-      onPay: (payOcc, payAmt, payDate) => onToggle(payOcc, null, payAmt, payDate),
-      onDelete: onDelete,
-      onEndRepeat: onEndRepeat,
-      onEndRepeatAt: onEndRepeatAt,
-      onAttachDoc: onAttachDoc,
-      onDeleteDoc: onDeleteDoc,
-      showTimes: showTimes,
-      billPayer: billPayer,
-      hist: chgHist,
-      onAddPast: onAddPast,
-      onRestore: onRestore,
-      onPurge: onPurge,
-      overdueDates: overdueBillDates(r.bill, today),
-      billCatchUpId: billCatchUpId,
-      setBillCatchUpId: setBillCatchUpId
-    })) : /*#__PURE__*/React.createElement("div", {
-      style: {
-        padding: "0 14px 14px",
-        marginLeft: 16,
-        borderLeft: `2px solid ${rgbaFromHex(CARD_TINT_OF(BILL_CATS), 0.45)}`
-      },
-      onClick: e => e.stopPropagation()
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        borderTop: `1px solid ${C.ruleSoft}`,
-        marginBottom: chgHist.length ? 10 : 0
-      }
-    }, /*#__PURE__*/React.createElement(AgendaRow, {
-      billPayer: billPayer,
-      key: "bill" + r.bill.id + "@" + r.date,
-      compact: true,
-      row: taskRow(chgOcc, people, today),
-      people: people,
-      today: today,
-      showTimes: showTimes,
-      onToggle: (pointsTo, amt, pdate, pphoto) => onToggle(chgOcc, pointsTo, amt, pdate, pphoto),
-      onToggleSub: sid => onToggleSub(chgOcc, sid),
-      onEdit: () => onEdit({
-        ...r.bill,
-        dueDate: r.date,
-        _occDate: r.date,
-        _seriesId: r.bill.id,
-        _isOccurrence: true
-      }),
-      onDelete: scope => onDelete(scope === "one" || scope === "one-purge" ? chgOcc : r.bill, scope),
-      onEndRepeat: onEndRepeat,
-      onEndRepeatAt: onEndRepeatAt,
-      docSlot: /*#__PURE__*/React.createElement(BillDocRow, {
-        occ: chgOcc,
-        onAttach: onAttachDoc,
-        onDelete: onDeleteDoc
-      })
-    })), /*#__PURE__*/React.createElement(BillHistory, {
-      hist: chgHist,
-      today: today,
-      bill: r.bill,
-      onAddPast: onAddPast,
-      onRestore: onRestore,
-      onPurge: onPurge
-    }))));
+    }, fmtMoney(r.amount)));
   }
 
   // NOT a component — a render helper, called as renderBill(r).
@@ -30384,7 +30250,6 @@ function BillsTab({
       showTimes: showTimes,
       billPayer: billPayer,
       hist: hist,
-      onAddPast: onAddPast,
       onRestore: onRestore,
       onPurge: onPurge,
       overdueDates: overdueBillDates(r.bill, today),
@@ -30429,7 +30294,6 @@ function BillsTab({
       hist: hist,
       today: today,
       bill: r.bill,
-      onAddPast: onAddPast,
       onRestore: onRestore,
       onPurge: onPurge
     }))));
@@ -32310,234 +32174,10 @@ function BillHistory({
   hist,
   today,
   bill,
-  onAddPast,
   onRestore,
   onPurge
 }) {
-  const [addOpen, setAddOpen] = useState(false);
-  const [addAmt, setAddAmt] = useState("");
-  const [addDue, setAddDue] = useState("");
-  const [addPaid, setAddPaid] = useState("");
-  const [addBy, setAddBy] = useState(null);
-  const recurring = bill && bill.recur && bill.recur !== "none";
-  function resetAdd() {
-    setAddOpen(false);
-    setAddAmt("");
-    setAddDue("");
-    setAddPaid("");
-    setAddBy(null);
-  }
-  function doAdd() {
-    if (!addDue || !onAddPast) return;
-    onAddPast(bill, addDue, addAmt || bill.amount, addPaid || addDue, addBy);
-    resetAdd();
-  }
-  const _lbl = {
-    fontSize: 10.5,
-    fontWeight: 600,
-    color: C.inkMute,
-    textTransform: "uppercase",
-    letterSpacing: .4,
-    width: 62,
-    flexShrink: 0
-  };
-  const _inp = {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: 600,
-    padding: "9px 11px",
-    borderRadius: 10,
-    background: C.page,
-    border: `1px solid ${C.rule}`,
-    color: C.ink,
-    fontFamily: "inherit"
-  };
-  const addBtn = onAddPast && recurring ? /*#__PURE__*/React.createElement("span", {
-    onClick: () => {
-      if (addOpen) {
-        resetAdd();
-      } else {
-        setAddOpen(true);
-        setAddAmt(String(bill.amount || ""));
-        setAddDue("");
-        setAddPaid(today);
-        setAddBy(null);
-      }
-    },
-    className: "sans",
-    style: {
-      fontSize: 10,
-      fontWeight: 700,
-      color: C.accent,
-      cursor: "pointer",
-      marginLeft: 6
-    }
-  }, "+ Add") : null;
-  const addPanel = addOpen ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: C.page,
-      border: `1px solid ${rgbaFromHex(C.accent, 0.25)}`,
-      borderRadius: 12,
-      padding: 14,
-      marginTop: 8,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: _lbl
-  }, "Amount"), /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    inputMode: "decimal",
-    step: "0.01",
-    value: addAmt,
-    onChange: e => setAddAmt(e.target.value),
-    className: "sans",
-    style: {
-      ..._inp,
-      maxWidth: 150
-    },
-    placeholder: "0.00"
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: _lbl
-  }, "Due date"), /*#__PURE__*/React.createElement("input", {
-    type: "date",
-    value: addDue,
-    onChange: e => setAddDue(e.target.value),
-    className: "sans",
-    style: {
-      ..._inp,
-      fontSize: 13,
-      fontWeight: 500,
-      maxWidth: 170
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: _lbl
-  }, "Paid on"), /*#__PURE__*/React.createElement("input", {
-    type: "date",
-    value: addPaid,
-    onChange: e => setAddPaid(e.target.value),
-    className: "sans",
-    style: {
-      ..._inp,
-      fontSize: 13,
-      fontWeight: 500,
-      maxWidth: 170
-    }
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      marginBottom: 10
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: _lbl
-  }, "Paid by"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6
-    }
-  }, ["her", "him", "split"].map(v => {
-    const on = addBy === v;
-    const lbl = v === "her" ? "Mandy" : v === "him" ? "Liam" : "Both";
-    return /*#__PURE__*/React.createElement("span", {
-      key: v,
-      onClick: () => setAddBy(v),
-      className: "sans",
-      style: {
-        fontSize: 10,
-        fontWeight: 700,
-        padding: "4px 12px",
-        borderRadius: 8,
-        cursor: "pointer",
-        background: on ? rgbaFromHex(C.accent, 0.15) : "transparent",
-        color: on ? C.accent : C.inkMute,
-        border: `1px solid ${on ? rgbaFromHex(C.accent, 0.4) : C.rule}`
-      }
-    }, lbl);
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      marginTop: 12,
-      justifyContent: "flex-end"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: resetAdd,
-    className: "sans",
-    style: {
-      height: 28,
-      padding: "0 12px",
-      borderRadius: 9,
-      border: `1px solid ${C.rule}`,
-      background: "transparent",
-      color: C.inkMute,
-      fontSize: 11,
-      fontWeight: 600,
-      cursor: "pointer"
-    }
-  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
-    onClick: doAdd,
-    disabled: !addDue,
-    className: "sans",
-    style: {
-      height: 28,
-      padding: "0 14px",
-      borderRadius: 9,
-      border: "none",
-      background: `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
-      color: "#fff",
-      fontSize: 11,
-      fontWeight: 700,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      gap: 5,
-      opacity: addDue ? 1 : 0.5
-    }
-  }, /*#__PURE__*/React.createElement("svg", {
-    width: "11",
-    height: "11",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "2.5",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("polyline", {
-    points: "20 6 9 17 4 12"
-  })), "Add payment"))) : null;
-  if (!hist.length) return /*#__PURE__*/React.createElement("div", null, addBtn && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      justifyContent: "flex-end",
-      marginBottom: 4
-    }
-  }, addBtn), addPanel, /*#__PURE__*/React.createElement("p", {
+  if (!hist.length) return /*#__PURE__*/React.createElement("p", {
     className: "sans",
     style: {
       fontSize: 11.5,
@@ -32545,7 +32185,7 @@ function BillHistory({
       textAlign: "center",
       padding: "12px 0"
     }
-  }, addBtn ? "No payments recorded yet. Tap + Add to record a past payment." : "No payments recorded yet. The first time you mark this paid, it starts building a history."));
+  }, "No payments recorded yet. The first time you mark this paid, it starts building a history.");
   const recent = hist.slice(0, 6).reverse(); // oldest → newest, for the chart
   const max = Math.max(...recent.map(h => h.amount), 1);
   const avg = hist.reduce((s, h) => s + h.amount, 0) / hist.length;
@@ -32568,7 +32208,7 @@ function BillHistory({
       fontSize: 10.5,
       color: C.inkMute
     }
-  }, "mean ", fmtMoney(avg), " · ", hist.length, " paid"), addBtn), addPanel, recent.length > 1 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "mean ", fmtMoney(avg), " · ", hist.length, " paid")), recent.length > 1 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "flex-end",
@@ -61645,7 +61285,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v407"))))), diagOpen && (() => {
+  }, "v405"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
