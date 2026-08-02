@@ -5825,6 +5825,7 @@ function autoPayDue(series, today) {
     // A one-off bill keeps `done` on the series itself, never in exceptions (see DECISIONS).
     if (series.done) return [];
     if (start < floor || start > today) return [];
+    if (start === today && new Date().getHours() < 17) return []; // v433 · DD pending until 5 PM
     return [{
       date: start,
       amount: occAmount(series, start)
@@ -5833,6 +5834,7 @@ function autoPayDue(series, today) {
   const out = [];
   seriesDates(series, field, floor, today).forEach(d => {
     if (d > today || d < floor) return;
+    if (d === today && new Date().getHours() < 17) return; // v433 · DD pending until 5 PM
     const e = ex[d];
     // Already paid, or DELETED. A tombstone is not a payment and must not be revived (v105).
     if (e && (e.done || e.deleted)) return;
@@ -61706,7 +61708,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v432"))))), diagOpen && (() => {
+  }, "v433"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
