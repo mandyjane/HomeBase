@@ -13282,21 +13282,15 @@ function App({
       const bk = periodBucket(p, fp);
       const end = bk ? periodEnd(p, bk.key) : null;
       const dl = end ? Math.max(0, Math.round((end - new Date()) / 864e5)) : 0;
-      const cur = bk[key] || 0;
       return /*#__PURE__*/React.createElement("div", {
         className: "sans",
         style: {
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           marginTop: 5
         }
       }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: 9,
-          color: C.inkFaint
-        }
-      }, cur, " / ", g.target, " · ", g.treat || "No treat set"), /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: 8,
           fontWeight: 700,
@@ -61739,7 +61733,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v408"))))), diagOpen && (() => {
+  }, "v409"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
