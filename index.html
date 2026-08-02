@@ -13286,27 +13286,43 @@ function App({
         className: "serif",
         style: {
           fontSize: 22,
-          fontWeight: 700,
-          color: C.accent,
+          fontWeight: 400,
+          color: C.ink,
           lineHeight: 1
         }
       }, earned), /*#__PURE__*/React.createElement("span", {
         className: "sans",
         style: {
           fontSize: 9,
-          fontWeight: 700,
+          fontWeight: 400,
           textTransform: "uppercase",
           letterSpacing: .4,
-          color: C.inkFaint
+          color: C.ink
         }
-      }, "pts")), /*#__PURE__*/React.createElement("span", {
+      }, "pts")), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "baseline",
+          gap: 6
+        }
+      }, /*#__PURE__*/React.createElement("span", {
         className: "sans",
         style: {
           fontSize: 11,
           fontWeight: 600,
           color: C.inkFaint
         }
-      }, "/ ", target)), /*#__PURE__*/React.createElement("div", {
+      }, "/ ", target), /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 8,
+          fontWeight: 700,
+          padding: "1px 6px",
+          borderRadius: 5,
+          background: softTint(dl <= 1 ? C.urgent : C.low),
+          color: dl <= 1 ? C.urgent : C.low
+        }
+      }, dl === 0 ? "Last day" : dl <= 1 ? "1d left" : `${dl}d left`))), /*#__PURE__*/React.createElement("div", {
         style: {
           height: 6,
           borderRadius: 6,
@@ -13323,23 +13339,7 @@ function App({
           boxShadow: isSleek ? C.glow : "none",
           transition: "width 0.6s ease"
         }
-      })), /*#__PURE__*/React.createElement("div", {
-        className: "sans",
-        style: {
-          display: "flex",
-          justifyContent: "flex-end",
-          marginTop: 5
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: 8,
-          fontWeight: 700,
-          padding: "1px 6px",
-          borderRadius: 5,
-          background: softTint(dl <= 1 ? C.urgent : C.low),
-          color: dl <= 1 ? C.urgent : C.low
-        }
-      }, dl === 0 ? "Last day" : dl <= 1 ? "1d left" : `${dl}d left`)));
+      })));
     })())))))) : tab === "settings" ? null :
     /*#__PURE__*/
     /* Tab heading for non-home tabs */
@@ -61761,7 +61761,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v425"))))), diagOpen && (() => {
+  }, "v426"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
