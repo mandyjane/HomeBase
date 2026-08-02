@@ -7240,7 +7240,11 @@ function App({
     if (sbClient && sbHouseholdId && rows.length > 0) {
       (async () => {
         try {
-          await sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false).like("id", "e-%"); // v416 · only delete event rows, preserve treat push rows
+          // v419 DEBUG · temporarily skip delete to test treat row persistence
+          // await sbClient.from("alert_schedule").delete()
+          //   .eq("household_id",sbHouseholdId).eq("sent",false)
+          //   .like("id","e-%");
+          console.log("[alert_schedule] SKIPPED delete for debug");
           const {
             error
           } = await sbClient.from("alert_schedule").upsert(rows, {
@@ -61767,7 +61771,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v419"))))), diagOpen && (() => {
+  }, "v420"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
