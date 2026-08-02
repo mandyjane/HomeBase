@@ -8845,7 +8845,7 @@ function App({
     // Push notification to partner via alert_schedule
     if (sbClient && sbHouseholdId) {
       const requesterName = who === "her" ? people.her.name : who === "him" ? people.him.name : "Someone";
-      sbClient.from("alert_schedule").upsert([{
+      const treatRow = {
         id: "treat-req-" + Date.now(),
         fire_at: new Date().toISOString(),
         title: "Treat request",
@@ -8853,13 +8853,18 @@ function App({
         household_id: sbHouseholdId,
         exclude_user_id: sbUserId || null,
         sent: false
-      }], {
+      };
+      console.log("[treat push] inserting:", JSON.stringify(treatRow));
+      sbClient.from("alert_schedule").upsert([treatRow], {
         onConflict: "id"
       }).then(({
+        data,
         error
       }) => {
-        if (error) console.warn("[treat push]", error.message);
+        if (error) console.warn("[treat push] ERROR:", error.message);else console.log("[treat push] OK, data:", data);
       });
+    } else {
+      console.warn("[treat push] SKIPPED — sbClient:", !!sbClient, "sbHouseholdId:", sbHouseholdId);
     }
   }
   function approveTreatRequest(reqId) {
@@ -61764,7 +61769,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v417"))))), diagOpen && (() => {
+  }, "v418"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
