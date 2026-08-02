@@ -20249,33 +20249,52 @@ function BillCatchUp({
     }
   }, "Exit catch-up")));
 }
-function BillQuickEdit({
+
+// ── BILL ACTION PANEL *(v403)* ─────────────────────────────────────────────────
+// Two toggle buttons (Update / Paid), each opens a focused panel with only the
+// fields relevant to that action. No inline fields by default — clean expansion.
+function BillActionPanel({
   bill,
   occDate,
   occAmount: initAmt,
   seriesAmount,
   onSave,
   onPay,
-  onFullEdit
+  today
 }) {
+  const [panel, setPanel] = useState(null); // "update" | "paid" | null
   const [amt, setAmt] = useState(initAmt != null ? String(initAmt) : "");
-  const initDate = bill.exceptions && bill.exceptions[occDate] && bill.exceptions[occDate].dueDate || occDate;
-  const [dt, setDt] = useState(initDate);
+  const initDue = bill.exceptions && bill.exceptions[occDate] && bill.exceptions[occDate].dueDate || occDate;
+  const [dt, setDt] = useState(initDue);
+  const [paidDate, setPaidDate] = useState(today || new Date().toISOString().slice(0, 10));
   const [saved, setSaved] = useState(false);
   const parsed = parseAmt(amt);
-  const seriesParsed = parseAmt(seriesAmount);
-  const amtChanged = parsed !== parseAmt(initAmt);
-  const dtChanged = dt !== initDate;
-  const changed = amtChanged || dtChanged;
-  const showWas = seriesParsed > 0 && parsed !== seriesParsed;
+
+  // Reset fields when panel changes
+  function openPanel(p) {
+    setPanel(panel === p ? null : p);
+    setAmt(initAmt != null ? String(initAmt) : "");
+    setDt(initDue);
+    setPaidDate(today || new Date().toISOString().slice(0, 10));
+    setSaved(false);
+  }
   function doSave() {
-    if (!changed) return;
     const updates = {};
+    const amtChanged = parsed !== parseAmt(initAmt);
+    const dtChanged = dt !== initDue;
     if (amtChanged) updates.amount = parsed;
     if (dtChanged) updates.dueDate = dt;
+    if (!Object.keys(updates).length) return;
     onSave(bill, occDate, updates);
     setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
+    setTimeout(() => {
+      setSaved(false);
+      setPanel(null);
+    }, 1200);
+  }
+  function doPay() {
+    if (onPay) onPay(parsed, paidDate);
+    setPanel(null);
   }
   const lbl = {
     fontSize: 10.5,
@@ -20288,25 +20307,35 @@ function BillQuickEdit({
   };
   const inp = {
     flex: 1,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: 600,
     padding: "9px 11px",
     borderRadius: 10,
-    background: C.page,
+    background: C.card,
     border: `1px solid ${C.rule}`,
     color: C.ink,
     fontFamily: "inherit"
   };
+  const BH = 30,
+    BR = 9;
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "12px 0 8px"
+      padding: "8px 0 4px"
+    }
+  }, panel === "update" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.page,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 10
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 10,
-      marginBottom: showWas ? 4 : 10
+      marginBottom: 10
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "sans",
@@ -20323,23 +20352,14 @@ function BillQuickEdit({
     className: "sans",
     style: {
       ...inp,
-      maxWidth: 160
+      maxWidth: 150
     },
-    placeholder: "$0.00"
-  })), showWas && /*#__PURE__*/React.createElement("div", {
-    className: "sans",
-    style: {
-      fontSize: 10,
-      color: C.inkFaint,
-      marginBottom: 10,
-      paddingLeft: 72
-    }
-  }, "was ", fmtMoney(seriesParsed)), /*#__PURE__*/React.createElement("div", {
+    placeholder: "0.00"
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 10,
-      marginBottom: 2
+      gap: 10
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "sans",
@@ -20354,74 +20374,130 @@ function BillQuickEdit({
     className: "sans",
     style: {
       ...inp,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: 500,
-      maxWidth: 180
+      maxWidth: 170
     }
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      alignItems: "center",
       gap: 8,
-      marginTop: 14
+      marginTop: 12,
+      justifyContent: "flex-end"
     }
-  }, onPay && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onPay(parsed),
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPanel(null),
     className: "sans",
     style: {
-      flex: 1,
-      padding: "10px 14px",
-      borderRadius: 10,
-      border: "none",
-      background: `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
-      color: "#fff",
-      fontSize: 13,
-      fontWeight: 700,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6
-    }
-  }, /*#__PURE__*/React.createElement("svg", {
-    width: "13",
-    height: "13",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "2.5",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("polyline", {
-    points: "20 6 9 17 4 12"
-  })), "Paid"), /*#__PURE__*/React.createElement("button", {
-    onClick: doSave,
-    disabled: !changed || saved,
-    className: "sans",
-    style: {
-      padding: "10px 14px",
-      borderRadius: 10,
-      border: "none",
-      background: saved ? "#2a6" : !changed ? C.ruleSoft : C.card,
-      color: saved ? "#fff" : changed ? C.ink : C.inkFaint,
-      fontSize: 13,
-      fontWeight: 700,
-      cursor: changed ? "pointer" : "default",
-      opacity: !changed && !saved ? .5 : 1,
-      transition: "all .2s",
-      border: `1px solid ${saved ? "#2a6" : C.rule}`
-    }
-  }, saved ? "Saved" : "Save"), /*#__PURE__*/React.createElement("button", {
-    onClick: onFullEdit,
-    className: "sans",
-    style: {
-      padding: "10px 12px",
-      borderRadius: 10,
+      height: 28,
+      padding: "0 12px",
+      borderRadius: BR,
       border: `1px solid ${C.rule}`,
       background: "transparent",
       color: C.inkMute,
       fontSize: 11,
       fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: doSave,
+    disabled: saved,
+    className: "sans",
+    style: {
+      height: 28,
+      padding: "0 14px",
+      borderRadius: BR,
+      border: "none",
+      background: saved ? "#2a6" : C.accent,
+      color: "#fff",
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, saved ? "Saved" : "Save"))), panel === "paid" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.page,
+      border: `1px solid ${rgbaFromHex(C.low, 0.3)}`,
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: lbl
+  }, "Amount"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "decimal",
+    step: "0.01",
+    value: amt,
+    onChange: e => setAmt(e.target.value),
+    className: "sans",
+    style: {
+      ...inp,
+      maxWidth: 150,
+      borderColor: rgbaFromHex(C.low, 0.3)
+    },
+    placeholder: "0.00"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: lbl
+  }, "Paid on"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    value: paidDate,
+    onChange: e => setPaidDate(e.target.value),
+    className: "sans",
+    style: {
+      ...inp,
+      fontSize: 13,
+      fontWeight: 500,
+      maxWidth: 170
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 12,
+      justifyContent: "flex-end"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPanel(null),
+    className: "sans",
+    style: {
+      height: 28,
+      padding: "0 12px",
+      borderRadius: BR,
+      border: `1px solid ${C.rule}`,
+      background: "transparent",
+      color: C.inkMute,
+      fontSize: 11,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: doPay,
+    className: "sans",
+    style: {
+      height: 28,
+      padding: "0 14px",
+      borderRadius: BR,
+      border: "none",
+      background: `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
+      color: "#fff",
+      fontSize: 11,
+      fontWeight: 700,
       cursor: "pointer",
       display: "flex",
       alignItems: "center",
@@ -20433,12 +20509,62 @@ function BillQuickEdit({
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
-    strokeWidth: "2.4",
+    strokeWidth: "2.5",
     strokeLinecap: "round",
     strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"
-  })), "Full edit")));
+  }, /*#__PURE__*/React.createElement("polyline", {
+    points: "20 6 9 17 4 12"
+  })), "Confirm paid"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 7
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => openPanel("update"),
+    className: "sans",
+    style: {
+      height: BH,
+      padding: "0 13px",
+      borderRadius: BR,
+      border: "none",
+      background: panel === "update" ? C.accentSoft : C.accentSoft,
+      color: C.accent,
+      fontSize: 11.5,
+      fontWeight: 700,
+      cursor: "pointer",
+      opacity: panel === "paid" ? .4 : 1
+    }
+  }, "Update"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => openPanel("paid"),
+    className: "sans",
+    style: {
+      height: BH,
+      padding: "0 13px",
+      borderRadius: BR,
+      border: "none",
+      background: `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
+      color: "#fff",
+      fontSize: 11.5,
+      fontWeight: 700,
+      cursor: "pointer",
+      opacity: panel === "update" ? .4 : 1,
+      display: "flex",
+      alignItems: "center",
+      gap: 5
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "12",
+    height: "12",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("polyline", {
+    points: "20 6 9 17 4 12"
+  })), "Paid")));
 }
 
 // Two states: no document → a dashed, muted "Attach" clip. Has one → a solid,
@@ -29843,20 +29969,14 @@ function BillsTab({
         strokeLinejoin: "round"
       }, /*#__PURE__*/React.createElement("polyline", {
         points: "9 18 15 12 9 6"
-      }))), onQuickUpdate && /*#__PURE__*/React.createElement(BillQuickEdit, {
+      }))), onQuickUpdate && /*#__PURE__*/React.createElement(BillActionPanel, {
         bill: r.bill,
         occDate: r.date,
         occAmount: r.amount,
         seriesAmount: r.bill.amount,
         onSave: onQuickUpdate,
-        onPay: paidAmt => onToggle(r.occ, null, paidAmt, r.date),
-        onFullEdit: () => onEdit({
-          ...r.bill,
-          dueDate: r.date,
-          _occDate: r.date,
-          _seriesId: r.bill.id,
-          _isOccurrence: true
-        })
+        today: today,
+        onPay: (paidAmt, paidOn) => onToggle(r.occ, null, paidAmt, paidOn || r.date)
       })));
     })(), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -60883,7 +61003,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v401"))))), diagOpen && (() => {
+  }, "v403"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
