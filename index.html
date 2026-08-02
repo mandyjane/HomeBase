@@ -58710,27 +58710,75 @@ function AppearanceModal({
           cursor: "pointer"
         }
       });
-    })), /*#__PURE__*/React.createElement(L, null, "Custom"), /*#__PURE__*/React.createElement("input", {
-      key: current,
-      type: "range",
-      min: "0",
-      max: "360",
-      defaultValue: hexHue(current),
-      onChange: e => {
-        const h = +e.target.value;
-        setAccent(mood, hslToHex(h, isBold ? 72 : 66, isBold ? 52 : 64));
-      },
-      style: {
-        width: "100%",
-        WebkitAppearance: "none",
-        appearance: "none",
-        height: 16,
-        borderRadius: 8,
-        marginBottom: 6,
-        "--track": "linear-gradient(90deg,#FF0000,#FFFF00,#00FF00,#00FFFF,#0000FF,#FF00FF,#FF0000)",
-        background: "linear-gradient(90deg,#FF0000,#FFFF00,#00FF00,#00FFFF,#0000FF,#FF00FF,#FF0000)"
-      }
-    }), /*#__PURE__*/React.createElement("p", {
+    })), /*#__PURE__*/React.createElement(L, null, "Custom"), (() => {
+      const sat = isBold ? 72 : 66,
+        lit = isBold ? 52 : 64,
+        ch = hexHue(current),
+        pickThemeHue = e => {
+          const bar = e.currentTarget;
+          const go = ev => {
+            const rect = bar.getBoundingClientRect();
+            const x = Math.max(0, Math.min((ev.clientX || ev.touches[0].clientX) - rect.left, rect.width));
+            const h = Math.round(x / rect.width * 360);
+            setAccent(mood, hslToHex(h, sat, lit));
+          };
+          go(e);
+          const onMove = ev => {
+            ev.preventDefault();
+            go(ev);
+          };
+          const onUp = () => {
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", onUp);
+          };
+          window.addEventListener("pointermove", onMove);
+          window.addEventListener("pointerup", onUp);
+        };
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginBottom: 6
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          flexShrink: 0,
+          background: current,
+          border: `2px solid ${C.ink}`,
+          outline: `1.5px solid ${current}`,
+          outlineOffset: 2
+        }
+      }), /*#__PURE__*/React.createElement("div", {
+        onPointerDown: pickThemeHue,
+        style: {
+          flex: 1,
+          height: 28,
+          borderRadius: 14,
+          cursor: "pointer",
+          touchAction: "none",
+          position: "relative",
+          background: `linear-gradient(to right,${Array.from({
+            length: 13
+          }, (_, i) => `hsl(${i * 30},${sat}%,${lit}%)`).join(",")})`
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          width: 22,
+          height: 22,
+          borderRadius: "50%",
+          border: "3px solid #fff",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+          background: current,
+          position: "absolute",
+          top: 3,
+          left: `calc(${(ch / 360 * 100).toFixed(1)}% - 11px)`
+        }
+      })));
+    })(), /*#__PURE__*/React.createElement("p", {
       className: "sans",
       style: {
         fontSize: 11,
@@ -59319,106 +59367,7 @@ function AppearanceModal({
       marginTop: 9,
       lineHeight: 1.5
     }
-  }, "Overdue deadlines always show in red.")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 22
-    }
-  }, /*#__PURE__*/React.createElement(L, null, "Categories"), /*#__PURE__*/React.createElement("button", {
-    onClick: onOpenCategories,
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 12,
-      width: "100%",
-      padding: "14px 15px",
-      background: C.card,
-      border: `1px solid ${C.rule}`,
-      borderRadius: 14,
-      cursor: "pointer",
-      textAlign: "left",
-      boxShadow: C.mood === "sleek" ? "none" : C.shadowSm
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      width: 30,
-      height: 30,
-      borderRadius: 9,
-      background: C.accentSoft,
-      color: C.accent,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement("svg", {
-    width: "17",
-    height: "17",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "3",
-    y: "3",
-    width: "7",
-    height: "7",
-    rx: "1.5"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "14",
-    y: "3",
-    width: "7",
-    height: "7",
-    rx: "1.5"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "3",
-    y: "14",
-    width: "7",
-    height: "7",
-    rx: "1.5"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "14",
-    y: "14",
-    width: "7",
-    height: "7",
-    rx: "1.5"
-  }))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      display: "block",
-      fontSize: 14,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Categories"), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 11,
-      color: C.inkMute
-    }
-  }, "Colours & icons for tasks & events")), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 12,
-      color: C.inkMute
-    }
-  }, categoryCount), /*#__PURE__*/React.createElement("svg", {
-    width: "16",
-    height: "16",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: C.inkMute,
-    strokeWidth: "2",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M9 18l6-6-6-6"
-  })))))));
+  }, "Overdue deadlines always show in red.")))));
 }
 
 // ─── SETTINGS PAGE (full-screen, replaces the old cog popup) ─────────────────
@@ -60393,6 +60342,125 @@ function SettingsPage({
     label: "Display",
     GroupLabel: GroupLabel
   }, /*#__PURE__*/React.createElement(SRow, {
+    hb: "appearance mood glow colours theme dark light sleek bold"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onAppearance,
+    style: {
+      ...rowBase
+    }
+  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "13.5",
+    cy: "6.5",
+    r: "2.5"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "17.5",
+    cy: "10.5",
+    r: "2.5"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "8.5",
+    cy: "7.5",
+    r: "2.5"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "6.5",
+    cy: "12.5",
+    r: "2.5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 2a10 10 0 1 0 0 20 2.5 2.5 0 0 0 2-4 2.5 2.5 0 0 1 2-4h2a4 4 0 0 0 4-4 10 10 0 0 0-12-8z"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Appearance"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, "Mood, glow & colours")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 16,
+      height: 16,
+      borderRadius: 5,
+      flexShrink: 0,
+      background: `linear-gradient(140deg,${C.heroTop},${C.heroBot})`,
+      boxShadow: glowOn ? glowShadow(C.accent, 0.4, 8) : "none"
+    }
+  }), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
+    hb: "categories tasks events bills colours icons rooms"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onCategories,
+    style: {
+      ...rowBase
+    }
+  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "3",
+    width: "7",
+    height: "7",
+    rx: "1.5"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "14",
+    y: "3",
+    width: "7",
+    height: "7",
+    rx: "1.5"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "14",
+    width: "7",
+    height: "7",
+    rx: "1.5"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "14",
+    y: "14",
+    width: "7",
+    height: "7",
+    rx: "1.5"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Categories"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, "Tasks, events & bills — colours and icons")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
     hb: "show completed tasks keep done items visible"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => setKeepDone(p => !p),
@@ -60777,126 +60845,7 @@ function SettingsPage({
         color: on ? "#fff" : C.inkMute
       }
     }, lbl);
-  })))), /*#__PURE__*/React.createElement(SRow, {
-    hb: "appearance mood glow colours theme dark light sleek bold"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onAppearance,
-    style: {
-      ...rowBase
-    }
-  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
-    width: "18",
-    height: "18",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("circle", {
-    cx: "13.5",
-    cy: "6.5",
-    r: "2.5"
-  }), /*#__PURE__*/React.createElement("circle", {
-    cx: "17.5",
-    cy: "10.5",
-    r: "2.5"
-  }), /*#__PURE__*/React.createElement("circle", {
-    cx: "8.5",
-    cy: "7.5",
-    r: "2.5"
-  }), /*#__PURE__*/React.createElement("circle", {
-    cx: "6.5",
-    cy: "12.5",
-    r: "2.5"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M12 2a10 10 0 1 0 0 20 2.5 2.5 0 0 0 2-4 2.5 2.5 0 0 1 2-4h2a4 4 0 0 0 4-4 10 10 0 0 0-12-8z"
-  }))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "block",
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Appearance"), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 11.5,
-      color: C.inkMute
-    }
-  }, "Mood, glow, colours, categories")), /*#__PURE__*/React.createElement("span", {
-    style: {
-      width: 16,
-      height: 16,
-      borderRadius: 5,
-      flexShrink: 0,
-      background: `linear-gradient(140deg,${C.heroTop},${C.heroBot})`,
-      boxShadow: glowOn ? glowShadow(C.accent, 0.4, 8) : "none"
-    }
-  }), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
-    hb: "categories tasks events bills colours icons rooms"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onCategories,
-    style: {
-      ...rowBase
-    }
-  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
-    width: "18",
-    height: "18",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "3",
-    y: "3",
-    width: "7",
-    height: "7",
-    rx: "1.5"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "14",
-    y: "3",
-    width: "7",
-    height: "7",
-    rx: "1.5"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "3",
-    y: "14",
-    width: "7",
-    height: "7",
-    rx: "1.5"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "14",
-    y: "14",
-    width: "7",
-    height: "7",
-    rx: "1.5"
-  }))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "block",
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Categories"), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 11.5,
-      color: C.inkMute
-    }
-  }, "Tasks, events & bills — colours and icons")), /*#__PURE__*/React.createElement(Chev, null)))), /*#__PURE__*/React.createElement(SGroup, {
+  }))))), /*#__PURE__*/React.createElement(SGroup, {
     q: q,
     label: "Calendar",
     GroupLabel: GroupLabel,
@@ -61757,7 +61706,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v430"))))), diagOpen && (() => {
+  }, "v431"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -62892,8 +62841,9 @@ function SettingsModal({
     }), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        gap: 7,
-        flexWrap: "nowrap"
+        gap: 0,
+        flexWrap: "nowrap",
+        justifyContent: "space-between"
       }
     }, PERSON_COLORS.map(col => {
       const ppc = personColor(col);
@@ -62903,12 +62853,12 @@ function SettingsModal({
         onClick: () => setColor(k, col),
         title: col,
         style: {
-          width: 28,
-          height: 28,
+          width: 34,
+          height: 34,
           borderRadius: "50%",
           background: ppc,
           cursor: "pointer",
-          flexShrink: 0,
+          flexShrink: 1,
           padding: 0,
           border: on ? `2px solid ${C.ink}` : "2px solid transparent",
           outline: on ? `1.5px solid ${ppc}` : "none",
@@ -62924,8 +62874,8 @@ function SettingsModal({
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
-        width: 28,
-        height: 28,
+        width: 34,
+        height: 34,
         borderRadius: "50%",
         background: pc,
         flexShrink: 0,
