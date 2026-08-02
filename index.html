@@ -56382,7 +56382,7 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd, resetAfter) {
     // household goal showed points with no matching activity. Include bills
     // for "shared" so the numbers add up. Individual activity still hides
     // bills — they have their own tab.
-    if (isBill(t) && who !== "shared") return;
+    if (isBill(t)) return;
     const assignee = t.assignee || "both";
     const pts = t.points || 0;
     const rm = taskMeta(t);
