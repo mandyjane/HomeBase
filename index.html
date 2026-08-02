@@ -3360,7 +3360,7 @@ const PRIORITIES = [{
 // at RENDER time only (storage is untouched, Bold is unaffected). One chokepoint
 // so Her/Him read consistently everywhere.
 function personColor(hex) {
-  if (!hex || C.mood !== "sleek") return hex;
+  if (!hex) return hex;
   const h = hex.replace('#', '');
   if (h.length < 6) return hex;
   let r = parseInt(h.slice(0, 2), 16) / 255,
@@ -61757,7 +61757,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v428"))))), diagOpen && (() => {
+  }, "v429"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -62834,12 +62834,12 @@ function SettingsModal({
       width: 12,
       height: 12,
       borderRadius: "50%",
-      background: form[k].color
+      background: personColor(form[k].color)
     }
   }), /*#__PURE__*/React.createElement("span", {
     className: "lbl",
     style: {
-      color: form[k].color
+      color: personColor(form[k].color)
     }
   }, k === "her" ? "First person" : "Second person")), /*#__PURE__*/React.createElement("input", {
     value: form[k].name,
@@ -62854,23 +62854,65 @@ function SettingsModal({
     style: {
       display: "flex",
       gap: 9,
-      flexWrap: "wrap"
+      flexWrap: "wrap",
+      alignItems: "center"
     }
-  }, PERSON_COLORS.map(col => /*#__PURE__*/React.createElement("button", {
-    key: col,
-    onClick: () => setColor(k, col),
-    title: col,
-    style: {
-      width: 30,
-      height: 30,
-      borderRadius: "50%",
-      background: col,
-      cursor: "pointer",
-      border: form[k].color === col ? `2px solid ${C.ink}` : "2px solid transparent",
-      outline: form[k].color === col ? `1.5px solid ${col}` : "none",
-      outlineOffset: 2
-    }
-  }))));
+  }, PERSON_COLORS.map(col => {
+    const pc = personColor(col);
+    const on = form[k].color === col;
+    return /*#__PURE__*/React.createElement("button", {
+      key: col,
+      onClick: () => setColor(k, col),
+      title: col,
+      style: {
+        width: 30,
+        height: 30,
+        borderRadius: "50%",
+        background: pc,
+        cursor: "pointer",
+        border: on ? `2px solid ${C.ink}` : "2px solid transparent",
+        outline: on ? `1.5px solid ${pc}` : "none",
+        outlineOffset: 2
+      }
+    });
+  }), (() => {
+    const isCustom = !PERSON_COLORS.includes(form[k].color);
+    const pc = personColor(form[k].color);
+    return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("label", {
+      style: {
+        width: 30,
+        height: 30,
+        borderRadius: "50%",
+        background: "conic-gradient(red,yellow,lime,aqua,blue,magenta,red)",
+        border: isCustom ? `2px solid ${C.ink}` : "2px solid transparent",
+        outline: isCustom ? `1.5px solid ${pc}` : "none",
+        outlineOffset: 2,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 14,
+        height: 14,
+        borderRadius: "50%",
+        background: isCustom ? pc : C.card
+      }
+    }), /*#__PURE__*/React.createElement("input", {
+      type: "color",
+      value: form[k].color,
+      onChange: e => setColor(k, e.target.value),
+      style: {
+        position: "absolute",
+        opacity: 0,
+        width: 0,
+        height: 0,
+        overflow: "hidden"
+      }
+    })));
+  })()));
   const {
     sheetRef
   } = useSwipeToClose(onClose);
