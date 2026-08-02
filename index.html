@@ -8855,13 +8855,11 @@ function App({
         sent: false
       };
       console.log("[treat push] inserting:", JSON.stringify(treatRow));
-      sbClient.from("alert_schedule").upsert([treatRow], {
-        onConflict: "id"
-      }).then(({
+      sbClient.from("alert_schedule").insert([treatRow]).select().then(({
         data,
         error
       }) => {
-        if (error) console.warn("[treat push] ERROR:", error.message);else console.log("[treat push] OK, data:", data);
+        if (error) console.warn("[treat push] ERROR:", error.message, error.details, error.hint);else console.log("[treat push] INSERTED:", JSON.stringify(data));
       });
     } else {
       console.warn("[treat push] SKIPPED — sbClient:", !!sbClient, "sbHouseholdId:", sbHouseholdId);
@@ -61769,7 +61767,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v418"))))), diagOpen && (() => {
+  }, "v419"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
