@@ -16803,6 +16803,7 @@ function App({
       onEndRepeatAt: endRepeatAt,
       onShowCompleted: who => setCompletedTasksSheet(who)
     }), tab === "settings" && /*#__PURE__*/React.createElement(SettingsPage, {
+      debugId: (_sbUserId ? "uid:" + String(_sbUserId).slice(0, 6) : "no-uid") + " " + (currentUser || "role:??") + " priv:" + tasks.filter(t => t.private).length + " hide:" + tasks.filter(t => isPrivateHidden(t)).length,
       tasks: tasks,
       events: events,
       today: today,
@@ -60783,6 +60784,7 @@ function OtStepper({
 function SettingsPage({
   tasks,
   events = [],
+  debugId = "",
   today,
   showPoints,
   setShowPoints,
@@ -63105,7 +63107,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v475 ", _sbUserId ? "· uid:" + _sbUserId.slice(0, 6) : "", " ", currentUser ? "· " + currentUser : " · role:??"))))), diagOpen && (() => {
+  }, "v475", debugId ? " · " + debugId : ""))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
