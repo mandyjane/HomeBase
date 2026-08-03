@@ -1399,11 +1399,6 @@ const PH_ICON_PATHS = {
     vb: "0 0 680 880",
     filled: true,
     d: 'M585 790 l-57 -70 -163 0 c-156 0 -164 1 -170 20 -4 11 -18 28 -31 37 -59 38 -134 1 -134 -67 0 -57 64 -104 109 -81 17 10 30 -1 105 -84 l86 -95 -2 -172 -3 -171 -39 -11 c-46 -13 -67 -39 -48 -58 18 -18 226 -18 244 0 20 20 -3 46 -50 56 l-42 10 0 174 0 174 110 123 c61 68 110 128 110 133 0 6 -11 12 -24 14 -24 3 -23 5 25 63 27 33 49 63 49 67 0 21 -23 2 -75 -62z m-431 -36 c25 -24 19 -34 -19 -34 -40 0 -44 -9 -15 -35 27 -25 25 -35 -7 -35 -54 0 -80 52 -47 98 18 26 65 30 88 6z m329 -89 l-28 -35 -130 1 -130 0 -28 35 -29 34 186 0 187 0 -28 -35z m87 27 c0 -15 -58 -64 -70 -60 -16 5 36 68 56 68 8 0 14 -4 14 -8z m-174 -134 c-20 -23 -36 -45 -36 -50 0 -19 19 -5 59 42 23 28 49 50 57 50 9 0 -9 -27 -45 -68 l-61 -69 0 -190 0 -190 41 -6 c42 -6 57 -13 46 -23 -11 -11 -132 -16 -172 -6 l-40 9 28 12 c16 6 39 11 53 11 l24 0 0 194 c0 107 -4 197 -9 200 -5 3 -32 33 -61 66 l-52 60 102 0 102 0 -36 -42z'
-  },
-  cup: {
-    vb: "0 0 680 880",
-    filled: true,
-    d: 'M585 790 l-57 -70 -163 0 c-156 0 -164 1 -170 20 -4 11 -18 28 -31 37 -59 38 -134 1 -134 -67 0 -57 64 -104 109 -81 17 10 30 -1 105 -84 l86 -95 -2 -172 -3 -171 -39 -11 c-46 -13 -67 -39 -48 -58 18 -18 226 -18 244 0 20 20 -3 46 -50 56 l-42 10 0 174 0 174 110 123 c61 68 110 128 110 133 0 6 -11 12 -24 14 -24 3 -23 5 25 63 27 33 49 63 49 67 0 21 -23 2 -75 -62z m-431 -36 c25 -24 19 -34 -19 -34 -40 0 -44 -9 -15 -35 27 -25 25 -35 -7 -35 -54 0 -80 52 -47 98 18 26 65 30 88 6z m329 -89 l-28 -35 -130 1 -130 0 -28 35 -29 34 186 0 187 0 -28 -35z m87 27 c0 -15 -58 -64 -70 -60 -16 5 36 68 56 68 8 0 14 -4 14 -8z m-174 -134 c-20 -23 -36 -45 -36 -50 0 -19 19 -5 59 42 23 28 49 50 57 50 9 0 -9 -27 -45 -68 l-61 -69 0 -190 0 -190 41 -6 c42 -6 57 -13 46 -23 -11 -11 -132 -16 -172 -6 l-40 9 28 12 c16 6 39 11 53 11 l24 0 0 194 c0 107 -4 197 -9 200 -5 3 -32 33 -61 66 l-52 60 102 0 102 0 -36 -42z'
   }
 };
 function migratePeriod(p) {
@@ -3537,7 +3532,7 @@ const ICON_GROUPS = [
 // path would repoint a live category. A group listing is a PICKER choice; the catalog is
 // the source of truth, and `iconGroupsWithRest` would otherwise sweep it into "More", so
 // it is named in an explicitly hidden list below.
-["Bills & home", ["bolt", "waterdrop", "flame", "home", "building", "wifi", "shield", "bank", "repeat", "truck", "card", "bills", "key"]], ["Rooms", ["kitchen", "bathroom", "garden", "bedroom", "living", "garage", "laundry", "window", "fridge", "bulb", "other", "entertainment"]], ["Chores", ["broom", "spray", "dishes", "trash", "vacuum", "dusting", "iron", "hammer", "paint", "mower", "water", "cart", "shopping"]], ["Outdoors & pets", ["trees", "flower", "plant", "sun", "moon", "cooling", "pet", "catface", "paw", "petbowl", "fish", "baby", "tent", "compass", "pin", "plane", "takeoff"]], ["Celebrations", ["rings", "ring", "cheers", "cake", "gift", "balloon", "hearts", "heart", "ticket", "star", "circus", "wand", "teddybear"]], ["Food & social", ["dining", "cup", "coffee", "wine", "cocktail", "users", "bag", "popcorn"]], ["Health & self-care", ["spa", "pill", "stethoscope", "tooth", "sleep", "medical", "cross", "scissors"]], ["Work & leisure", ["shift", "briefcase", "cap", "book", "booklet", "music", "mic", "film", "camera", "palette", "dumbbell", "ball", "run", "car", "calendar", "phone", "gamepad", "soccer", "ticket"]]];
+["Bills & home", ["bolt", "waterdrop", "flame", "home", "building", "wifi", "shield", "bank", "repeat", "truck", "card", "bills", "key"]], ["Rooms", ["kitchen", "bathroom", "garden", "bedroom", "living", "garage", "laundry", "window", "fridge", "bulb", "other"]], ["Chores", ["broom", "spray", "dishes", "trash", "vacuum", "dusting", "iron", "hammer", "paint", "mower", "water", "cart", "shopping"]], ["Outdoors & pets", ["trees", "flower", "plant", "sun", "moon", "cooling", "pet", "catface", "paw", "petbowl", "fish", "baby", "tent", "compass", "pin", "plane", "takeoff"]], ["Celebrations", ["rings", "ring", "cheers", "cake", "gift", "balloon", "hearts", "heart", "ticket", "star", "circus", "wand", "teddybear"]], ["Food & social", ["dining", "cup", "cocktail", "users", "bag", "popcorn"]], ["Health & self-care", ["spa", "pill", "stethoscope", "tooth", "sleep", "medical", "cross", "scissors"]], ["Work & leisure", ["shift", "briefcase", "cap", "book", "booklet", "music", "mic", "film", "camera", "palette", "dumbbell", "ball", "run", "car", "calendar", "phone", "gamepad", "ticket"]]];
 // Flattened, de-duplicated, and BACKSTOPPED: any icon in ICON_PATHS that a group forgot is
 // appended rather than silently lost. The grouping is a presentation choice; the pool is
 // the source of truth.
@@ -3569,7 +3564,7 @@ const EVENT_ICON_LIBRARY = CATEGORY_ICONS; // same pool — kept as an alias for
 // They must ALSO be named here rather than merely left out of ICON_GROUPS, because
 // iconGroupsWithRest sweeps anything ungrouped into a trailing "More" — the backstop that
 // stops a typo stranding an icon would otherwise hand these straight back to the picker.
-const ICONS_RETIRED = new Set(["clock", "drop"]);
+const ICONS_RETIRED = new Set(["clock", "drop", "coffee", "wine", "entertainment", "soccer", "ph_flag", "ph_sparkle", "ph_cross", "ph_anzac", "ph_wrench", "ph_crown", "ph_tree", "ph_gift", "ph_ferris", "ph_bunny", "ph_australia"]);
 function iconGroupsWithRest() {
   const seen = new Set(ICONS_RETIRED);
   const out = ICON_GROUPS.map(([label, list]) => {
@@ -62691,7 +62686,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v468"))))), diagOpen && (() => {
+  }, "v469"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
