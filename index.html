@@ -8034,6 +8034,19 @@ function App({
     lsSet("hb_goalPromptAck", goalPromptAck);
   }, [goalPromptAck]);
   useEffect(() => {
+    if (!currentUser) return;
+    setGoalPromptAck(prev => {
+      if (prev[currentUser]) return prev;
+      const g = rewards && rewards[currentUser] || DEFAULT_REWARDS[currentUser];
+      const p = migratePeriod(g.period);
+      const bk = periodBucket(p, pointsPeriods);
+      return bk && bk.key ? {
+        ...prev,
+        [currentUser]: bk.key
+      } : prev;
+    });
+  }, [currentUser]);
+  useEffect(() => {
     lsSet("hb_billPoints", billPoints);
   }, [billPoints]);
   useEffect(() => {
@@ -12866,91 +12879,7 @@ function App({
       total: levelUp.total,
       color: personColor(people[levelUp.who]?.color),
       onClose: () => setLevelUp(null)
-    }), tab === "home" && currentUser && (() => {
-      const myGoal = rewards && rewards[currentUser] || DEFAULT_REWARDS[currentUser];
-      const myPeriod = migratePeriod(myGoal.period);
-      const myBucket = periodBucket(myPeriod, pointsPeriods);
-      const myKey = myBucket && myBucket.key;
-      const acked = goalPromptAck[currentUser];
-      if (!myKey || myKey === acked) return null;
-      const periodWord = myPeriod === "weekly" ? "week" : myPeriod === "fortnightly" ? "fortnight" : "month";
-      return /*#__PURE__*/React.createElement("div", {
-        onClick: () => {
-          setGoalPromptAck(a => ({
-            ...a,
-            [currentUser]: myKey
-          }));
-          setPersonSheet(currentUser);
-        },
-        className: "sans",
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          background: "rgba(180,130,255,0.08)",
-          border: "1.5px solid rgba(180,130,255,0.25)",
-          borderRadius: 14,
-          padding: "12px 14px",
-          cursor: "pointer",
-          marginBottom: 10,
-          maxWidth: 480,
-          marginLeft: "auto",
-          marginRight: "auto"
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          background: "rgba(180,130,255,0.15)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0
-        }
-      }, /*#__PURE__*/React.createElement("svg", {
-        width: "18",
-        height: "18",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: "#B482FF",
-        strokeWidth: "1.8",
-        strokeLinecap: "round",
-        strokeLinejoin: "round"
-      }, /*#__PURE__*/React.createElement("path", {
-        d: "M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"
-      }), /*#__PURE__*/React.createElement("path", {
-        d: "M4 6v12c0 1.1.9 2 2 2h14v-4"
-      }), /*#__PURE__*/React.createElement("path", {
-        d: "M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"
-      }))), /*#__PURE__*/React.createElement("span", {
-        style: {
-          flex: 1,
-          minWidth: 0
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        className: "serif",
-        style: {
-          display: "block",
-          fontSize: 15,
-          fontStyle: "italic",
-          color: "#E8E9ED"
-        }
-      }, "New ", periodWord, "! Set your reward"), /*#__PURE__*/React.createElement("span", {
-        style: {
-          display: "block",
-          fontSize: 11,
-          color: "rgba(180,130,255,0.7)",
-          marginTop: 1
-        }
-      }, "What are you working towards?")), /*#__PURE__*/React.createElement("span", {
-        style: {
-          color: "rgba(180,130,255,0.5)",
-          fontSize: 14,
-          flexShrink: 0
-        }
-      }, "→"));
-    })(), !levelUp && goalQueue.length > 0 && (() => {
+    }), !levelUp && goalQueue.length > 0 && (() => {
       const g = goalQueue[0];
       const shift = () => setGoalQueue(q => q.slice(1));
       return /*#__PURE__*/React.createElement(GoalBurst, {
@@ -13295,7 +13224,88 @@ function App({
         opacity: .9,
         marginTop: 3
       }
-    }, totalToday === 0 ? "Nothing due today." : `${totalToday - doneToday} to go — you've got this.`)))), showPoints &&
+    }, totalToday === 0 ? "Nothing due today." : `${totalToday - doneToday} to go — you've got this.`)))), showPoints && currentUser && (() => {
+      const myGoal = rewards && rewards[currentUser] || DEFAULT_REWARDS[currentUser];
+      const myPeriod = migratePeriod(myGoal.period);
+      const myBucket = periodBucket(myPeriod, pointsPeriods);
+      const myKey = myBucket && myBucket.key;
+      const acked = goalPromptAck[currentUser];
+      if (!myKey || myKey === acked) return null;
+      const pw = myPeriod === "weekly" ? "week" : myPeriod === "fortnightly" ? "fortnight" : "month";
+      return /*#__PURE__*/React.createElement("div", {
+        onClick: () => {
+          setGoalPromptAck(a => ({
+            ...a,
+            [currentUser]: myKey
+          }));
+          setPersonSheet(currentUser);
+        },
+        className: "sans",
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          background: "rgba(180,130,255,0.08)",
+          border: "1.5px solid rgba(180,130,255,0.25)",
+          borderRadius: 14,
+          padding: "12px 14px",
+          cursor: "pointer",
+          marginBottom: 14
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          width: 36,
+          height: 36,
+          borderRadius: 10,
+          background: "rgba(180,130,255,0.15)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "18",
+        height: "18",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "#B482FF",
+        strokeWidth: "1.8",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }, /*#__PURE__*/React.createElement("path", {
+        d: "M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M4 6v12c0 1.1.9 2 2 2h14v-4"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"
+      }))), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1,
+          minWidth: 0
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "serif",
+        style: {
+          display: "block",
+          fontSize: 15,
+          fontStyle: "italic",
+          color: "#E8E9ED"
+        }
+      }, "New " + pw + "! Set your reward"), /*#__PURE__*/React.createElement("span", {
+        style: {
+          display: "block",
+          fontSize: 11,
+          color: "rgba(180,130,255,0.7)",
+          marginTop: 1
+        }
+      }, "What are you working towards?")), /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: "rgba(180,130,255,0.5)",
+          fontSize: 14,
+          flexShrink: 0
+        }
+      }, "→"));
+    })(), showPoints &&
     /*#__PURE__*/
     /* v245 · 6 -> 2. The level cards and the reward goal are ONE idea - points -
        and sat too far apart to read as a group. Tightening here also stops the
@@ -62154,7 +62164,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v449"))))), diagOpen && (() => {
+  }, "v450"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
