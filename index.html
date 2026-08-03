@@ -12862,6 +12862,8 @@ function App({
         @keyframes cbburst{0%{transform:scale(.6);opacity:.7}100%{transform:scale(1.8);opacity:0}}
         @keyframes stampin{0%{opacity:0;transform:translate(-50%,-50%) rotate(-12deg) scale(.4)}6%{opacity:1;transform:translate(-50%,-50%) rotate(-12deg) scale(1.1)}11%{transform:translate(-50%,-50%) rotate(-12deg) scale(1)}90%{opacity:1;transform:translate(-50%,-50%) rotate(-12deg) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) rotate(-12deg) scale(1)}}
         @keyframes exitswipeR{0%{transform:translateX(0);opacity:1;max-height:200px}40%{transform:translateX(12px)}100%{transform:translateX(120%);opacity:0;max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0}}
+        @keyframes daySlideL{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+        @keyframes daySlideR{from{transform:translateX(-40px);opacity:0}to{transform:translateX(0);opacity:1}}
         @keyframes exitswipeL{0%{transform:translateX(0);opacity:1;max-height:200px}40%{transform:translateX(-12px)}100%{transform:translateX(-120%);opacity:0;max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0}}
         @keyframes exitcollapse{0%{opacity:1;max-height:200px;transform:scale(1)}100%{opacity:0;max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0;transform:scale(.92)}}
         @keyframes exitzoom{0%{opacity:1;max-height:200px;transform:scale(1)}30%{transform:scale(1.04)}100%{opacity:0;max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0;transform:scale(1.15)}}
@@ -28430,9 +28432,19 @@ function DaySheet({
   const {
     sheetRef
   } = useSwipeToClose(onClose);
-  // Horizontal step gesture. Attached to the sheet body rather than the scrim so a drag
-  // that starts outside the sheet cannot change the day.
-  const swipeRef = useSwipeDay(onStepDay, !!onStepDay);
+  // v462 · slide direction for day swipe animation
+  const slideDirRef = useRef(0);
+  const wrappedStep = useCallback(n => {
+    slideDirRef.current = n;
+    onStepDay && onStepDay(n);
+  }, [onStepDay]);
+  const swipeRef = useSwipeDay(wrappedStep, !!onStepDay);
+  // Also track arrow taps
+  const stepWithAnim = n => {
+    slideDirRef.current = n;
+    onStepDay && onStepDay(n);
+  };
+  const slideAnim = slideDirRef.current > 0 ? "daySlideL" : slideDirRef.current < 0 ? "daySlideR" : null;
   const d = new Date(dateStr + "T00:00:00");
   const label = `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}`;
 
@@ -28608,7 +28620,7 @@ function DaySheet({
       flexShrink: 0
     }
   }, onStepDay && /*#__PURE__*/React.createElement("button", {
-    onClick: () => onStepDay(-1),
+    onClick: () => stepWithAnim(-1),
     className: "sans",
     "aria-label": "Previous day",
     style: {
@@ -28643,7 +28655,7 @@ function DaySheet({
       marginTop: 2
     }
   }, counts.length ? counts.join(" · ") : "Nothing scheduled")), onStepDay ? /*#__PURE__*/React.createElement("button", {
-    onClick: () => onStepDay(1),
+    onClick: () => stepWithAnim(1),
     className: "sans",
     "aria-label": "Next day",
     style: {
@@ -28687,10 +28699,12 @@ function DaySheet({
     d: "M12 5v14M5 12h14"
   })), "Add")), /*#__PURE__*/React.createElement("div", {
     ref: swipeRef,
+    key: dateStr,
     style: {
       overflowY: "auto",
       padding: "0 20px 30px",
-      WebkitOverflowScrolling: "touch"
+      WebkitOverflowScrolling: "touch",
+      animation: slideAnim ? `${slideAnim} 0.22s ease-out` : undefined
     }
   }, onStepDay && /*#__PURE__*/React.createElement("button", {
     onClick: () => onAdd && onAdd(dateStr),
@@ -62582,7 +62596,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v461"))))), diagOpen && (() => {
+  }, "v462"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
