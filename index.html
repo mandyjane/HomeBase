@@ -6698,6 +6698,133 @@ const HB_SCHEMA = 1;
 //
 // EXPORT/IMPORT NEED NO CHANGES. Both enumerate by prefix (k.startsWith(HB_PREFIX)), so
 // `hb_doc:*` keys are carried into backups automatically. That was checked, not assumed.
+// ── INDEXEDDB DOCUMENT STORE *(v470)* ──────────────────────────────────────────
+// Photos move from localStorage (5MB shared cap) into IndexedDB (effectively unlimited).
+// Reads stay synchronous via an in-memory cache populated at boot; writes go to both the
+// cache AND IDB so the UI never waits. Migration happens transparently on first load.
+const IDB_NAME = "home-base-docs";
+const IDB_STORE = "photos";
+const IDB_VERSION = 1;
+// The in-memory cache. Populated on boot from IDB (+ migration from LS on first run).
+// Every docRead/docWrite/docDelete goes through this, so the rest of the app stays sync.
+const _docCache = new Map();
+let _idbReady = false;
+let _idbDB = null;
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => {
+        _idbDB = req.result;
+        resolve(_idbDB);
+      };
+      req.onerror = () => reject(req.error);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+function idbPut(key, val) {
+  if (!_idbDB) return;
+  try {
+    const tx = _idbDB.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put(val, key);
+  } catch {}
+}
+function idbDel(key) {
+  if (!_idbDB) return;
+  try {
+    const tx = _idbDB.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).delete(key);
+  } catch {}
+}
+function idbGetAll() {
+  return new Promise((resolve, reject) => {
+    if (!_idbDB) return resolve([]);
+    try {
+      const tx = _idbDB.transaction(IDB_STORE, "readonly");
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.openCursor();
+      const out = [];
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (cur) {
+          out.push({
+            key: cur.key,
+            value: cur.value
+          });
+          cur.continue();
+        } else resolve(out);
+      };
+      req.onerror = () => reject(req.error);
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+// Boot: open IDB, migrate any remaining LS docs, populate cache.
+// Returns a promise; the app renders immediately but the Documents tab
+// will show "Loading documents..." until this resolves.
+async function idbBoot() {
+  try {
+    await idbOpen();
+    // Migrate any leftover localStorage docs into IDB
+    const lsKeys = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("hb_doc:")) lsKeys.push(k);
+      }
+    } catch {}
+    for (const k of lsKeys) {
+      try {
+        const v = localStorage.getItem(k);
+        if (v) {
+          const ref = k.slice("hb_doc:".length);
+          idbPut(ref, v);
+          _docCache.set(ref, v);
+        }
+        localStorage.removeItem(k);
+      } catch {}
+    }
+    // Load everything already in IDB into cache
+    const all = await idbGetAll();
+    for (const {
+      key,
+      value
+    } of all) {
+      _docCache.set(key, value);
+    }
+    _idbReady = true;
+  } catch {
+    // IDB unavailable (private browsing, opaque origin). Fall back to LS silently.
+    // Populate cache from LS so docs still render.
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("hb_doc:")) {
+          const ref = k.slice("hb_doc:".length);
+          _docCache.set(ref, localStorage.getItem(k));
+        }
+      }
+    } catch {}
+    _idbReady = true;
+  }
+}
+// Total bytes stored in IDB (from cache). Used for the storage meter.
+function idbUsage() {
+  let n = 0;
+  for (const [k, v] of _docCache) {
+    n += (k.length + (v || "").length) * 2;
+  }
+  return n;
+}
+// IDB quota: browsers typically allow hundreds of MB.
+// Show a generous but honest estimate.
+const IDB_BUDGET = 50 * 1024 * 1024;
 const DOC_PREFIX = "hb_doc:";
 const DOC_REF = "doc:"; // what sits in the photo field instead of bytes
 // A pointer, not an image. `doc:42:2026-07-02` — the series id and the occurrence it
@@ -6712,52 +6839,47 @@ const docRefFor = (seriesId, occDate) => `${DOC_REF}${seriesId}:${occDate || "se
 function docRead(v) {
   if (!v) return null;
   if (!isDocRef(v)) return v; // legacy: the bytes are still inline
-  try {
-    return localStorage.getItem(docKeyOf(v)) || null;
-  } catch {
-    return null;
-  }
+  // v470: read from in-memory cache (populated from IDB at boot)
+  const ref = String(v).slice(DOC_REF.length);
+  return _docCache.get(ref) || null;
 }
 // Write a photo to its own key. Returns the REF on success, or null if it would not fit —
 // and null is a real answer, not an error: the caller records the payment either way.
 function docWrite(seriesId, occDate, dataUrl) {
   if (!dataUrl) return null;
   const ref = docRefFor(seriesId, occDate);
+  const cacheKey = String(ref).slice(DOC_REF.length);
   try {
-    localStorage.setItem(docKeyOf(ref), dataUrl);
+    // v470: write to in-memory cache + IDB (fire and forget)
+    _docCache.set(cacheKey, dataUrl);
+    idbPut(cacheKey, dataUrl);
     return ref;
   } catch (e) {
-    // Quota. The photo is refused; the PAYMENT is not. lsSet's banner is deliberately NOT
-    // raised here — hb_tasks is still perfectly writable, and claiming the app cannot save
-    // when it can is its own kind of lie.
     return null;
   }
 }
 function docDelete(v) {
   if (!isDocRef(v)) return;
-  try {
-    localStorage.removeItem(docKeyOf(v));
-  } catch {}
+  // v470: remove from cache + IDB
+  const cacheKey = String(v).slice(DOC_REF.length);
+  _docCache.delete(cacheKey);
+  idbDel(cacheKey);
 }
 // Every doc key currently in store, newest first, with its size. Drives both the
 // "which one do you want to drop?" chooser and the Documents library.
 function docList() {
+  // v470: read from in-memory cache (backed by IDB)
   const out = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (!k || !k.startsWith(DOC_PREFIX)) continue;
-      const v = localStorage.getItem(k) || "";
-      const [sid, occ] = k.slice(DOC_PREFIX.length).split(":");
-      out.push({
-        key: k,
-        ref: DOC_REF + k.slice(DOC_PREFIX.length),
-        seriesId: sid,
-        occDate: occ,
-        bytes: attBytes(v)
-      });
-    }
-  } catch {}
+  for (const [ref, v] of _docCache) {
+    const [sid, occ] = ref.split(":");
+    out.push({
+      key: DOC_PREFIX + ref,
+      ref: DOC_REF + ref,
+      seriesId: sid,
+      occDate: occ,
+      bytes: attBytes(v || "")
+    });
+  }
   return out.sort((a, b) => (b.occDate || "").localeCompare(a.occDate || ""));
 }
 // ORPHANS. A doc whose bill (or occurrence) no longer exists. Deleting a bill deletes its
@@ -6790,6 +6912,11 @@ function exportData() {
       } catch {}
     }
   } catch {}
+  // v470: include IDB docs in export (from cache)
+  for (const [ref, v] of _docCache) {
+    const k = DOC_PREFIX + ref;
+    data[k] = v; // raw data-URL string, not JSON-parsed
+  }
   return {
     app: "home-base",
     schema: HB_SCHEMA,
@@ -6865,8 +6992,26 @@ function importData(json, {
         if (k && k.startsWith(HB_PREFIX) && !HB_NO_EXPORT.has(k)) kill.push(k);
       }
       kill.forEach(k => localStorage.removeItem(k));
+      // v470: also clear IDB docs on replace import
+      _docCache.clear();
+      if (_idbDB) {
+        try {
+          const tx = _idbDB.transaction(IDB_STORE, "readwrite");
+          tx.objectStore(IDB_STORE).clear();
+        } catch {}
+      }
     }
-    staged.forEach(([k, v]) => localStorage.setItem(k, v));
+    staged.forEach(([k, v]) => {
+      if (k.startsWith(DOC_PREFIX)) {
+        // v470: doc keys go to IDB + cache, not LS
+        const ref = k.slice(DOC_PREFIX.length);
+        const val = typeof v === "string" ? v : JSON.stringify(v);
+        _docCache.set(ref, val);
+        idbPut(ref, val);
+      } else {
+        localStorage.setItem(k, v);
+      }
+    });
   } catch (e) {
     return {
       ok: false,
@@ -7314,6 +7459,15 @@ function App({
     return loaded;
   });
   const [manualOT, setManualOT] = useState(() => lsGet("hb_manualOT", [])); // [{id,person,hours,date,note}]
+  // v470 · IndexedDB boot — populates the in-memory doc cache from IDB (+ migrates LS docs on first run)
+  const [idbReady, setIdbReady] = useState(_idbReady);
+  useState(() => {
+    if (_idbReady) {
+      setIdbReady(true);
+      return;
+    }
+    idbBoot().then(() => setIdbReady(true)).catch(() => setIdbReady(true));
+  });
   // Seed id counters above any persisted ids so freshly-added items can't collide
   // with existing ones after a reload (which previously caused edits to hit
   // multiple items and rows to duplicate).
@@ -13101,7 +13255,7 @@ function App({
       d: "M12 9v4M12 17h.01"
     }), /*#__PURE__*/React.createElement("path", {
       d: "M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-    })), /*#__PURE__*/React.createElement("span", null, "Storage is full — nothing is being saved. Remove a bill document in Bills → Documents.")), toast && (toast.type === "level" ? /*#__PURE__*/React.createElement("div", {
+    })), /*#__PURE__*/React.createElement("span", null, "Storage is full — nothing is being saved. Try removing old tasks or exporting a backup.")), toast && (toast.type === "level" ? /*#__PURE__*/React.createElement("div", {
       className: "sans",
       style: {
         position: "fixed",
@@ -31745,8 +31899,8 @@ function BillsTab({
     })));
   })()))) : view === "docs" ? /*#__PURE__*/React.createElement(React.Fragment, null, (() => {
     const all = billDocs(bills);
-    const used = lsUsage();
-    const pctUsed = Math.min(100, used / LS_BUDGET * 100);
+    const used = idbUsage();
+    const pctUsed = Math.min(100, used / IDB_BUDGET * 100);
     const tight = pctUsed >= 75;
     const shown = docCat ? all.filter(d => d.cat === docCat) : all;
     const cats = [...new Set(all.map(d => d.cat))].sort((a, b) => all.filter(d => d.cat === b).length - all.filter(d => d.cat === a).length);
@@ -31794,7 +31948,7 @@ function BillsTab({
         color: tight ? C.urgent : C.inkMute,
         fontVariantNumeric: "tabular-nums"
       }
-    }, fmtBytes(used), " of ~", fmtBytes(LS_BUDGET))), /*#__PURE__*/React.createElement("div", {
+    }, fmtBytes(used), " of ~", fmtBytes(IDB_BUDGET))), /*#__PURE__*/React.createElement("div", {
       style: {
         height: 7,
         borderRadius: 4,
@@ -31817,7 +31971,7 @@ function BillsTab({
         marginTop: 7,
         lineHeight: 1.5
       }
-    }, tight ? "Nearly full. When it fills, nothing can save — not just photos. Remove a document, or wait for cloud sync." : `${all.length} document${all.length === 1 ? "" : "s"} · estimate, browsers vary`)), /*#__PURE__*/React.createElement("div", {
+    }, tight ? "Nearly full. Remove a document to free space, or wait for cloud sync." : `${all.length} document${all.length === 1 ? "" : "s"} · estimate, browsers vary`)), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         gap: 6,
@@ -31844,7 +31998,7 @@ function BillsTab({
           borderRadius: 20,
           border: `1px solid ${on ? col : C.rule}`,
           background: on ? col : "transparent",
-          color: on ? "#fff" : C.inkMute,
+          color: on ? val ? "#fff" : C.page : C.inkMute,
           cursor: "pointer",
           whiteSpace: "nowrap"
         }
@@ -62686,7 +62840,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v469"))))), diagOpen && (() => {
+  }, "v470"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
