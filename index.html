@@ -7845,6 +7845,10 @@ function App({
   const [showNames, setShowNames] = useState(false);
   // v368 · Derive which person the logged-in user is (for treat approval resolution)
   const currentUser = sbUserName && people.her.name === sbUserName ? "her" : sbUserName && people.him.name === sbUserName ? "him" : null;
+  // v445 · PRIVATE — hidden from the other person, no points.
+  const isPrivateHidden = t => !!(t && t.private && currentUser && t.assignee !== currentUser && t.assignee !== "both");
+  const visTasks = tasks.filter(t => !isPrivateHidden(t));
+  const visEvents = events.filter(e => !isPrivateHidden(e));
   const [location, setLocation] = useState(() => lsGet("hb_location", DEFAULT_LOCATION));
   const [showLocation, setShowLocation] = useState(false);
   const [rewards, setRewards] = useState(() => lsGet("hb_rewards", DEFAULT_REWARDS));
@@ -11846,7 +11850,7 @@ function App({
   }
 
   // Snapshot data for Home (nearest upcoming only)
-  const homeListTasks = tasks.map(t => {
+  const homeListTasks = visTasks.map(t => {
     if (!t.recur || t.recur === "none") return t;
     const d = nextOccurrenceDate(t, "dueDate", today);
     return materialize(t, d, "dueDate");
@@ -11974,7 +11978,7 @@ function App({
   // Blend-B agenda: one ruled column mixing overdue + today's tasks + next events.
   // Each entry: {kind, ref, title, sub, date, dotColor, badge, overdue, done}.
   const homeAgenda = [];
-  overdueTasks.forEach(t => homeAgenda.push({
+  overdueTasks.filter(t => !isPrivateHidden(t)).forEach(t => homeAgenda.push({
     kind: "task",
     ref: t,
     title: t.title,
@@ -12024,7 +12028,7 @@ function App({
     taskTime: t.time ? fmtTime(t.time) : null
   }));
   // Completed-today tasks (any due date) sorted by when they were done.
-  doneTodayTasks.sort((a, b) => (a.doneAt || "").localeCompare(b.doneAt || "")).forEach(t => homeAgenda.push({
+  doneTodayTasks.filter(t => !isPrivateHidden(t)).sort((a, b) => (a.doneAt || "").localeCompare(b.doneAt || "")).forEach(t => homeAgenda.push({
     kind: "task",
     ref: t,
     title: t.title,
@@ -12060,7 +12064,7 @@ function App({
     doneAt: t.doneAt,
     taskTime: t.time ? fmtTime(t.time) : null
   }));
-  nextEvents.filter(e => e.date === today).forEach(e => homeAgenda.push({
+  nextEvents.filter(e => e.date === today && !isPrivateHidden(e)).forEach(e => homeAgenda.push({
     kind: "event",
     ref: e,
     title: dayOffTitle(e),
@@ -15806,8 +15810,8 @@ function App({
       billPayer: billPayer,
       billQuickPay: billQuickPay,
       q: tabQ,
-      tasks: tasks,
-      events: events,
+      tasks: visTasks,
+      events: visEvents,
       manualOT: manualOT,
       people: people,
       calDate: calDate,
@@ -15903,7 +15907,7 @@ function App({
     }), tab === "bills" && /*#__PURE__*/React.createElement(BillsTab, {
       billPayer: billPayer,
       q: tabQ,
-      tasks: tasks,
+      tasks: visTasks,
       people: people,
       today: today,
       showTimes: showTimes,
@@ -23991,7 +23995,42 @@ function AgendaRow({
       flex: 1,
       lineHeight: 1.25
     }
-  }, row.title), (() => {
+  }, row.title, row.ref && row.ref.private && /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "inline-block",
+      fontSize: 7.5,
+      fontWeight: 700,
+      letterSpacing: ".5px",
+      textTransform: "uppercase",
+      background: "rgba(255,255,255,0.08)",
+      color: "#999",
+      borderRadius: 4,
+      padding: "1.5px 5px",
+      marginLeft: 5,
+      verticalAlign: "middle"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "8",
+    height: "8",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round",
+    style: {
+      verticalAlign: "-1px",
+      marginRight: 2
+    }
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "11",
+    width: "18",
+    height: "11",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M7 11V7a5 5 0 0 1 10 0v4"
+  })), "PRIVATE")), (() => {
     if (!bill || !t.onCard || !t.cardId) return null;
     const tint = CARD_TINT_OF(BILL_CATS);
     return /*#__PURE__*/React.createElement("span", {
@@ -49782,7 +49821,8 @@ function TaskModal({
     } : {}),
     ...(task?.recurEnd ? {
       recurEnd: task.recurEnd
-    } : {})
+    } : {}),
+    private: !!task?.private
   });
   const [newSub, setNewSub] = useState("");
   const [scopeAsk, setScopeAsk] = useState(false);
@@ -52090,7 +52130,70 @@ function TaskModal({
     style: {
       color: C.inkSoft
     }
-  }, "shared"), ", split 50/50.")))), PTS.on && (!billForm || billPoints) && (() => {
+  }, "shared"), ", split 50/50.")))), !billForm && form.assignee && form.assignee !== "both" && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "6px 0 10px"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: C.ink,
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "11",
+    width: "18",
+    height: "11",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M7 11V7a5 5 0 0 1 10 0v4"
+  })), "Private"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, "Only visible to you \\u00b7 no points")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => set("private", !form.private),
+    style: {
+      width: 40,
+      height: 22,
+      borderRadius: 11,
+      border: "none",
+      background: form.private ? C.low : "rgba(255,255,255,0.15)",
+      position: "relative",
+      cursor: "pointer",
+      transition: "background .2s",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 2,
+      left: form.private ? 20 : 2,
+      width: 18,
+      height: 18,
+      borderRadius: "50%",
+      background: "#fff",
+      transition: "left .2s"
+    }
+  }))), PTS.on && (!billForm || billPoints) && (() => {
     const PRESETS = [5, 10, 15, 20, 25, 30];
     const selVal = ptsMode === "custom" ? "custom" : form.points === 0 ? "none" : String(form.points);
     const clamp = v => Math.max(1, Math.min(999, Math.round(v) || 1));
@@ -56430,6 +56533,7 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd, resetAfter) {
     // for "shared" so the numbers add up. Individual activity still hides
     // bills — they have their own tab.
     if (isBill(t)) return;
+    if (t.private) return; // v446 · private tasks excluded from activity
     const assignee = t.assignee || "both";
     const pts = t.points || 0;
     const rm = taskMeta(t);
@@ -61754,7 +61858,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v444"))))), diagOpen && (() => {
+  }, "v446"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -63644,7 +63748,70 @@ function ShiftModal({
     height: "6"
   }), /*#__PURE__*/React.createElement("path", {
     d: "M15 6V4h2v3.5"
-  })))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(L, null, "Repeat"), /*#__PURE__*/React.createElement("select", {
+  })))), form.assignee && form.assignee !== "both" && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "6px 0 10px"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: C.ink,
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "11",
+    width: "18",
+    height: "11",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M7 11V7a5 5 0 0 1 10 0v4"
+  })), "Private"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, "Only visible to you \\u00b7 no points")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => set("private", !form.private),
+    style: {
+      width: 40,
+      height: 22,
+      borderRadius: 11,
+      border: "none",
+      background: form.private ? C.low : "rgba(255,255,255,0.15)",
+      position: "relative",
+      cursor: "pointer",
+      transition: "background .2s",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 2,
+      left: form.private ? 20 : 2,
+      width: 18,
+      height: 18,
+      borderRadius: "50%",
+      background: "#fff",
+      transition: "left .2s"
+    }
+  }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(L, null, "Repeat"), /*#__PURE__*/React.createElement("select", {
     value: form.recur,
     onChange: e => set("recur", e.target.value)
   }, /*#__PURE__*/React.createElement("option", {
@@ -64065,7 +64232,8 @@ function EventModal({
     } : {}),
     ...(event?.recurEnd ? {
       recurEnd: event.recurEnd
-    } : {})
+    } : {}),
+    private: !!event?.private
   });
   // Select a category you just created in the manager. See TaskModal for the why.
   useEffect(() => {
