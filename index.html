@@ -8357,23 +8357,37 @@ function App({
     };
   });
   const [showNames, setShowNames] = useState(false);
-  // v368 · Derive which person the logged-in user is (for treat approval resolution)
-  // v473: case-insensitive + trimmed match, and persist the mapping so it survives
-  // name edits. Also checks startsWith for "Mandy" matching "Mandy Smith".
+  // v474 · WHO ARE YOU? — maps the logged-in Supabase user to her/him.
+  // Stored per userId so it survives name changes and never needs guessing.
+  // If no stored role and name matching fails, a one-time picker appears.
+  const roleKey = sbUserId ? "hb_sbRole_" + sbUserId : null;
+  const [storedRole, setStoredRole] = useState(() => {
+    if (!roleKey) return null;
+    const saved = lsGet(roleKey, "");
+    if (saved === "her" || saved === "him") return saved;
+    return null;
+  });
   const currentUser = (() => {
+    // 1. Stored role is the primary source (set by the picker or a previous match)
+    if (storedRole) return storedRole;
+    // 2. Try name matching as a fallback (case-insensitive, trimmed)
     if (!sbUserName) return null;
     const sbn = sbUserName.trim().toLowerCase();
     const herN = (people.her.name || "").trim().toLowerCase();
     const himN = (people.him.name || "").trim().toLowerCase();
-    if (sbn === herN || herN.startsWith(sbn) || sbn.startsWith(herN)) return "her";
-    if (sbn === himN || himN.startsWith(sbn) || sbn.startsWith(himN)) return "him";
-    // Fallback: check persisted role from a previous successful match
-    const saved = lsGet("hb_sbRole_" + (sbUserId || ""), "");
-    if (saved === "her" || saved === "him") return saved;
+    if (herN && (sbn === herN || herN.startsWith(sbn) || sbn.startsWith(herN))) return "her";
+    if (himN && (sbn === himN || himN.startsWith(sbn) || sbn.startsWith(himN))) return "him";
     return null;
   })();
-  // Persist the mapping when we have one, so name changes don't break it
-  if (currentUser && sbUserId) lsSet("hb_sbRole_" + sbUserId, currentUser);
+  // Auto-persist a successful name match so the picker never appears for this user
+  useEffect(() => {
+    if (currentUser && roleKey && !storedRole) {
+      lsSet(roleKey, currentUser);
+      setStoredRole(currentUser);
+    }
+  }, [currentUser, roleKey, storedRole]);
+  // Show "Who are you?" picker when logged in but identity unknown
+  const needsRolePick = !!sbUserId && !currentUser;
   // v445 · PRIVATE — hidden from the other person, no points.
   const isPrivateHidden = t => !!(t && t.private && currentUser && t.assignee !== currentUser && t.assignee !== "both");
   const visTasks = tasks.filter(t => !isPrivateHidden(t));
@@ -13141,7 +13155,88 @@ function App({
         fontFamily: "'Bricolage Grotesque','Fraunces',sans-serif",
         paddingBottom: "calc(env(safe-area-inset-bottom) + 72px)"
       }
-    }, /*#__PURE__*/React.createElement("style", null, `
+    }, needsRolePick && /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "fixed",
+        inset: 0,
+        background: SCRIM_DIM,
+        backdropFilter: "blur(6px)",
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.card,
+        borderRadius: 24,
+        padding: "32px 24px",
+        maxWidth: 340,
+        width: "100%",
+        textAlign: "center",
+        border: `1px solid ${C.rule}`
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "36",
+      height: "36",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: C.accent,
+      strokeWidth: "1.6",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      style: {
+        marginBottom: 14
+      }
+    }, /*#__PURE__*/React.createElement("circle", {
+      cx: "12",
+      cy: "8",
+      r: "4"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M5 21v-2a6 6 0 0 1 12 0v2"
+    })), /*#__PURE__*/React.createElement("h3", {
+      className: "serif",
+      style: {
+        fontSize: 22,
+        fontStyle: "italic",
+        color: C.ink,
+        marginBottom: 6
+      }
+    }, "Who are you?"), /*#__PURE__*/React.createElement("p", {
+      className: "sans",
+      style: {
+        fontSize: 12.5,
+        color: C.inkSoft,
+        lineHeight: 1.5,
+        marginBottom: 22
+      }
+    }, "This lets the app know which tasks and events are yours, and keeps private items hidden from the other person."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 10
+      }
+    }, [["her", people.her], ["him", people.him]].map(([key, p]) => /*#__PURE__*/React.createElement("button", {
+      key: key,
+      onClick: () => {
+        if (roleKey) {
+          lsSet(roleKey, key);
+          setStoredRole(key);
+        }
+      },
+      className: "sans",
+      style: {
+        flex: 1,
+        padding: "14px 10px",
+        borderRadius: 14,
+        border: `2px solid ${personColor(p.color)}`,
+        background: softTint(personColor(p.color)),
+        color: personColor(p.color),
+        fontSize: 15,
+        fontWeight: 700,
+        cursor: "pointer"
+      }
+    }, p.name || key))))), /*#__PURE__*/React.createElement("style", null, `
         /* v240 · SANS FACE IS ROBOTO CONDENSED. Archivo was wide: at 393px a long title
            like "Book honeymoon flights" crowded the countdown pill beside it, and the
            person chips ate width the row could not spare. Mandy compared five faces at
@@ -63008,7 +63103,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v473"))))), diagOpen && (() => {
+  }, "v474"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
