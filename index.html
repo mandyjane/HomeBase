@@ -1278,7 +1278,7 @@ function generatePublicHolidays(year) {
 const PH_ICON_PATHS = {
   ph_flag: {
     vb: "0 0 24 24",
-    d: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="4" y1="22" x2="4" y2="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+    d: '<path d="M5 21V4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 4l12 4-12 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
   },
   ph_sparkle: {
     vb: "0 0 24 24",
@@ -3372,7 +3372,8 @@ const ICON_PATHS = {
   bills: `<rect x="2.5" y="6.5" width="19" height="11" rx="2"/><circle cx="12" cy="12" r="2.7"/><path d="M6 10v4M18 10v4"/>`,
   dining: `<path d="M6 3v7a2 2 0 0 0 2 2M8 3v18M8 12a2 2 0 0 0 2-2V3"/><path d="M17 3c-1.6 0-2.5 1.8-2.5 4.5S15.4 12 17 12v9"/>`,
   star: `<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>`,
-  flag: `<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>`,
+  flag: `<path d="M5 21V4"/><path d="M5 4l12 4-12 4"/>`,
+  entertainment: `<circle cx="12" cy="12" r="9"/><path d="M12 3c-2 3-2 6 0 9s2 6 0 9"/><path d="M3 12h18"/>`,
   ball: `<circle cx="12" cy="12" r="9.5"/><path d="M 10.84 8.12 L 14.11 9.73 L 13.61 13.32 L 10.02 13.96 L 8.30 10.74 Z"/><path d="M 10.84 8.12 L 9.52 3.53"/><path d="M 14.11 9.73 L 17.99 5.60"/><path d="M 13.61 13.32 L 18.61 17.37"/><path d="M 10.02 13.96 L 5.80 17.99"/><path d="M 8.30 10.74 L 3.53 9.11"/><path d="M 13.65 3.74 Q 15.72 4.57 17.99 5.60"/><path d="M 19.64 10.76 Q 19.43 14.07 18.61 17.37"/><path d="M 12.41 20.26 Q 9.11 19.85 5.80 17.99"/><path d="M 2.91 12.41 Q 3.12 10.76 3.53 9.11"/>`,
   shift: `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>`,
   // ── Additional event-flavoured icons ──
@@ -22824,6 +22825,8 @@ function SwipeDeck({
     if (!tr) return;
     tr.style.transition = "none";
     tr.style.transform = "translateX(-33.3333%)";
+    // Force reflow so the browser commits the snap before the next frame
+    void tr.offsetWidth;
     animatingRef.current = false;
   }, [deckKey]);
   const slide = useCallback(dir => {
@@ -28596,7 +28599,7 @@ function DaySheet({
       borderRadius: "26px 26px 0 0",
       width: "100%",
       maxWidth: 480,
-      maxHeight: "85vh",
+      height: "85vh",
       display: "flex",
       flexDirection: "column",
       animation: "sheet 0.28s cubic-bezier(0.22,1,0.36,1)"
@@ -28701,6 +28704,8 @@ function DaySheet({
     ref: swipeRef,
     key: dateStr,
     style: {
+      flex: 1,
+      minHeight: 0,
       overflowY: "auto",
       padding: "0 20px 30px",
       WebkitOverflowScrolling: "touch",
@@ -62596,7 +62601,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v462"))))), diagOpen && (() => {
+  }, "v463"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
