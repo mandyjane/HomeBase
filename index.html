@@ -1129,7 +1129,7 @@ const REWARD_PERIODS = [["weekly", "Weekly"], ["fortnightly", "Fortnightly"], ["
 // never awards points, and it throws the moment a goal is met. It has no dependencies and
 // belongs with the other period constants.
 const periodLabel = {
-  weekly: "This week",
+  weekly: "Due this week",
   fortnightly: "This fortnight",
   monthly: "This month"
 };
@@ -15391,61 +15391,7 @@ function App({
           borderRadius: "0 0 12px 12px",
           padding: "6px 6px 2px"
         }
-      }, renderRows(homeBillRows))), billNext7.count > 0 && /*#__PURE__*/React.createElement("button", {
-        onClick: () => setTab("bills"),
-        className: "sans",
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          width: "100%",
-          textAlign: "left",
-          background: C.card,
-          border: "none",
-          borderRadius: 12,
-          padding: "9px 11px",
-          marginTop: 6,
-          cursor: "pointer",
-          opacity: 0.75
-        }
-      }, /*#__PURE__*/React.createElement("svg", {
-        width: "13",
-        height: "13",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: C.inkMute,
-        strokeWidth: "2",
-        strokeLinecap: "round",
-        style: {
-          flexShrink: 0
-        }
-      }, /*#__PURE__*/React.createElement("rect", {
-        x: "2",
-        y: "5",
-        width: "20",
-        height: "14",
-        rx: "2"
-      }), /*#__PURE__*/React.createElement("path", {
-        d: "M2 10h20"
-      })), /*#__PURE__*/React.createElement("span", {
-        style: {
-          flex: 1,
-          minWidth: 0,
-          fontSize: 11,
-          color: C.inkMute,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap"
-        }
-      }, billNext7.count, " more bill", billNext7.count > 1 ? "s" : "", " in next 7 days"), /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: 11,
-          fontWeight: 700,
-          color: C.inkMute,
-          flexShrink: 0,
-          fontVariantNumeric: "tabular-nums"
-        }
-      }, fmtMoney(billNext7.total))), /*#__PURE__*/React.createElement(PaidBills, {
+      }, renderRows(homeBillRows))), /*#__PURE__*/React.createElement(PaidBills, {
         rows: homeBillPaid,
         total: homeBillPaidTotal,
         style: billPaidStyle,
@@ -23610,7 +23556,8 @@ function PaidBills({
       background: C.ruleSoft,
       borderLeft: `2px solid ${C.low}`,
       borderRadius: "0 0 12px 12px",
-      padding: "6px 6px 2px",
+      padding: "6px 6px 0",
+      overflow: "hidden",
       opacity: 0.72
     }
   }, renderRows(rows)));
@@ -61777,7 +61724,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v439"))))), diagOpen && (() => {
+  }, "v440"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
