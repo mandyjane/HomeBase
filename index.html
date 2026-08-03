@@ -7964,7 +7964,7 @@ function App({
   // last state"), so a collapsed card stays collapsed across launches.
   const [cardOpen, setCardOpen] = useState(() => lsGet("hb_cardOpen", {}));
   const [paidOpen, setPaidOpen] = useState(false);
-  // v435 · dueOpen removed — "Due · N" dropdown replaced with Bills · Due section
+  const [dueOpen, setDueOpen] = useState(false);
   const [billCats, setBillCats] = useState(() => lsGet("hb_billCats", DEFAULT_BILL_CATS));
   // DISMISSED UNRECORDED-DD NUDGES *(v126)* — an array of bill IDs, not a single flag.
   // Dismissing Power must not silence Internet: the banner is a SWEEP, and one global
@@ -15190,7 +15190,11 @@ function App({
         y1: "12",
         x2: "19",
         y2: "12"
-      })), "Add")), billShowStrip && (homeBillAll.length > 0 || homeBillPaidMo > 0) && /*#__PURE__*/React.createElement("div", {
+      })), "Add")), homeEventRows.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginBottom: 4
+        }
+      }, renderRows(homeEventRows)), renderRows(homeOtherRows), billShowStrip && (homeBillAll.length > 0 || homeBillPaidMo > 0) && /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
           gap: 7,
@@ -15230,34 +15234,166 @@ function App({
           color: C.inkMute,
           marginTop: 2
         }
-      }, k)))), homeBillRows.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      }, k)))), /*#__PURE__*/React.createElement("button", {
+        onClick: () => setTab("bills"),
+        className: "sans",
         style: {
           display: "flex",
           alignItems: "center",
-          gap: 10,
-          margin: "4px 0 6px"
+          gap: 12,
+          width: "100%",
+          textAlign: "left",
+          background: softTint(BILL_COLOR),
+          border: `1.5px solid ${rgbaFromHex(BILL_COLOR, 0.35)}`,
+          borderRadius: 16,
+          padding: "14px 15px",
+          cursor: "pointer",
+          marginBottom: 0
         }
       }, /*#__PURE__*/React.createElement("span", {
-        className: "sans",
         style: {
-          fontSize: 9,
-          fontWeight: 800,
-          letterSpacing: 1.6,
-          textTransform: "uppercase",
-          color: BILL_COLOR
+          width: 42,
+          height: 42,
+          borderRadius: 11,
+          background: BILL_COLOR,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0
         }
-      }, "Bills · Due"), /*#__PURE__*/React.createElement("span", {
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "22",
+        height: "22",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "#fff",
+        strokeWidth: "1.8",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }, /*#__PURE__*/React.createElement("rect", {
+        x: "2.5",
+        y: "6.5",
+        width: "19",
+        height: "11",
+        rx: "2"
+      }), /*#__PURE__*/React.createElement("circle", {
+        cx: "12",
+        cy: "12",
+        r: "2.7"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M6 10v4M18 10v4"
+      }))), /*#__PURE__*/React.createElement("span", {
         style: {
           flex: 1,
-          height: 1,
-          background: C.rule
+          minWidth: 0
         }
-      })), /*#__PURE__*/React.createElement("div", {
+      }, /*#__PURE__*/React.createElement("span", {
         style: {
+          display: "block",
+          fontSize: 22,
+          color: C.ink,
+          fontWeight: 500,
+          fontVariantNumeric: "tabular-nums"
+        }
+      }, fmtMoney(homeBillTotal), " ", /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 15,
+          fontWeight: 400,
+          color: rgbaFromHex(BILL_COLOR, 0.7)
+        }
+      }, "due")), /*#__PURE__*/React.createElement("span", {
+        style: {
+          display: "block",
+          fontSize: 12,
+          color: rgbaFromHex(BILL_COLOR, 0.7),
+          marginTop: 1
+        }
+      }, homeBillRows.length > 0 ? `${homeBillRows.length} bill${homeBillRows.length > 1 ? "s" : ""} due today` : "All paid")), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 14,
+          color: rgbaFromHex(BILL_COLOR, 0.6),
+          whiteSpace: "nowrap"
+        }
+      }, homeBillRows.length, " →")), homeBillRows.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginTop: 8
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: () => setDueOpen(!dueOpen),
+        className: "sans",
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          width: "100%",
+          textAlign: "left",
           background: C.card,
-          borderLeft: `2px solid ${BILL_COLOR}`,
-          borderRadius: 12,
-          padding: "4px 10px"
+          border: "none",
+          borderRadius: dueOpen ? "12px 12px 0 0" : 12,
+          padding: "9px 11px",
+          cursor: "pointer"
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          width: 20,
+          height: 20,
+          borderRadius: "50%",
+          background: softTint(BILL_COLOR),
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "10",
+        height: "10",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: BILL_COLOR,
+        strokeWidth: "2.5",
+        strokeLinecap: "round"
+      }, /*#__PURE__*/React.createElement("circle", {
+        cx: "12",
+        cy: "12",
+        r: "10"
+      }))), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1,
+          minWidth: 0,
+          fontSize: 11,
+          color: C.inkSoft,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
+        }
+      }, "Due · ", homeBillRows.length), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 11,
+          fontWeight: 700,
+          color: C.inkMute,
+          flexShrink: 0,
+          fontVariantNumeric: "tabular-nums"
+        }
+      }, fmtMoney(homeBillTotal)), /*#__PURE__*/React.createElement("svg", {
+        width: "12",
+        height: "12",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: C.inkMute,
+        strokeWidth: "2.4",
+        strokeLinecap: "round",
+        style: {
+          flexShrink: 0,
+          transform: dueOpen ? "rotate(180deg)" : "none",
+          transition: "transform .2s ease"
+        }
+      }, /*#__PURE__*/React.createElement("path", {
+        d: "m6 9 6 6 6-6"
+      }))), dueOpen && /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: C.ruleSoft,
+          borderRadius: "0 0 12px 12px",
+          padding: "6px 6px 2px"
         }
       }, renderRows(homeBillRows))), billNext7.count > 0 && /*#__PURE__*/React.createElement("button", {
         onClick: () => setTab("bills"),
@@ -61641,7 +61777,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v436"))))), diagOpen && (() => {
+  }, "v437"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
