@@ -7964,7 +7964,7 @@ function App({
   // last state"), so a collapsed card stays collapsed across launches.
   const [cardOpen, setCardOpen] = useState(() => lsGet("hb_cardOpen", {}));
   const [paidOpen, setPaidOpen] = useState(false);
-  const [dueOpen, setDueOpen] = useState(false);
+  // v435 · dueOpen removed — "Due · N" dropdown replaced with Bills · Due section
   const [billCats, setBillCats] = useState(() => lsGet("hb_billCats", DEFAULT_BILL_CATS));
   // DISMISSED UNRECORDED-DD NUDGES *(v126)* — an array of bill IDs, not a single flag.
   // Dismissing Power must not silence Internet: the banner is a SWEEP, and one global
@@ -12345,11 +12345,37 @@ function App({
   // due within 3 days. The dashboard is a to-do list, not a ledger; a bill due in three
   // weeks is not today's problem and shouldn't cost three lines to say so. Everything
   // else collapses to one quiet summary line, so nothing is hidden.
-  const HOME_BILL_SOON_DAYS = 3;
-  const billSoonCut = addDays(today, HOME_BILL_SOON_DAYS);
-  const homeBillUrgent = homeBillRows.filter(r => r.date <= billSoonCut);
-  const homeBillLater = homeBillRows.filter(r => r.date > billSoonCut);
-  const homeBillLaterTotal = homeBillLater.filter(r => owed(r.ref)).reduce((a, r) => a + parseAmt(r.ref.amount), 0);
+  // v435 · NEXT 7 DAYS tail — scans all bill series for upcoming bills (excluding today,
+  // which is rendered as individual rows). Same seriesDates approach as the strip.
+  const billNext7 = (() => {
+    const tomorrow = addDays(today, 1),
+      we = addDays(today, 7);
+    let count = 0,
+      total = 0;
+    const todayIds = new Set(homeBillRows.map(r => (r.ref._seriesId || r.ref.id) + "@" + r.date));
+    tasks.filter(isBill).forEach(t => {
+      if (isOnCard(t, cardList)) return;
+      const ex = t.exceptions || {};
+      if (!t.recur || t.recur === "none") {
+        if (!t.done && t.dueDate >= tomorrow && t.dueDate <= we) {
+          count++;
+          total += parseAmt(t.amount);
+        }
+        return;
+      }
+      seriesDates(t, "dueDate", tomorrow, we).forEach(d => {
+        if (d < tomorrow || d > we) return;
+        const e = ex[d];
+        if (e && (e.done || e.deleted)) return;
+        count++;
+        total += parseAmt(occAmount(t, d));
+      });
+    });
+    return {
+      count,
+      total
+    };
+  })();
   // "Strip" mode: three figures, fixed height no matter how many bills exist.
   // Paid-this-month is read from billHistory (the same source the Bills tab uses), so
   // the dashboard can never disagree with it.
@@ -15204,7 +15230,36 @@ function App({
           color: C.inkMute,
           marginTop: 2
         }
-      }, k)))), homeBillLater.length > 0 && /*#__PURE__*/React.createElement("button", {
+      }, k)))), homeBillRows.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          margin: "4px 0 6px"
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 9,
+          fontWeight: 800,
+          letterSpacing: 1.6,
+          textTransform: "uppercase",
+          color: BILL_COLOR
+        }
+      }, "Bills · Due"), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1,
+          height: 1,
+          background: C.rule
+        }
+      })), /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: C.card,
+          borderLeft: `2px solid ${BILL_COLOR}`,
+          borderRadius: 12,
+          padding: "4px 10px"
+        }
+      }, renderRows(homeBillRows))), billNext7.count > 0 && /*#__PURE__*/React.createElement("button", {
         onClick: () => setTab("bills"),
         className: "sans",
         style: {
@@ -15217,7 +15272,7 @@ function App({
           border: "none",
           borderRadius: 12,
           padding: "9px 11px",
-          marginTop: 8,
+          marginTop: 6,
           cursor: "pointer",
           opacity: 0.75
         }
@@ -15250,7 +15305,7 @@ function App({
           textOverflow: "ellipsis",
           whiteSpace: "nowrap"
         }
-      }, homeBillLater.length, " more bill", homeBillLater.length > 1 ? "s" : "", " later this month"), /*#__PURE__*/React.createElement("span", {
+      }, billNext7.count, " more bill", billNext7.count > 1 ? "s" : "", " in next 7 days"), /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: 11,
           fontWeight: 700,
@@ -15258,75 +15313,7 @@ function App({
           flexShrink: 0,
           fontVariantNumeric: "tabular-nums"
         }
-      }, fmtMoney(homeBillLaterTotal))), homeBillRows.length > 0 && /*#__PURE__*/React.createElement("div", {
-        style: {
-          marginTop: 8
-        }
-      }, /*#__PURE__*/React.createElement("button", {
-        onClick: () => setDueOpen(!dueOpen),
-        className: "sans",
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          width: "100%",
-          textAlign: "left",
-          background: C.card,
-          border: "none",
-          borderLeft: `2px solid ${BILL_COLOR}`,
-          borderRadius: dueOpen ? "12px 12px 0 0" : 12,
-          padding: "9px 11px",
-          cursor: "pointer"
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          width: 15,
-          height: 15,
-          borderRadius: "50%",
-          background: softTint(BILL_COLOR),
-          flexShrink: 0
-        }
-      }), /*#__PURE__*/React.createElement("span", {
-        style: {
-          flex: 1,
-          minWidth: 0,
-          fontSize: 11,
-          color: C.inkSoft,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap"
-        }
-      }, "Due · ", homeBillRows.length), /*#__PURE__*/React.createElement("span", {
-        style: {
-          fontSize: 11,
-          fontWeight: 700,
-          color: C.inkMute,
-          flexShrink: 0,
-          fontVariantNumeric: "tabular-nums"
-        }
-      }, fmtMoney(homeBillTotal)), /*#__PURE__*/React.createElement("svg", {
-        width: "12",
-        height: "12",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: C.inkMute,
-        strokeWidth: "2.4",
-        strokeLinecap: "round",
-        style: {
-          flexShrink: 0,
-          transform: dueOpen ? "rotate(180deg)" : "none",
-          transition: "transform .2s ease"
-        }
-      }, /*#__PURE__*/React.createElement("path", {
-        d: "m6 9 6 6 6-6"
-      }))), dueOpen && /*#__PURE__*/React.createElement("div", {
-        style: {
-          background: C.ruleSoft,
-          borderLeft: `2px solid ${BILL_COLOR}`,
-          borderRadius: "0 0 12px 12px",
-          padding: "6px 6px 2px"
-        }
-      }, renderRows(homeBillRows))), /*#__PURE__*/React.createElement(PaidBills, {
+      }, fmtMoney(billNext7.total))), /*#__PURE__*/React.createElement(PaidBills, {
         rows: homeBillPaid,
         total: homeBillPaidTotal,
         style: billPaidStyle,
@@ -61654,7 +61641,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v435"))))), diagOpen && (() => {
+  }, "v436"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
