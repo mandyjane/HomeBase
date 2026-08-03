@@ -12558,6 +12558,9 @@ function App({
         @keyframes exitzoom{0%{opacity:1;max-height:200px;transform:scale(1)}30%{transform:scale(1.04)}100%{opacity:0;max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0;transform:scale(1.15)}}
         @keyframes exitfall{0%{opacity:1;max-height:200px;transform:translateY(0) rotate(0)}25%{transform:translateY(-6px) rotate(-1deg)}100%{opacity:0;max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0;transform:translateY(90px) rotate(4deg)}}
         @keyframes exitlift{0%{opacity:1;max-height:200px;transform:translateY(0)}100%{opacity:0;max-height:0;margin-bottom:0;padding-top:0;padding-bottom:0;transform:translateY(-40px)}}
+        @keyframes bonusShine{0%{transform:translateX(-250%) rotate(25deg)}100%{transform:translateX(250%) rotate(25deg)}}
+        .bonus-shine{position:relative;overflow:hidden}
+        .bonus-shine::after{content:"";position:absolute;top:-4px;bottom:-4px;width:12px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent);transform:rotate(25deg);animation:bonusShine 2.5s ease-in-out infinite}
         .tickdraw{stroke-dasharray:16;stroke-dashoffset:16;animation:drawtick .4s .05s ease forwards}
         .cbdone{animation:cbpop .4s ease}
         .cbring{position:absolute;inset:-4px;border-radius:50%;border:2px solid currentColor;opacity:0;pointer-events:none;animation:cbburst .5s ease forwards}
@@ -55945,6 +55948,7 @@ function PersonSheet({
       borderBottom: i < activityTasks.length - 1 ? `1px solid ${C.ruleSoft}` : "none"
     }
   }, /*#__PURE__*/React.createElement("span", {
+    className: t.isBonus ? "bonus-shine" : "",
     style: {
       width: 24,
       height: 24,
@@ -55980,14 +55984,14 @@ function PersonSheet({
       fontSize: 8,
       letterSpacing: ".8px",
       textTransform: "uppercase",
-      background: "rgba(255,193,7,0.15)",
-      color: "#ffc107",
+      background: "rgba(34,195,220,0.15)",
+      color: "#22C3DC",
       borderRadius: 4,
       padding: "1px 5px",
       marginLeft: 5,
       verticalAlign: "middle"
     }
-  }, "Bonus")), /*#__PURE__*/React.createElement("div", {
+  }, "BONUS")), /*#__PURE__*/React.createElement("div", {
     className: "sans",
     style: {
       fontSize: 10,
@@ -56736,7 +56740,7 @@ function collectBonusActivity(bonusLog, who, periodStart, periodEnd, resetAfter)
       doneAt: iso,
       doneDate: dd,
       catIcon: "star",
-      catColor: "#ffc107",
+      catColor: "#ffffff",
       category: "Bonus",
       isBonus: true
     });
@@ -56856,6 +56860,7 @@ function CompletedTasksSheet({
       borderBottom: i < all.length - 1 ? `1px solid ${C.ruleSoft}` : "none"
     }
   }, /*#__PURE__*/React.createElement("span", {
+    className: t.isBonus ? "bonus-shine" : "",
     style: {
       width: 24,
       height: 24,
@@ -56891,14 +56896,14 @@ function CompletedTasksSheet({
       fontSize: 8,
       letterSpacing: ".8px",
       textTransform: "uppercase",
-      background: "rgba(255,193,7,0.15)",
-      color: "#ffc107",
+      background: "rgba(34,195,220,0.15)",
+      color: "#22C3DC",
       borderRadius: 4,
       padding: "1px 5px",
       marginLeft: 5,
       verticalAlign: "middle"
     }
-  }, "Bonus")), /*#__PURE__*/React.createElement("div", {
+  }, "BONUS")), /*#__PURE__*/React.createElement("div", {
     className: "sans",
     style: {
       fontSize: 10,
@@ -61749,7 +61754,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v443"))))), diagOpen && (() => {
+  }, "v444"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
