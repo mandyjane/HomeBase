@@ -8085,7 +8085,10 @@ function App({
   const [view, setView] = useState(() => lsGet("hb_view", "all"));
   const [personOpen, setPersonOpen] = useState(false);
   const [filter, setFilter] = useState("open");
-  const [range, setRange] = useState(() => lsGet("hb_range", "all")); // today | tomorrow | week | all (Tasks/Events time filter)
+  const [range, setRange] = useState(() => {
+    const r = lsGet("hb_range", "week");
+    return r === "today" || r === "tomorrow" ? "week" : r;
+  }); // week | deadlines | all | done (v471: today/tomorrow removed)
   // FOUR DISJOINT BUCKETS. A bill IS a task and a shift IS an event, so "tasks" and
   // "events" must NARROW — otherwise switching Bills off would do nothing while Tasks was
   // on, and the new pill would be a control that visibly does nothing (the v48 lesson).
@@ -12189,7 +12192,7 @@ function App({
   // both START at today, so today is the honest default). The calendar passes its own
   // selected date explicitly and overrides this.
   function seedDate() {
-    return range === "tomorrow" ? tomorrowStr : today;
+    return today;
   }
   function inRange(ds) {
     if (range === "all") return true;
@@ -12255,6 +12258,8 @@ function App({
       if (deadlineVisible(t)) groups[t.taskKind === "project" ? "Projects" : "Deadlines"].push(t);
       return;
     }
+    // v471: Deadlines range shows ONLY deadline/project tasks — regular tasks skipped.
+    if (range === "deadlines") return;
     if (!inRange(t.dueDate)) return;
     if (t.dueDate < today) groups.Overdue.push(t);else if (t.dueDate === today) groups.Today.push(t);else groups.Upcoming.push(t);
   });
@@ -12312,6 +12317,7 @@ function App({
       if (e.date < today) evGroups.Past.push(e);
       return;
     }
+    if (range === "deadlines") return; // v471: deadlines view has no events
     if (!inRangeEvent(e.date)) return;
     if (e.date < today) evGroups.Past.push(e);else if (e.date === today) evGroups.Today.push(e);else evGroups.Upcoming.push(e);
   });
@@ -22446,6 +22452,8 @@ function CombinedList({
   const showTasks = listType !== "events";
   const showEvents = listType !== "tasks";
   const [confirmClear, setConfirmClear] = useState(false);
+  // v471: collapsible deadlines/projects fold in Upcoming (week) view
+  const [dlFoldOpen, setDlFoldOpen] = useState(() => lsGet("hb_dlFold", false));
   // Build interleaved buckets: Overdue(tasks), Today(tasks+events), Upcoming(tasks+events), Completed(tasks), Past(events)
   // Friendly header for a date group: "Today · Sun 12 Jul" / "Tomorrow · …" / "Wed 15 Jul".
   function dateHeading(ds) {
@@ -22473,7 +22481,45 @@ function CombinedList({
     dateKey: g.date,
     tasks: showTasks ? g.tasks : [],
     events: showEvents ? g.events : []
-  })) : dateDivided ? [{
+  })) : range === "deadlines" ? [{
+    key: "Deadlines",
+    tasks: showTasks ? groups.Deadlines : [],
+    events: []
+  }, {
+    key: "Projects",
+    tasks: showTasks ? groups.Projects : [],
+    events: []
+  }] : dateDivided ? [{
+    key: "Overdue",
+    tasks: showTasks ? groups.Overdue : [],
+    events: []
+  }, ...(range === "all" ? [{
+    key: "Deadlines",
+    tasks: showTasks ? groups.Deadlines : [],
+    events: []
+  }, {
+    key: "Projects",
+    tasks: showTasks ? groups.Projects : [],
+    events: []
+  }] : []), ...(dateBuckets || []).map(g => ({
+    key: dateHeading(g.date),
+    dateKey: g.date,
+    tasks: showTasks ? g.tasks : [],
+    events: showEvents ? g.events : []
+  })), ...(range === "week" ? [{
+    key: "_dlFold",
+    fold: true,
+    tasks: showTasks ? [...groups.Deadlines, ...groups.Projects] : [],
+    events: []
+  }] : []), {
+    key: "Completed",
+    tasks: showTasks ? groups.Completed : [],
+    events: []
+  }, ...(range === "done" ? [{
+    key: "Past events",
+    tasks: [],
+    events: showEvents ? evGroups.Past : []
+  }] : [])] : [{
     key: "Overdue",
     tasks: showTasks ? groups.Overdue : [],
     events: []
@@ -22494,39 +22540,11 @@ function CombinedList({
     key: "Completed",
     tasks: showTasks ? groups.Completed : [],
     events: []
-  }, ...(range === "done" ? [{
-    key: "Past events",
-    tasks: [],
-    events: showEvents ? evGroups.Past : []
-  }] : [])] : [{
-    key: "Overdue",
-    tasks: showTasks ? groups.Overdue : [],
-    events: []
-  }, {
-    key: "Today",
-    tasks: showTasks ? groups.Today : [],
-    events: showEvents ? evGroups.Today : []
-  }, {
-    key: "Upcoming",
-    tasks: showTasks ? groups.Upcoming : [],
-    events: showEvents ? evGroups.Upcoming : []
-  }, {
-    key: "Deadlines",
-    tasks: showTasks ? groups.Deadlines : [],
-    events: []
-  }, {
-    key: "Projects",
-    tasks: showTasks ? groups.Projects : [],
-    events: []
-  }, {
-    key: "Completed",
-    tasks: showTasks ? groups.Completed : [],
-    events: []
   }];
   const totalEmpty = buckets.every(b => !b.tasks.length && !b.events.length);
   // "all" keeps its internal key so a saved hb_range preference still resolves —
   // only the LABEL changed to "Upcoming". "done" is the new completed-only range.
-  const RANGES = [["today", "Today"], ["tomorrow", "Tomorrow"], ["week", "Week"], ["all", "Upcoming"], ["done", showEvents && !showTasks ? "Past" : "Done"]];
+  const RANGES = [["week", "Upcoming"], ["deadlines", "Deadlines"], ["all", "All"], ["done", showEvents && !showTasks ? "Past" : "Done"]];
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -22623,12 +22641,98 @@ function CombinedList({
     sub: listType === "events" ? "Events move here once they've been and gone." : "Tick something off and it'll show up here."
   }) : /*#__PURE__*/React.createElement(EmptyState, {
     icon: listType === "events" ? "calendar" : "check",
-    title: listType === "events" ? range === "today" ? "Nothing today" : range === "tomorrow" ? "Nothing tomorrow" : range === "week" ? "Nothing this week" : "Nothing on the calendar" : range === "today" ? "All caught up" : range === "tomorrow" ? "Nothing for tomorrow" : range === "week" ? "Clear week ahead" : "All caught up",
-    sub: listType === "events" ? "Plan a date night, a game, or a catch-up." : range === "today" ? "No tasks left. Enjoy the breather — or line up something for later." : "Nothing due here yet.",
+    title: listType === "events" ? range === "week" ? "Nothing this week" : range === "deadlines" ? "No deadlines or projects" : "Nothing on the calendar" : range === "week" ? "Clear week ahead" : range === "deadlines" ? "No deadlines or projects" : "All caught up",
+    sub: listType === "events" ? "Plan a date night, a game, or a catch-up." : range === "deadlines" ? "Deadlines and projects will show here." : "Nothing due here yet.",
     addLabel: listType === "events" ? "Add an event" : "Add a task",
     onAdd: onAdd
   })), buckets.map(b => {
     if (!b.tasks.length && !b.events.length) return null;
+    // v471: collapsible fold for deadlines/projects in Upcoming view
+    if (b.fold) {
+      const fCount = b.tasks.length;
+      const dlCount = b.tasks.filter(t => t.taskKind !== "project").length;
+      const pjCount = b.tasks.filter(t => t.taskKind === "project").length;
+      const fLabel = [dlCount && `${dlCount} deadline${dlCount > 1 ? "s" : ""}`, pjCount && `${pjCount} project${pjCount > 1 ? "s" : ""}`].filter(Boolean).join(" · ");
+      return /*#__PURE__*/React.createElement("div", {
+        key: b.key,
+        style: {
+          marginBottom: 20
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: () => {
+          const nv = !dlFoldOpen;
+          setDlFoldOpen(nv);
+          lsSet("hb_dlFold", nv);
+        },
+        className: "sans",
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          width: "100%",
+          padding: "10px 14px",
+          borderRadius: 12,
+          border: `1px solid ${C.rule}`,
+          background: C.card,
+          cursor: "pointer",
+          marginBottom: dlFoldOpen ? 12 : 0
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "12",
+        height: "12",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: C.inkMute,
+        strokeWidth: "2.5",
+        strokeLinecap: "round",
+        strokeLinejoin: "round",
+        style: {
+          transform: dlFoldOpen ? "rotate(90deg)" : "rotate(0deg)",
+          transition: "transform 0.15s"
+        }
+      }, /*#__PURE__*/React.createElement("path", {
+        d: "M9 18l6-6-6-6"
+      })), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 12,
+          fontWeight: 700,
+          color: C.inkMute
+        }
+      }, "Deadlines & Projects"), /*#__PURE__*/React.createElement("span", {
+        style: {
+          background: C.pageWarm,
+          color: C.inkMute,
+          borderRadius: 20,
+          padding: "1px 8px",
+          fontSize: 11,
+          fontWeight: 700
+        }
+      }, fCount), /*#__PURE__*/React.createElement("span", {
+        style: {
+          marginLeft: "auto",
+          fontSize: 10,
+          color: C.inkFaint
+        }
+      }, fLabel)), dlFoldOpen && b.tasks.map(task => /*#__PURE__*/React.createElement(TaskCard, {
+        billPayer: billPayer,
+        key: "t" + (task._seriesId || task.id) + "@" + (task._occDate || task.dueDate),
+        task: task,
+        people: people,
+        showTimes: showTimes,
+        onToggle: toggleDone,
+        onToggleSub: toggleSub,
+        onEdit: onEditTask,
+        onDelete: deleteTask,
+        onEndRepeat: endRepeat,
+        onEndRepeatAt: endRepeatAt,
+        onNag: startNag,
+        today: today,
+        onSaveQuick: onSaveQuick,
+        isQuickSaved: isQuickSaved,
+        onSetDoneAt: setDoneAt,
+        onChangeCompletedBy: task.done && !isBill(task) ? newPT => changeCompletedBy(task, newPT) : null
+      })));
+    }
     const count = b.tasks.length + b.events.length;
     const isOverdue = b.key === "Overdue";
     const isDeadlines = b.key === "Deadlines";
@@ -62840,7 +62944,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v470"))))), diagOpen && (() => {
+  }, "v471"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
