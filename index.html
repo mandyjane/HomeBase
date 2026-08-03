@@ -3108,6 +3108,18 @@ function shortDate(ds) {
     return ds;
   }
 }
+// v435 · day+month only, no weekday — for "paid 12 Jul" annotations
+function compactDate(ds) {
+  try {
+    const d = new Date(ds + "T00:00:00");
+    return d.toLocaleDateString("en-AU", {
+      day: "numeric",
+      month: "short"
+    });
+  } catch {
+    return ds;
+  }
+}
 
 // Clean line icons that actually depict each room's activity.
 // stroke="currentColor" so they inherit the white tile colour.
@@ -29162,7 +29174,7 @@ function BillsTab({
         fontSize: 10.5,
         color: C.inkMute
       }
-    }, "Paid ", shortDate(pmt.paidYMD || pmt.date), !billPayer ? "" : (() => {
+    }, "Due ", shortDate(pmt.date), pmt.paidYMD && pmt.paidYMD !== pmt.date ? " · paid " + compactDate(pmt.paidYMD) : "", !billPayer ? "" : (() => {
       const lbl = payerLabel(pmt.paidBy, people);
       return lbl ? ` · ${lbl}` : "";
     })()), (() => {
@@ -61642,7 +61654,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v434"))))), diagOpen && (() => {
+  }, "v435"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
