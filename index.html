@@ -12938,10 +12938,10 @@ function App({
     return hits.length ? materialize(series, ymd, dateField) : null;
   }
   // Events (work AND plain) falling tomorrow.
-  const tomorrowEvents = events.map(e => occursOnDay(e, "date", tomorrowYMD)).filter(Boolean).filter(e => !(hideDaysOff && isPureDayOff(e)));
+  const tomorrowEvents = events.map(e => occursOnDay(e, "date", tomorrowYMD)).filter(Boolean).filter(e => !isPrivateHidden(e)).filter(e => !(hideDaysOff && isPureDayOff(e)));
   // Tasks and bills due tomorrow. A DONE occurrence is excluded — it is not something
   // coming up. Deadlines keep their own section and are not repeated here.
-  const tomorrowTasks = tasks.map(t => occursOnDay(t, "dueDate", tomorrowYMD)).filter(Boolean).filter(t => !isDeadlineTask(t)).filter(t => !(t.exceptions && t.exceptions[tomorrowYMD] && t.exceptions[tomorrowYMD].done) && !t.done)
+  const tomorrowTasks = tasks.map(t => occursOnDay(t, "dueDate", tomorrowYMD)).filter(Boolean).filter(t => !isPrivateHidden(t)).filter(t => !isDeadlineTask(t)).filter(t => !(t.exceptions && t.exceptions[tomorrowYMD] && t.exceptions[tomorrowYMD].done) && !t.done)
   // v256 · A SERIES STILL OUTSTANDING TODAY DOES NOT ALSO PREVIEW TOMORROW.
   // A daily task is due today AND tomorrow, so it drew two rows reading exactly
   // "Feed Leo · 6:00 PM · Fur Baby · Both" with nothing to tell them apart. Mandy ticked
@@ -16803,7 +16803,7 @@ function App({
       onEndRepeatAt: endRepeatAt,
       onShowCompleted: who => setCompletedTasksSheet(who)
     }), tab === "settings" && /*#__PURE__*/React.createElement(SettingsPage, {
-      debugId: (_sbUserId ? "uid:" + String(_sbUserId).slice(0, 6) : "no-uid") + " " + (currentUser || "role:??") + " priv:" + tasks.filter(t => t.private).length + " hide:" + tasks.filter(t => isPrivateHidden(t)).length,
+      debugId: (_sbUserId ? "uid:" + String(_sbUserId).slice(0, 6) : "no-uid") + " " + (currentUser || "??"),
       tasks: tasks,
       events: events,
       today: today,
