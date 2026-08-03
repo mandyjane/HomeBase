@@ -12150,6 +12150,8 @@ function App({
     // the calendar and Stats all still see bills. Hiding them at listTasks would
     // silently drop them from all of those too.
     if (isBill(t)) return false;
+    // v471: private tasks hidden from the other person's login
+    if (isPrivateHidden(t)) return false;
     if (view === "all") return true;
     if (view === "shared") return t.assignee === "both";
     return t.assignee === view || t.assignee === "both"; // her/him also see shared tasks
@@ -12286,6 +12288,7 @@ function App({
   });
   let evPool = listEvents.filter(e => {
     if (e.category === SHIFT_CAT) return false; // shifts live in the Work tab now
+    if (isPrivateHidden(e)) return false; // v471: private events hidden from other person
     if (view === "all") return true;
     if (view === "shared") return e.assignee === "both";
     return e.assignee === view || e.assignee === "both";
@@ -12440,6 +12443,7 @@ function App({
   const overdueTasks = tasks.map(t => {
     if (isDeadlineTask(t)) return null; // deadlines have their own section
     if (isBill(t)) return null; // bills are pulled out below
+    if (isPrivateHidden(t)) return null; // v471: private tasks hidden from other person
     const miss = missedRun(t, today);
     if (!miss.length) return null;
     const row = materialize(t, miss[0], "dueDate"); // the OLDEST miss is the row's date
