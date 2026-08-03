@@ -62568,7 +62568,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v457"))))), diagOpen && (() => {
+  }, "v458"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -63120,6 +63120,20 @@ function SettingsPage({
       background: phColor || "#E5484D",
       border: "2px solid rgba(255,255,255,0.15)",
       flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => onPhColor("#ffffff"),
+    style: {
+      width: 34,
+      height: 34,
+      borderRadius: "50%",
+      background: "#ffffff",
+      border: phColor === "#ffffff" ? "2.5px solid " + C.low : "2px solid rgba(255,255,255,0.25)",
+      flexShrink: 0,
+      cursor: "pointer",
+      padding: 0,
+      boxShadow: phColor === "#ffffff" ? "0 0 0 2px #fff" : "none"
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
