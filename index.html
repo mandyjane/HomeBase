@@ -7215,11 +7215,13 @@ function AppRoot() {
   });
   return React.createElement(CrashBoundary, null, React.createElement(App, {
     sbUserName,
+    sbUserId,
     syncVersion
   }));
 }
 function App({
   sbUserName,
+  sbUserId: _sbUserId,
   syncVersion = 0
 }) {
   const [tasks, setTasks] = useState(() => {
@@ -8360,7 +8362,7 @@ function App({
   // v474 · WHO ARE YOU? — maps the logged-in Supabase user to her/him.
   // Stored per userId so it survives name changes and never needs guessing.
   // If no stored role and name matching fails, a one-time picker appears.
-  const roleKey = sbUserId ? "hb_sbRole_" + sbUserId : null;
+  const roleKey = _sbUserId ? "hb_sbRole_" + _sbUserId : null;
   const [storedRole, setStoredRole] = useState(() => {
     if (!roleKey) return null;
     const saved = lsGet(roleKey, "");
@@ -8387,7 +8389,7 @@ function App({
     }
   }, [currentUser, roleKey, storedRole]);
   // Show "Who are you?" picker when logged in but identity unknown
-  const needsRolePick = !!sbUserId && !currentUser;
+  const needsRolePick = !!_sbUserId && !currentUser;
   // v445 · PRIVATE — hidden from the other person, no points.
   const isPrivateHidden = t => !!(t && t.private && currentUser && t.assignee !== currentUser && t.assignee !== "both");
   const visTasks = tasks.filter(t => !isPrivateHidden(t));
@@ -63103,7 +63105,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v474"))))), diagOpen && (() => {
+  }, "v475 ", _sbUserId ? "· uid:" + _sbUserId.slice(0, 6) : "", " ", currentUser ? "· " + currentUser : " · role:??"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
