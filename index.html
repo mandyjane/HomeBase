@@ -8358,7 +8358,22 @@ function App({
   });
   const [showNames, setShowNames] = useState(false);
   // v368 · Derive which person the logged-in user is (for treat approval resolution)
-  const currentUser = sbUserName && people.her.name === sbUserName ? "her" : sbUserName && people.him.name === sbUserName ? "him" : null;
+  // v473: case-insensitive + trimmed match, and persist the mapping so it survives
+  // name edits. Also checks startsWith for "Mandy" matching "Mandy Smith".
+  const currentUser = (() => {
+    if (!sbUserName) return null;
+    const sbn = sbUserName.trim().toLowerCase();
+    const herN = (people.her.name || "").trim().toLowerCase();
+    const himN = (people.him.name || "").trim().toLowerCase();
+    if (sbn === herN || herN.startsWith(sbn) || sbn.startsWith(herN)) return "her";
+    if (sbn === himN || himN.startsWith(sbn) || sbn.startsWith(himN)) return "him";
+    // Fallback: check persisted role from a previous successful match
+    const saved = lsGet("hb_sbRole_" + (sbUserId || ""), "");
+    if (saved === "her" || saved === "him") return saved;
+    return null;
+  })();
+  // Persist the mapping when we have one, so name changes don't break it
+  if (currentUser && sbUserId) lsSet("hb_sbRole_" + sbUserId, currentUser);
   // v445 · PRIVATE — hidden from the other person, no points.
   const isPrivateHidden = t => !!(t && t.private && currentUser && t.assignee !== currentUser && t.assignee !== "both");
   const visTasks = tasks.filter(t => !isPrivateHidden(t));
