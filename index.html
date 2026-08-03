@@ -8042,8 +8042,13 @@ function App({
   const visEvents = events.filter(e => !isPrivateHidden(e));
   // v451 · PUBLIC HOLIDAYS — generated for current + next year, merged into events
   const publicHolidays = useMemo(() => {
-    const thisYear = new Date().getFullYear();
-    return [...generatePublicHolidays(thisYear), ...generatePublicHolidays(thisYear + 1)];
+    try {
+      const thisYear = new Date().getFullYear();
+      return [...generatePublicHolidays(thisYear), ...generatePublicHolidays(thisYear + 1)];
+    } catch (e) {
+      console.error("[PH]", e);
+      return [];
+    }
   }, []);
   const allEvents = [...visEvents, ...(showPublicHolidays ? publicHolidays : [])];
   const [location, setLocation] = useState(() => lsGet("hb_location", DEFAULT_LOCATION));
@@ -12113,10 +12118,10 @@ function App({
       title: e.title,
       date: e.date,
       done: false,
-      catColor: phColor,
+      catColor: phColor || "#E5484D",
       catIcon: "flag",
       time: "",
-      sub: PH_CAT + " · All day",
+      sub: "Public Holiday · All day",
       allDay: true
     };
     if (!e.recur || e.recur === "none") return e;
