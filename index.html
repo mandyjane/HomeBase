@@ -28192,7 +28192,9 @@ function CalendarTab({
       ev,
       n,
       dateStr: selStr
-    })
+    }),
+    phColor: phColor,
+    phSpecialIcons: phSpecialIcons
   }), dayNoteEdit && /*#__PURE__*/React.createElement(DayNoteSheet, {
     ev: dayNoteEdit.ev,
     n: dayNoteEdit.n,
@@ -28407,7 +28409,9 @@ function DaySheet({
   onChangeType,
   onHistory,
   workHist = {},
-  onToggleWfh
+  onToggleWfh,
+  phColor = "#E5484D",
+  phSpecialIcons = false
 }) {
   const {
     sheetRef
@@ -60344,6 +60348,7 @@ function SettingsPage({
   // Export sheet: null, or {text, payload}. Added BELOW `q` — see the slot note above.
   const [expSheet, setExpSheet] = useState(null);
   const [expMsg, setExpMsg] = useState(null); // {ok, text}
+  const [phSheet, setPhSheet] = useState(false);
   // When BOTH copy routes are blocked, the textarea grows and pre-selects itself, so the
   // manual escape hatch is one long-press rather than a scroll-and-drag through thousands
   // of characters in a 6-line box.
@@ -60957,154 +60962,7 @@ function SettingsPage({
       fontSize: 11.5,
       color: C.inkMute
     }
-  }, "Period, targets & household goal")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    className: "sans",
-    style: {
-      fontSize: 9,
-      fontWeight: 800,
-      letterSpacing: 1.2,
-      textTransform: "uppercase",
-      color: C.accent,
-      marginBottom: 10
-    }
-  }, "Public Holidays"), /*#__PURE__*/React.createElement(SRow, {
-    hb: "public holidays toggle"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...rowBase,
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "block",
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Show public holidays"), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 11.5,
-      color: C.inkMute
-    }
-  }, "QLD holidays on calendar + dashboard")), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onTogglePH,
-    style: {
-      width: 44,
-      height: 26,
-      borderRadius: 13,
-      position: "relative",
-      background: showPublicHolidays ? C.low : C.rule,
-      border: "none",
-      cursor: "pointer",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      position: "absolute",
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      top: 2,
-      left: showPublicHolidays ? 20 : 2,
-      background: "#fff",
-      boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-      transition: "left .15s"
-    }
-  })))), showPublicHolidays && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(SRow, {
-    hb: "special holiday icons"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...rowBase,
-      justifyContent: "space-between"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "block",
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Special holiday icons"), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 11.5,
-      color: C.inkMute
-    }
-  }, "Themed icons for Christmas, Easter, etc.")), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: onTogglePhIcons,
-    style: {
-      width: 44,
-      height: 26,
-      borderRadius: 13,
-      position: "relative",
-      background: phSpecialIcons ? C.low : C.rule,
-      border: "none",
-      cursor: "pointer",
-      flexShrink: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      position: "absolute",
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      top: 2,
-      left: phSpecialIcons ? 20 : 2,
-      background: "#fff",
-      boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-      transition: "left .15s"
-    }
-  })))), /*#__PURE__*/React.createElement(SRow, {
-    hb: "public holiday icon colour"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...rowBase,
-      flexDirection: "column",
-      alignItems: "stretch",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Icon colour"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 8,
-      flexWrap: "wrap"
-    }
-  }, ["#E5484D", "#DC3C78", "#F0A93C", "#4FA3E8", "#B38BFF", "#57D964", "#34D399", "#FF6B5C"].map(c => /*#__PURE__*/React.createElement("button", {
-    key: c,
-    onClick: () => onPhColor(c),
-    style: {
-      width: 34,
-      height: 34,
-      borderRadius: 10,
-      border: phColor === c ? "2.5px solid #fff" : "2px solid transparent",
-      background: c,
-      cursor: "pointer",
-      boxShadow: phColor === c ? "0 0 0 2px " + c : "none"
-    }
-  }))))))), /*#__PURE__*/React.createElement(SRow, {
+  }, "Period, targets & household goal")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
     hb: "household treat proposer first turns scorer"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -61930,6 +61788,69 @@ function SettingsPage({
       }
     }, lbl);
   })))), /*#__PURE__*/React.createElement(SRow, {
+    hb: "public holidays settings colour icons"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPhSheet(true),
+    style: {
+      ...rowBase,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "4",
+    y1: "22",
+    x2: "4",
+    y2: "15"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Public holidays"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, showPublicHolidays ? "QLD holidays on calendar + dashboard" : "Hidden")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 20,
+      height: 20,
+      borderRadius: "50%",
+      background: phColor || "#E5484D",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.inkMute,
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    style: {
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "m9 18 6-6-6-6"
+  })))), /*#__PURE__*/React.createElement(SRow, {
     hb: "stats count occurrences tasks repeats how many"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -62647,7 +62568,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v456"))))), diagOpen && (() => {
+  }, "v457"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -63030,7 +62951,224 @@ function SettingsPage({
         lineHeight: 1.55
       }
     }, "Read-only. This screen never writes to your data.")));
-  })(), expSheet && /*#__PURE__*/React.createElement("div", {
+  })(), phSheet && /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.target === e.currentTarget && setPhSheet(false),
+    className: "hb-scrim",
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: SCRIM_DIM,
+      backdropFilter: "blur(3px)",
+      zIndex: 240,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center",
+      padding: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      borderRadius: "20px 20px 0 0",
+      padding: 20,
+      width: "100%",
+      maxWidth: 420,
+      border: `1px solid ${C.rule}`,
+      borderBottom: "none"
+    },
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      background: C.rule,
+      margin: "0 auto 16px"
+    }
+  }), /*#__PURE__*/React.createElement("h3", {
+    className: "serif",
+    style: {
+      fontSize: 18,
+      fontStyle: "italic",
+      color: C.ink,
+      marginBottom: 14
+    }
+  }, "Public holidays"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      padding: "12px 0",
+      borderBottom: `1px solid ${C.rule}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Show public holidays"), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, "QLD holidays on calendar + dashboard")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onTogglePH,
+    style: {
+      width: 44,
+      height: 26,
+      borderRadius: 13,
+      position: "relative",
+      background: showPublicHolidays ? C.low : C.rule,
+      border: "none",
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      top: 2,
+      left: showPublicHolidays ? 20 : 2,
+      background: "#fff",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+      transition: "left .15s"
+    }
+  }))), showPublicHolidays && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      padding: "12px 0",
+      borderBottom: `1px solid ${C.rule}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Special holiday icons"), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, "Themed icons for Christmas, Easter, etc.")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: onTogglePhIcons,
+    style: {
+      width: 44,
+      height: 26,
+      borderRadius: 13,
+      position: "relative",
+      background: phSpecialIcons ? C.low : C.rule,
+      border: "none",
+      cursor: "pointer",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      top: 2,
+      left: phSpecialIcons ? 20 : 2,
+      background: "#fff",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+      transition: "left .15s"
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "14px 0 8px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink,
+      marginBottom: 12
+    }
+  }, "Holiday colour"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 40,
+      height: 40,
+      borderRadius: "50%",
+      background: phColor || "#E5484D",
+      border: "2px solid rgba(255,255,255,0.15)",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "range",
+    min: "0",
+    max: "360",
+    value: (() => {
+      const hex = phColor || "#E5484D";
+      const r = parseInt(hex.slice(1, 3), 16) / 255,
+        g = parseInt(hex.slice(3, 5), 16) / 255,
+        b = parseInt(hex.slice(5, 7), 16) / 255;
+      const mx = Math.max(r, g, b),
+        mn = Math.min(r, g, b),
+        d = mx - mn;
+      if (d === 0) return 0;
+      let h = 0;
+      if (mx === r) h = ((g - b) / d + 6) % 6;else if (mx === g) h = (b - r) / d + 2;else h = (r - g) / d + 4;
+      return Math.round(h * 60);
+    })(),
+    onChange: e => {
+      const h = Number(e.target.value);
+      const s = 0.75,
+        l = 0.55;
+      const a2 = s * Math.min(l, 1 - l);
+      const f = n => {
+        const k = (n + h / 30) % 12;
+        return l - a2 * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      };
+      const toHex = v => {
+        const x = Math.round(v * 255);
+        return (x < 16 ? "0" : "") + x.toString(16);
+      };
+      onPhColor("#" + toHex(f(0)) + toHex(f(8)) + toHex(f(4)));
+    },
+    style: {
+      width: "100%",
+      height: 28,
+      borderRadius: 14,
+      WebkitAppearance: "none",
+      appearance: "none",
+      background: "linear-gradient(to right, hsl(0,75%,55%), hsl(30,75%,55%), hsl(60,75%,55%), hsl(90,75%,55%), hsl(120,75%,55%), hsl(150,75%,55%), hsl(180,75%,55%), hsl(210,75%,55%), hsl(240,75%,55%), hsl(270,75%,55%), hsl(300,75%,55%), hsl(330,75%,55%), hsl(360,75%,55%))",
+      cursor: "pointer",
+      outline: "none"
+    }
+  }))))))), expSheet && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setExpSheet(null),
     className: "hb-scrim",
     style: {
