@@ -8737,6 +8737,31 @@ function App({
       refundPoints(paid);
     }
     setBonusLog(l => [entry, ...l]);
+    // v441 · Toast + push notification for bonus points
+    const recipientName = who === "her" ? people.her.name : who === "him" ? people.him.name : "Both";
+    const awarderName = currentUser === "her" ? people.her.name : currentUser === "him" ? people.him.name : "";
+    const verb = n > 0 ? "awarded" : "deducted";
+    const absN = Math.abs(n);
+    const reasonStr = (reason || "").trim();
+    showToast(n > 0 ? "+" + absN + " bonus pt" + (absN > 1 ? "s" : "") + " to " + recipientName + (reasonStr ? " — " + reasonStr : "") : "-" + absN + " pt" + (absN > 1 ? "s" : "") + " deducted from " + recipientName + (reasonStr ? " — " + reasonStr : ""), n > 0 ? "success" : "warn");
+    // Push to partner
+    if (sbClient && sbHouseholdId) {
+      const pushTitle = n > 0 ? "Bonus points!" : "Points deducted";
+      const pushBody = (awarderName || "Someone") + " " + verb + " " + absN + " point" + (absN > 1 ? "s" : "") + " " + (n > 0 ? "to " : "from ") + recipientName + (reasonStr ? " — " + reasonStr : "");
+      sbClient.from("alert_schedule").insert([{
+        id: "bonus-" + Date.now(),
+        fire_at: new Date().toISOString(),
+        title: pushTitle,
+        body: pushBody,
+        household_id: sbHouseholdId,
+        exclude_user_id: sbUserId || null,
+        sent: false
+      }]).select().then(({
+        error
+      }) => {
+        if (error) console.warn("[bonus push]", error.message);
+      });
+    }
   }
   // Reverse one bonus entry. Reads the stored split — never re-derives it.
   function undoBonus(id) {
@@ -61724,7 +61749,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v440"))))), diagOpen && (() => {
+  }, "v443"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
