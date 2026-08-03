@@ -20587,6 +20587,208 @@ function readAttachment(file) {
   });
 }
 
+// ── PDF.JS LAZY LOADER + INLINE VIEWER *(v476)* ──────────────────────────────
+// Loads pdf.js (~350KB) from cdnjs on first PDF view. After that the browser
+// caches it. Worker is disabled (GlobalWorkerOptions.workerSrc="") so it runs
+// single-threaded — slightly slower but zero extra files to host.
+const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs";
+let _pdfjsLib = null;
+let _pdfjsLoading = null;
+function loadPdfJs() {
+  if (_pdfjsLib) return Promise.resolve(_pdfjsLib);
+  if (_pdfjsLoading) return _pdfjsLoading;
+  _pdfjsLoading = import(PDFJS_CDN).then(mod => {
+    _pdfjsLib = mod;
+    _pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+    return _pdfjsLib;
+  });
+  return _pdfjsLoading;
+}
+
+// Convert a data:application/pdf;base64,... URL to an ArrayBuffer for pdf.js
+function dataUrlToArrayBuffer(dataUrl) {
+  const b64 = dataUrl.split(",")[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr.buffer;
+}
+
+// Inline PDF renderer — shows pages as canvases inside the viewer overlay.
+function PdfInlineViewer({
+  src
+}) {
+  const [status, setStatus] = useState("loading"); // loading | ready | error
+  const [pages, setPages] = useState([]);
+  const [pageNum, setPageNum] = useState(1);
+  const [numPages, setNumPages] = useState(0);
+  const canvasRef = useRef(null);
+
+  // Load pdf.js and parse the document
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    loadPdfJs().then(pdfjs => {
+      if (cancelled) return;
+      return pdfjs.getDocument({
+        data: dataUrlToArrayBuffer(src)
+      }).promise;
+    }).then(doc => {
+      if (cancelled || !doc) return;
+      setNumPages(doc.numPages);
+      setPages([doc]); // store doc reference
+      setStatus("ready");
+    }).catch(() => {
+      if (!cancelled) setStatus("error");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  // Render current page to canvas
+  useEffect(() => {
+    if (status !== "ready" || !pages[0] || !canvasRef.current) return;
+    let cancelled = false;
+    pages[0].getPage(pageNum).then(page => {
+      if (cancelled) return;
+      // Scale to fit phone width (~360px content area) with good quality
+      const vp = page.getViewport({
+        scale: 1
+      });
+      const containerWidth = Math.min(window.innerWidth - 28, 900);
+      const scale = containerWidth / vp.width;
+      const scaledVp = page.getViewport({
+        scale
+      });
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      canvas.width = scaledVp.width;
+      canvas.height = scaledVp.height;
+      const ctx = canvas.getContext("2d");
+      page.render({
+        canvasContext: ctx,
+        viewport: scaledVp
+      });
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [status, pages, pageNum]);
+  if (status === "loading") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "center",
+        padding: "40px 20px"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        color: "rgba(255,255,255,0.7)",
+        fontSize: 13
+      }
+    }, "Loading PDF viewer..."));
+  }
+  if (status === "error") {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "center",
+        padding: "40px 20px"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        color: "rgba(255,255,255,0.7)",
+        fontSize: 13,
+        marginBottom: 12
+      }
+    }, "Couldn't load the PDF viewer. You may be offline."), /*#__PURE__*/React.createElement("a", {
+      href: src,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      download: "attachment.pdf",
+      className: "sans",
+      style: {
+        display: "inline-block",
+        padding: "11px 20px",
+        borderRadius: 12,
+        background: "#fff",
+        color: "#111",
+        fontSize: 13,
+        fontWeight: 700,
+        textDecoration: "none"
+      }
+    }, "Open PDF externally"));
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      width: "100%"
+    }
+  }, /*#__PURE__*/React.createElement("canvas", {
+    ref: canvasRef,
+    style: {
+      width: "100%",
+      maxWidth: 900,
+      height: "auto",
+      borderRadius: 6,
+      display: "block"
+    }
+  }), numPages > 1 && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 16,
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPageNum(p => Math.max(1, p - 1)),
+    disabled: pageNum <= 1,
+    style: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      border: "none",
+      background: pageNum <= 1 ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.2)",
+      color: pageNum <= 1 ? "rgba(255,255,255,0.3)" : "#fff",
+      fontSize: 16,
+      fontWeight: 700,
+      cursor: pageNum <= 1 ? "default" : "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, "‹"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "rgba(255,255,255,0.7)",
+      fontSize: 12,
+      fontWeight: 600,
+      minWidth: 60,
+      textAlign: "center"
+    }
+  }, pageNum, " / ", numPages), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPageNum(p => Math.min(numPages, p + 1)),
+    disabled: pageNum >= numPages,
+    style: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      border: "none",
+      background: pageNum >= numPages ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.2)",
+      color: pageNum >= numPages ? "rgba(255,255,255,0.3)" : "#fff",
+      fontSize: 16,
+      fontWeight: 700,
+      cursor: pageNum >= numPages ? "default" : "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, "›")));
+}
+
 // Full-screen document viewer. Scrolls, and pinch-to-zoom works because the image is a
 // plain <img> at natural width inside a scroll container — no transform hijacking.
 function DocViewer({
@@ -20662,47 +20864,17 @@ function DocViewer({
     }
   }, pdf ?
   /*#__PURE__*/
-  // A PDF can't be rendered inline without pdf.js. Say so plainly and hand off
-  // to the phone's own viewer, rather than showing a broken frame.
+  // v476: inline PDF preview via pdf.js from CDN
   React.createElement("div", {
     style: {
-      textAlign: "center",
-      maxWidth: 280,
-      alignSelf: "center"
+      width: "100%",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center"
     }
-  }, /*#__PURE__*/React.createElement("svg", {
-    width: "46",
-    height: "46",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "#fff",
-    strokeWidth: "1.5",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    style: {
-      opacity: 0.8
-    }
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M14 2v6h6"
-  })), /*#__PURE__*/React.createElement("p", {
-    className: "sans",
-    style: {
-      color: "#fff",
-      fontSize: 13.5,
-      fontWeight: 600,
-      marginTop: 12
-    }
-  }, title || "PDF"), /*#__PURE__*/React.createElement("p", {
-    className: "sans",
-    style: {
-      color: "rgba(255,255,255,0.62)",
-      fontSize: 11.5,
-      marginTop: 5,
-      lineHeight: 1.55
-    }
-  }, "PDFs can't be previewed inside the app. Open it in your phone's viewer."), /*#__PURE__*/React.createElement("a", {
+  }, /*#__PURE__*/React.createElement(PdfInlineViewer, {
+    src: src
+  }), /*#__PURE__*/React.createElement("a", {
     href: src,
     target: "_blank",
     rel: "noopener noreferrer",
@@ -20711,15 +20883,15 @@ function DocViewer({
     style: {
       display: "inline-block",
       marginTop: 14,
-      padding: "11px 20px",
-      borderRadius: 12,
-      background: "#fff",
-      color: "#111",
-      fontSize: 13,
-      fontWeight: 700,
+      padding: "9px 16px",
+      borderRadius: 10,
+      background: "rgba(255,255,255,0.15)",
+      color: "rgba(255,255,255,0.8)",
+      fontSize: 11.5,
+      fontWeight: 600,
       textDecoration: "none"
     }
-  }, "Open PDF")) : /*#__PURE__*/React.createElement("img", {
+  }, "Open in viewer")) : /*#__PURE__*/React.createElement("img", {
     src: src,
     alt: title || "Attachment",
     style: {
@@ -63107,7 +63279,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v475", debugId ? " · " + debugId : ""))))), diagOpen && (() => {
+  }, "v476", debugId ? " · " + debugId : ""))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
