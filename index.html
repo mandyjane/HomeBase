@@ -5055,6 +5055,35 @@ function EventIcon({
     }
   });
 }
+// v454 · PH ICON — renders from PH_ICON_PATHS (stroke or filled).
+function PhIcon({
+  name,
+  size = 15
+}) {
+  const pi = PH_ICON_PATHS[name];
+  if (!pi) return /*#__PURE__*/React.createElement(EventIcon, {
+    name: "flag",
+    size: size
+  });
+  if (pi.filled) return /*#__PURE__*/React.createElement("svg", {
+    width: size,
+    height: size,
+    viewBox: pi.vb,
+    "aria-hidden": "true"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: pi.d,
+    fill: "currentColor"
+  }));
+  return /*#__PURE__*/React.createElement("svg", {
+    width: size,
+    height: size,
+    viewBox: pi.vb,
+    "aria-hidden": "true",
+    dangerouslySetInnerHTML: {
+      __html: pi.d
+    }
+  });
+}
 
 // time helper: "19:30" -> "7:30 PM"
 // ── IS THIS HAPPENING RIGHT NOW? *(v238)* ───────────────────────────────────────────────
@@ -12121,6 +12150,7 @@ function App({
       done: false,
       catColor: phColor || "#E5484D",
       catIcon: "flag",
+      phIconKey: phSpecialIcons ? e.phIcon : undefined,
       time: "",
       sub: "Public Holiday · All day",
       allDay: true
@@ -12340,10 +12370,12 @@ function App({
     pName: assigneeName(e.assignee, people),
     pColor: assigneeColor(e.assignee, people),
     date: e.date,
-    dotColor: (EVENT_CATS[e.category] || EVENT_CATS.Other).color,
-    catIcon: (EVENT_CATS[e.category] || EVENT_CATS.Other).icon,
-    time: fmtRange(e.time, e.end) + (e.category === SHIFT_CAT && durLabel(e.time, e.end) ? ` · ${durLabel(e.time, e.end)}` : ""),
+    dotColor: e.publicHoliday ? phColor || "#E5484D" : (EVENT_CATS[e.category] || EVENT_CATS.Other).color,
+    catIcon: e.publicHoliday ? "flag" : (EVENT_CATS[e.category] || EVENT_CATS.Other).icon,
+    phIconKey: e.publicHoliday && phSpecialIcons ? e.phIcon : undefined,
+    time: e.publicHoliday ? "" : fmtRange(e.time, e.end) + (e.category === SHIFT_CAT && durLabel(e.time, e.end) ? ` · ${durLabel(e.time, e.end)}` : ""),
     overdue: false,
+    sub: e.publicHoliday ? "Public Holiday · All day" : `${e.place ? e.place + " · " : ""}${assigneeName(e.assignee, people)}`,
     // v182 · a WORKED RDO reflects its state on the dashboard too (matches the Work-tab card):
     // a "Worked" tag + a "+Xh OT" badge. worked/workedHours live on the materialised occurrence.
     rdoWorked: e.dayOff === "rdo" && !!e.worked,
@@ -12374,9 +12406,10 @@ function App({
       pName: assigneeName(e.assignee, people),
       pColor: assigneeColor(e.assignee, people),
       date: e.date,
-      dotColor: (EVENT_CATS[e.category] || EVENT_CATS.Other).color,
-      catIcon: (EVENT_CATS[e.category] || EVENT_CATS.Other).icon,
-      time: fmtRange(e.time, e.end) + (e.category === SHIFT_CAT && durLabel(e.time, e.end) ? ` · ${durLabel(e.time, e.end)}` : ""),
+      dotColor: e.publicHoliday ? phColor || "#E5484D" : (EVENT_CATS[e.category] || EVENT_CATS.Other).color,
+      catIcon: e.publicHoliday ? "flag" : (EVENT_CATS[e.category] || EVENT_CATS.Other).icon,
+      phIconKey: e.publicHoliday && phSpecialIcons ? e.phIcon : undefined,
+      time: e.publicHoliday ? "" : fmtRange(e.time, e.end) + (e.category === SHIFT_CAT && durLabel(e.time, e.end) ? ` · ${durLabel(e.time, e.end)}` : ""),
       overdue: false,
       rdoWorked: e.dayOff === "rdo" && !!e.worked,
       otHours: e.dayOff === "rdo" && e.worked ? Number(e.workedHours) || 0 : 0
@@ -12598,13 +12631,9 @@ function App({
     sub: `${e.place ? e.place + " · " : ""}${assigneeName(e.assignee, people)}`,
     pName: assigneeName(e.assignee, people),
     pColor: assigneeColor(e.assignee, people),
-    dotColor: EVENT_CATS[e.category] && EVENT_CATS[e.category].color || C.accent,
-    // v239 · catIcon WAS MISSING HERE. AgendaRow draws `row.catIcon||"star"`, so every
-    // Tomorrow event fell through to the generic star while the SAME event under Today
-    // (which builds its row at eventRow/homeListEvents) drew its category icon. The bug
-    // was invisible in any fixture whose events happened to be starred anyway.
-    // Read from the same EVENT_CATS lookup as dotColor so icon and colour cannot diverge.
-    catIcon: EVENT_CATS[e.category] && EVENT_CATS[e.category].icon || EVENT_CATS.Other && EVENT_CATS.Other.icon,
+    dotColor: e.publicHoliday ? phColor || "#E5484D" : EVENT_CATS[e.category] && EVENT_CATS[e.category].color || C.accent,
+    catIcon: e.publicHoliday ? "flag" : EVENT_CATS[e.category] && EVENT_CATS[e.category].icon || EVENT_CATS.Other && EVENT_CATS.Other.icon,
+    phIconKey: e.publicHoliday && phSpecialIcons ? e.phIcon : undefined,
     done: false,
     taskTime: e.time ? fmtTime(e.time) : null,
     _t: e.time || ""
@@ -16254,6 +16283,8 @@ function App({
       workCardTint: workCardTint,
       onSaveDayNote: saveDayNote,
       onNag: startNag,
+      phColor: phColor,
+      phSpecialIcons: phSpecialIcons,
       onChangeType: ev => setRetype(ev),
       onHistory: ev => setHistFor(ev),
       workHist: workHist,
@@ -18563,9 +18594,9 @@ function EventCard({
       width: 32,
       height: 32,
       borderRadius: 9,
-      border: `1.5px solid ${ev.alerts && ev.alerts.length > 0 ? C.low : C.rule}`,
-      background: ev.alerts && ev.alerts.length > 0 ? C.lowSoft : C.page,
-      color: ev.alerts && ev.alerts.length > 0 ? C.low : C.inkMute,
+      border: `1.5px solid ${ev.alerts && ev.alerts.length > 0 ? "#5EE7B4" : C.rule}`,
+      background: ev.alerts && ev.alerts.length > 0 ? "rgba(94,231,180,0.12)" : C.page,
+      color: ev.alerts && ev.alerts.length > 0 ? "#5EE7B4" : C.inkMute,
       cursor: "pointer",
       display: "flex",
       alignItems: "center",
@@ -23915,7 +23946,6 @@ function PaidBills({
       textAlign: "left",
       background: C.card,
       border: "none",
-      borderLeft: `2px solid ${C.low}`,
       borderRadius: open ? "12px 12px 0 0" : 12,
       padding: "9px 11px",
       cursor: "pointer"
@@ -23977,7 +24007,6 @@ function PaidBills({
   }))), open && /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.ruleSoft,
-      borderLeft: `2px solid ${C.low}`,
       borderRadius: "0 0 12px 12px",
       padding: "6px 6px 0",
       overflow: "hidden",
@@ -24287,7 +24316,10 @@ function AgendaRow({
           boxShadow: glowShadow(row.dotColor, 0.35, 10),
           color: row.dotColor
         }
-      }, /*#__PURE__*/React.createElement(EventIcon, {
+      }, row.phIconKey ? /*#__PURE__*/React.createElement(PhIcon, {
+        name: row.phIconKey,
+        size: 15
+      }) : /*#__PURE__*/React.createElement(EventIcon, {
         name: row.catIcon || "star",
         size: 15
       }));
@@ -25084,9 +25116,9 @@ function AgendaRow({
       width: 32,
       height: 32,
       borderRadius: 9,
-      border: `1.5px solid ${t.alerts && t.alerts.length > 0 ? C.low : C.rule}`,
-      background: t.alerts && t.alerts.length > 0 ? C.lowSoft : C.page,
-      color: t.alerts && t.alerts.length > 0 ? C.low : C.inkMute,
+      border: `1.5px solid ${t.alerts && t.alerts.length > 0 ? bill ? C.low : "#5EE7B4" : C.rule}`,
+      background: t.alerts && t.alerts.length > 0 ? bill ? C.lowSoft : "rgba(94,231,180,0.12)" : C.page,
+      color: t.alerts && t.alerts.length > 0 ? bill ? C.low : "#5EE7B4" : C.inkMute,
       cursor: "pointer",
       display: "flex",
       alignItems: "center",
@@ -26088,9 +26120,9 @@ function TaskCard({
         width: 32,
         height: 32,
         borderRadius: 9,
-        border: `1.5px solid ${task.alerts && task.alerts.length > 0 ? C.low : C.rule}`,
-        background: task.alerts && task.alerts.length > 0 ? C.lowSoft : C.page,
-        color: task.alerts && task.alerts.length > 0 ? C.low : C.inkMute,
+        border: `1.5px solid ${task.alerts && task.alerts.length > 0 ? bill ? C.low : "#5EE7B4" : C.rule}`,
+        background: task.alerts && task.alerts.length > 0 ? bill ? C.lowSoft : "rgba(94,231,180,0.12)" : C.page,
+        color: task.alerts && task.alerts.length > 0 ? bill ? C.low : "#5EE7B4" : C.inkMute,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -27182,8 +27214,9 @@ function taskRow(t, people, today) {
     deadlineLabel: isDeadline ? deadlineCountdown(t.dueDate, t.done && t.doneAt ? toLocalYMD(new Date(t.doneAt)) : today) : null
   };
 }
-function eventRow(e, people) {
-  const ec = EVENT_CATS[e.category] || EVENT_CATS.Other;
+function eventRow(e, people, phOpts) {
+  const ph = e.publicHoliday;
+  const ec = ph ? null : EVENT_CATS[e.category] || EVENT_CATS.Other;
   return {
     kind: "event",
     ref: e,
@@ -27192,9 +27225,11 @@ function eventRow(e, people) {
     pName: assigneeName(e.assignee, people),
     pColor: assigneeColor(e.assignee, people),
     date: e.date,
-    dotColor: ec.color,
-    catIcon: ec.icon,
-    time: e.dayOff ? null : fmtRange(e.time, e.end) + (e.category === SHIFT_CAT && durLabel(e.time, e.end) ? ` · ${durLabel(e.time, e.end)}` : ""),
+    dotColor: ph ? phOpts && phOpts.phColor || "#E5484D" : ec.color,
+    catIcon: ph ? "flag" : ec.icon,
+    phIconKey: ph && phOpts && phOpts.phSpecialIcons ? e.phIcon : undefined,
+    time: ph ? "" : e.dayOff ? null : fmtRange(e.time, e.end) + (e.category === SHIFT_CAT && durLabel(e.time, e.end) ? ` · ${durLabel(e.time, e.end)}` : ""),
+    sub: ph ? "Public Holiday · All day" : undefined,
     overdue: false,
     done: false
   };
@@ -27236,7 +27271,9 @@ function CalendarTab({
   onChangeType,
   onHistory,
   workHist = {},
-  onToggleWfh
+  onToggleWfh,
+  phColor = "#E5484D",
+  phSpecialIcons = false
 }) {
   const year = calDate.getFullYear(),
     month = calDate.getMonth();
@@ -27393,7 +27430,7 @@ function CalendarTab({
     const dk = e.dayOff || e.workEx || null;
     pushItem(e.date, {
       title: calDayOffShort(e),
-      color: dk ? calDayOffColor(dk) : (EVENT_CATS[e.category] || EVENT_CATS.Other).color,
+      color: dk ? calDayOffColor(dk) : e.publicHoliday ? phColor || "#E5484D" : (EVENT_CATS[e.category] || EVENT_CATS.Other).color,
       dayKind: dk,
       // Only a named person gets a dot. "both"/unassigned would be ambiguous, and a
       // day off is in practice always one person's.
@@ -27508,7 +27545,7 @@ function CalendarTab({
           kind: isWorkKind ? "work" : "event",
           dayKind: dk,
           person: occ.assignee === "her" || occ.assignee === "him" ? occ.assignee : null,
-          color: dk ? calDayOffColor(dk) : (EVENT_CATS[occ.category] || EVENT_CATS.Other).color
+          color: dk ? calDayOffColor(dk) : occ.publicHoliday ? phColor || "#E5484D" : (EVENT_CATS[occ.category] || EVENT_CATS.Other).color
         });
       });
     });
@@ -28438,7 +28475,10 @@ function DaySheet({
   const evRow = e => /*#__PURE__*/React.createElement(AgendaRow, {
     billPayer: billPayer,
     key: "e" + e._seriesId + e._occDate,
-    row: eventRow(e, people),
+    row: eventRow(e, people, {
+      phColor,
+      phSpecialIcons
+    }),
     people: people,
     today: today,
     showTimes: showTimes,
@@ -28649,7 +28689,7 @@ function DaySheet({
     key: "sb" + e._seriesId + e._occDate,
     ev: e,
     dateStr: dateStr,
-    color: (EVENT_CATS[e.category] || EVENT_CATS.Other).color,
+    color: e.publicHoliday ? phColor || "#E5484D" : (EVENT_CATS[e.category] || EVENT_CATS.Other).color,
     onEdit: () => onEditEvent && onEditEvent(e),
     onEditDayNote: onEditDayNote
   }))), workRows.length > 0 && /*#__PURE__*/React.createElement("div", {
@@ -52711,7 +52751,7 @@ function TaskModal({
       color: C.inkMute,
       marginTop: 1
     }
-  }, "Only visible to you \\u00b7 no points")), /*#__PURE__*/React.createElement("button", {
+  }, "Only visible to you · no points")), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => set("private", !form.private),
     style: {
@@ -62572,7 +62612,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v453"))))), diagOpen && (() => {
+  }, "v455"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -64500,7 +64540,7 @@ function ShiftModal({
       color: C.inkMute,
       marginTop: 1
     }
-  }, "Only visible to you \\u00b7 no points")), /*#__PURE__*/React.createElement("button", {
+  }, "Only visible to you · no points")), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => set("private", !form.private),
     style: {
