@@ -6728,11 +6728,17 @@ function idbOpen() {
   });
 }
 function idbPut(key, val) {
-  if (!_idbDB) return;
-  try {
-    const tx = _idbDB.transaction(IDB_STORE, "readwrite");
-    tx.objectStore(IDB_STORE).put(val, key);
-  } catch {}
+  if (!_idbDB) return Promise.resolve(false);
+  return new Promise(resolve => {
+    try {
+      const tx = _idbDB.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(val, key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
+  });
 }
 function idbDel(key) {
   if (!_idbDB) return;
@@ -6771,7 +6777,8 @@ function idbGetAll() {
 async function idbBoot() {
   try {
     await idbOpen();
-    // Migrate any leftover localStorage docs into IDB
+    // Migrate any leftover localStorage docs into IDB.
+    // AWAIT each put — only remove from LS after IDB confirms the write.
     const lsKeys = [];
     try {
       for (let i = 0; i < localStorage.length; i++) {
@@ -6784,10 +6791,13 @@ async function idbBoot() {
         const v = localStorage.getItem(k);
         if (v) {
           const ref = k.slice("hb_doc:".length);
-          idbPut(ref, v);
           _docCache.set(ref, v);
+          const ok = await idbPut(ref, v);
+          // Only remove from LS if IDB confirmed the write
+          if (ok) try {
+            localStorage.removeItem(k);
+          } catch {}
         }
-        localStorage.removeItem(k);
       } catch {}
     }
     // Load everything already in IDB into cache
@@ -6816,6 +6826,7 @@ async function idbBoot() {
 }
 // Total bytes stored in IDB (from cache). Used for the storage meter.
 function idbUsage() {
+  // Count from cache (which includes both IDB and LS-fallback docs after docList/docRead)
   let n = 0;
   for (const [k, v] of _docCache) {
     n += (k.length + (v || "").length) * 2;
@@ -6840,8 +6851,18 @@ function docRead(v) {
   if (!v) return null;
   if (!isDocRef(v)) return v; // legacy: the bytes are still inline
   // v470: read from in-memory cache (populated from IDB at boot)
+  // v472: fall back to localStorage if cache miss (IDB not ready yet, or failed)
   const ref = String(v).slice(DOC_REF.length);
-  return _docCache.get(ref) || null;
+  const cached = _docCache.get(ref);
+  if (cached) return cached;
+  try {
+    const ls = localStorage.getItem(DOC_PREFIX + ref);
+    if (ls) {
+      _docCache.set(ref, ls);
+      return ls;
+    }
+  } catch {}
+  return null;
 }
 // Write a photo to its own key. Returns the REF on success, or null if it would not fit —
 // and null is a real answer, not an error: the caller records the payment either way.
@@ -6869,8 +6890,11 @@ function docDelete(v) {
 // "which one do you want to drop?" chooser and the Documents library.
 function docList() {
   // v470: read from in-memory cache (backed by IDB)
+  // v472: also sweep LS for any docs not yet in cache (fallback / pre-migration)
+  const seen = new Set();
   const out = [];
   for (const [ref, v] of _docCache) {
+    seen.add(ref);
     const [sid, occ] = ref.split(":");
     out.push({
       key: DOC_PREFIX + ref,
@@ -6880,6 +6904,24 @@ function docList() {
       bytes: attBytes(v || "")
     });
   }
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(DOC_PREFIX)) continue;
+      const ref = k.slice(DOC_PREFIX.length);
+      if (seen.has(ref)) continue;
+      const v = localStorage.getItem(k) || "";
+      _docCache.set(ref, v); // warm the cache
+      const [sid, occ] = ref.split(":");
+      out.push({
+        key: k,
+        ref: DOC_REF + ref,
+        seriesId: sid,
+        occDate: occ,
+        bytes: attBytes(v)
+      });
+    }
+  } catch {}
   return out.sort((a, b) => (b.occDate || "").localeCompare(a.occDate || ""));
 }
 // ORPHANS. A doc whose bill (or occurrence) no longer exists. Deleting a bill deletes its
@@ -62948,7 +62990,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v471"))))), diagOpen && (() => {
+  }, "v472"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
