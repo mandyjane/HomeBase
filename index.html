@@ -12185,15 +12185,17 @@ function App({
       });
     }
   });
-  let pool = listTasks.filter(t => {
+
+  // v473: filter private tasks from listTasks itself — covers pool, todaysTasks,
+  // today ring, overdue bills, dashboard, and StatsTab occs in one pass.
+  const visListTasks = listTasks.filter(t => !isPrivateHidden(t));
+  let pool = visListTasks.filter(t => {
     // Bills are hidden from the TASKS LIST — they have their own tab, and a bill
     // mixed in with the chores was reading as a Kitchen task. This filters `pool`
     // (the Tasks tab) and NOT `listTasks`, so the dashboard agenda, the today-ring,
     // the calendar and Stats all still see bills. Hiding them at listTasks would
     // silently drop them from all of those too.
     if (isBill(t)) return false;
-    // v471: private tasks hidden from the other person's login
-    if (isPrivateHidden(t)) return false;
     if (view === "all") return true;
     if (view === "shared") return t.assignee === "both";
     return t.assignee === view || t.assignee === "both"; // her/him also see shared tasks
@@ -12525,7 +12527,7 @@ function App({
   // v132: `isDeadlineTask` now covers PROJECTS too, so this one filter would have swept them
   // into the "Deadlines" heading. They are the same behaviour under a different name, so they
   // are derived together and SPLIT for display — one list, two headings.
-  const homeByDate = tasks.filter(t => isDeadlineTask(t) && !t.done && !(t.startDate && today < t.startDate)).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || b.priority - a.priority);
+  const homeByDate = tasks.filter(t => isDeadlineTask(t) && !t.done && !(t.startDate && today < t.startDate) && !isPrivateHidden(t)).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || b.priority - a.priority);
   const homeDeadlines = homeByDate.filter(t => t.taskKind === "deadline");
   const homeProjects = homeByDate.filter(t => t.taskKind === "project");
 
@@ -12541,6 +12543,7 @@ function App({
   const doneTodayTasks = [];
   if (keepDone) {
     tasks.forEach(t => {
+      if (isPrivateHidden(t)) return; // v473
       const recurring = t.recur && t.recur !== "none";
       if (!recurring) {
         // Same guard on the NON-RECURRING branch. A one-off task dated tomorrow and ticked
@@ -12647,7 +12650,7 @@ function App({
   // the agenda, creating a phantom "1 done" the user could not find. Show these
   // struck-through at the end, after doneTodayTasks and before events.
   const earlyDoneKeys = new Set([...doneTodayKeys, ...overdueSeriesIds]);
-  listTasks.filter(t => t.dueDate === today && t.done && !earlyDoneKeys.has(occKey(t)) && !doneTodayKeys.has(occKey(t))).sort((a, b) => (a.doneAt || "").localeCompare(b.doneAt || "")).forEach(t => homeAgenda.push({
+  visListTasks.filter(t => t.dueDate === today && t.done && !earlyDoneKeys.has(occKey(t)) && !doneTodayKeys.has(occKey(t))).sort((a, b) => (a.doneAt || "").localeCompare(b.doneAt || "")).forEach(t => homeAgenda.push({
     kind: "task",
     ref: t,
     title: t.title,
@@ -12793,7 +12796,7 @@ function App({
   // occurrence is past due. A monthly bill starting in March with no payments shows
   // "Due 15 Aug" (the next occurrence) but has 3+ months overdue behind it.
   const overdueBills = (() => {
-    const direct = listTasks.filter(t => isBill(t) && !t.done && t.dueDate < today);
+    const direct = visListTasks.filter(t => isBill(t) && !t.done && t.dueDate < today);
     const directIds = new Set(direct.map(t => t._seriesId || t.id));
     // Find recurring bills with overdue backlogs not already in the direct list
     const withBacklog = tasks.filter(t => isBill(t) && t.recur && t.recur !== "none" && !directIds.has(t.id) && overdueBillDates(t, today).length > 0);
@@ -13036,7 +13039,7 @@ function App({
     const q = query.trim();
     if (q.length < 2) return []; // 1 char matches everything and is never what you meant
     const out = [];
-    listTasks.forEach(t => {
+    visListTasks.forEach(t => {
       if (!searchHit([t.title, t.notes, t.room, t.billCat], q)) return;
       out.push({
         kind: isBill(t) ? "bill" : "task",
@@ -13073,7 +13076,7 @@ function App({
   };
 
   // Today's completion for the ring: all task occurrences due today (done + not).
-  const todaysTasks = listTasks.filter(t => t.dueDate === today);
+  const todaysTasks = visListTasks.filter(t => t.dueDate === today);
   const doneToday = todaysTasks.filter(t => t.done).length;
   const totalToday = todaysTasks.length;
   const ringPct = totalToday > 0 ? doneToday / totalToday : 0;
@@ -16664,8 +16667,8 @@ function App({
         setShowAdd(true);
       }
     }), tab === "stats" && /*#__PURE__*/React.createElement(StatsTab, {
-      tasks: tasks,
-      occs: listTasks,
+      tasks: visTasks,
+      occs: visListTasks,
       events: events,
       people: people,
       points: points,
@@ -53237,7 +53240,7 @@ function TaskModal({
       background: "#fff",
       transition: "left .2s"
     }
-  }))), PTS.on && (!billForm || billPoints) && (() => {
+  }))), PTS.on && (!billForm || billPoints) && !form.private && (() => {
     const PRESETS = [5, 10, 15, 20, 25, 30];
     const selVal = ptsMode === "custom" ? "custom" : form.points === 0 ? "none" : String(form.points);
     const clamp = v => Math.max(1, Math.min(999, Math.round(v) || 1));
@@ -62990,7 +62993,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v472"))))), diagOpen && (() => {
+  }, "v473"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -66154,6 +66157,69 @@ function EventModal({
         fontWeight: 700
       }
     }, on ? "\u2713" : ""), label);
+  }))), form.assignee && form.assignee !== "both" && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "6px 0 10px"
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: C.ink,
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "11",
+    width: "18",
+    height: "11",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M7 11V7a5 5 0 0 1 10 0v4"
+  })), "Private"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, "Only visible to you")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => set("private", !form.private),
+    style: {
+      width: 40,
+      height: 22,
+      borderRadius: 11,
+      border: "none",
+      background: form.private ? C.low : "rgba(255,255,255,0.15)",
+      position: "relative",
+      cursor: "pointer",
+      transition: "background .2s",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 2,
+      left: form.private ? 20 : 2,
+      width: 18,
+      height: 18,
+      borderRadius: "50%",
+      background: "#fff",
+      transition: "left .2s"
+    }
   }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(L, null, "Repeat"), /*#__PURE__*/React.createElement("select", {
     value: form.recur,
     onChange: e => set("recur", e.target.value)
