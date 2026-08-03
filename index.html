@@ -5065,15 +5065,24 @@ function PhIcon({
     name: "flag",
     size: size
   });
-  if (pi.filled) return /*#__PURE__*/React.createElement("svg", {
-    width: size,
-    height: size,
-    viewBox: pi.vb,
-    "aria-hidden": "true"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: pi.d,
-    fill: "currentColor"
-  }));
+  if (pi.filled) {
+    const vbH = pi.vb.split(" ")[3] || "3600";
+    const sw = Math.round(Number(vbH) * 0.03);
+    return /*#__PURE__*/React.createElement("svg", {
+      width: size,
+      height: size,
+      viewBox: pi.vb,
+      "aria-hidden": "true"
+    }, /*#__PURE__*/React.createElement("g", {
+      transform: `scale(1,-1) translate(0,-${vbH})`
+    }, /*#__PURE__*/React.createElement("path", {
+      d: pi.d,
+      fill: "currentColor",
+      stroke: "currentColor",
+      strokeWidth: sw,
+      strokeLinejoin: "round"
+    })));
+  }
   return /*#__PURE__*/React.createElement("svg", {
     width: size,
     height: size,
@@ -62573,7 +62582,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v460"))))), diagOpen && (() => {
+  }, "v461"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
