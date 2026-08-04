@@ -6719,6 +6719,10 @@ function LoginScreen({
   const [pass, setPass] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const enterSubmit = e => {
+    if (e.key === "Enter" && !loading) handleLogin();
+  };
   async function handleLogin(e) {
     e && e.preventDefault && e.preventDefault();
     setErr("");
@@ -6819,6 +6823,7 @@ function LoginScreen({
     placeholder: "Email",
     value: email,
     onChange: e => setEmail(e.target.value),
+    onKeyDown: enterSubmit,
     style: {
       width: "100%",
       maxWidth: 300,
@@ -6832,25 +6837,83 @@ function LoginScreen({
       fontFamily: "'Roboto Condensed',sans-serif",
       outline: "none"
     }
-  }), React.createElement("input", {
-    type: "password",
+  }), React.createElement("div", {
+    style: {
+      position: "relative",
+      width: "100%",
+      maxWidth: 300,
+      marginBottom: 16
+    }
+  }, React.createElement("input", {
+    type: showPass ? "text" : "password",
     placeholder: "Password",
     value: pass,
     onChange: e => setPass(e.target.value),
+    onKeyDown: enterSubmit,
     style: {
       width: "100%",
-      maxWidth: 300,
-      padding: "12px 14px",
+      padding: "12px 44px 12px 14px",
       borderRadius: 12,
       border: "1.5px solid rgba(255,255,255,0.1)",
       fontSize: 15,
-      marginBottom: 16,
       background: "#171A22",
       color: "#e0ddd4",
       fontFamily: "'Roboto Condensed',sans-serif",
       outline: "none"
     }
   }), React.createElement("button", {
+    type: "button",
+    onClick: () => setShowPass(p => !p),
+    style: {
+      position: "absolute",
+      right: 10,
+      top: "50%",
+      transform: "translateY(-50%)",
+      background: "none",
+      border: "none",
+      color: "#6a6860",
+      cursor: "pointer",
+      padding: 4,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, showPass ? React.createElement("svg", {
+    width: 20,
+    height: 20,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, React.createElement("path", {
+    d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+  }), React.createElement("circle", {
+    cx: 12,
+    cy: 12,
+    r: 3
+  })) : React.createElement("svg", {
+    width: 20,
+    height: 20,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, React.createElement("path", {
+    d: "M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"
+  }), React.createElement("path", {
+    d: "M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"
+  }), React.createElement("path", {
+    d: "M14.12 14.12a3 3 0 1 1-4.24-4.24"
+  }), React.createElement("line", {
+    x1: 1,
+    y1: 1,
+    x2: 23,
+    y2: 23
+  })))), React.createElement("button", {
     onClick: handleLogin,
     disabled: loading,
     style: {
@@ -64805,7 +64868,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v512"))))), diagOpen && (() => {
+  }, "v513"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
