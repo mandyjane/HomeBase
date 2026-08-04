@@ -6468,7 +6468,7 @@ function nextOccurrenceDate(series, dateField, today) {
   for (const d of dates) {
     const ex = series.exceptions && series.exceptions[d];
     if (ex && ex.deleted) continue;
-    if (dateField === "dueDate" && ex && ex.done) continue; // skip already-done for "current" list
+    if (dateField === "dueDate" && ex && ex.done && d < today) continue; // v504 · only skip past-done; paid-early (future date) still shows
     return d;
   }
   // all upcoming done/deleted — fall back to earliest upcoming regardless
@@ -8453,6 +8453,40 @@ function App({
   // It also queues BEHIND the level-up rather than fighting it for the screen: both are
   // fixed overlays at z500, so two at once would stack invisibly.
   const [goalQueue, setGoalQueue] = useState([]); // [{who,name,treat,current,target,periodLabel}]
+  // v504 · ONE-SHOT: fire level-up + goal-met celebrations for Liam on his next app open.
+  // He missed them due to the points recalculation fixes. Remove this block after he's seen them.
+  useEffect(() => {
+    if (lsGet("hb_liamCelebDone", false)) return;
+    // Only fire for Liam's device
+    if (sbUserId && sbUserId !== "82ea7eb5-3900-4df4-a37b-f9e3a5351c14") return;
+    // Delay to let the app settle
+    const t = setTimeout(() => {
+      const himLv = levelInfo(points.him);
+      setLevelUp({
+        who: "him",
+        name: people.him?.name || "Liam",
+        level: himLv.level,
+        total: points.him || 0,
+        pts: 0
+      });
+      const g = rewards.him || DEFAULT_REWARDS.him;
+      const fp2 = freshPeriods(pointsPeriods, rewardReset);
+      const bk = periodBucket(migratePeriod(g.period), fp2);
+      const earned = bk.him || 0;
+      if (earned >= g.target) {
+        setGoalQueue([{
+          who: "him",
+          name: people.him?.name || "Liam",
+          treat: g.treat || "a reward",
+          current: earned,
+          target: g.target,
+          periodLabel: periodLabel[migratePeriod(g.period)] || ""
+        }]);
+      }
+      lsSet("hb_liamCelebDone", true);
+    }, 2000);
+    return () => clearTimeout(t);
+  }, []);
   const [nagMode, setNagMode] = useState(false);
   const [nagTask, setNagTask] = useState(null);
   const [nagStep, setNagStep] = useState(0);
