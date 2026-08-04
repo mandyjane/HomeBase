@@ -10835,6 +10835,12 @@ function App({
 
   // saveTask handles new, and edit-scope for recurring (this/all/forward).
   function saveTask(task, scope, carry) {
+    // v502 · Private tasks never carry points — zero them at save as a safety net
+    // in case the form didn't catch it (e.g. editing an older private task).
+    if (task.private && task.points) task = {
+      ...task,
+      points: 0
+    };
     if (task.id && tasks.find(t => t.id === task.id)) {
       const orig = tasks.find(t => t.id === task.id);
       // v496 · cancel stale alerts immediately if date/time changed
@@ -54660,7 +54666,11 @@ function TaskModal({
     }
   }, "Only visible to you · no points")), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => set("private", !form.private),
+    onClick: () => {
+      const nowPriv = !form.private;
+      set("private", nowPriv);
+      if (nowPriv) set("points", 0);
+    },
     style: {
       width: 40,
       height: 22,
@@ -64581,7 +64591,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v501"))))), diagOpen && (() => {
+  }, "v502"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -66753,7 +66763,11 @@ function ShiftModal({
     }
   }, "Only visible to you · no points")), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => set("private", !form.private),
+    onClick: () => {
+      const nowPriv = !form.private;
+      set("private", nowPriv);
+      if (nowPriv) set("points", 0);
+    },
     style: {
       width: 40,
       height: 22,
@@ -67789,7 +67803,11 @@ function EventModal({
     }
   }, "Only visible to you")), /*#__PURE__*/React.createElement("button", {
     type: "button",
-    onClick: () => set("private", !form.private),
+    onClick: () => {
+      const nowPriv = !form.private;
+      set("private", nowPriv);
+      if (nowPriv) set("points", 0);
+    },
     style: {
       width: 40,
       height: 22,
