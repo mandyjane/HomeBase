@@ -16803,7 +16803,6 @@ function App({
       onEndRepeatAt: endRepeatAt,
       onShowCompleted: who => setCompletedTasksSheet(who)
     }), tab === "settings" && /*#__PURE__*/React.createElement(SettingsPage, {
-      debugId: (_sbUserId ? "uid:" + String(_sbUserId).slice(0, 6) : "no-uid") + " " + (currentUser || "??"),
       tasks: tasks,
       events: events,
       today: today,
@@ -20591,33 +20590,30 @@ function readAttachment(file) {
 // Loads pdf.js (~350KB) from cdnjs on first PDF view. After that the browser
 // caches it. Worker is disabled (GlobalWorkerOptions.workerSrc="") so it runs
 // single-threaded — slightly slower but zero extra files to host.
-const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs";
+const PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js";
 let _pdfjsLib = null;
 let _pdfjsLoading = null;
 function loadPdfJs() {
   if (_pdfjsLib) return Promise.resolve(_pdfjsLib);
+  if (window.pdfjsLib) {
+    _pdfjsLib = window.pdfjsLib;
+    _pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+    return Promise.resolve(_pdfjsLib);
+  }
   if (_pdfjsLoading) return _pdfjsLoading;
   _pdfjsLoading = new Promise((resolve, reject) => {
-    // Use a <script type="module"> shim: define a global, then resolve.
-    // This avoids dynamic import() which is blocked on file:// origins.
     const tag = document.createElement("script");
-    tag.type = "module";
-    tag.textContent = `import * as pdfjsLib from "${PDFJS_CDN}"; window.__pdfjsLib=pdfjsLib; window.dispatchEvent(new Event("pdfjsReady"));`;
-    const onReady = () => {
-      window.removeEventListener("pdfjsReady", onReady);
-      _pdfjsLib = window.__pdfjsLib;
+    tag.src = PDFJS_CDN;
+    tag.onload = () => {
+      _pdfjsLib = window.pdfjsLib;
       if (_pdfjsLib) {
         _pdfjsLib.GlobalWorkerOptions.workerSrc = "";
         resolve(_pdfjsLib);
       } else {
-        reject(new Error("pdf.js failed to load"));
+        reject(new Error("pdf.js loaded but pdfjsLib not found"));
       }
     };
-    window.addEventListener("pdfjsReady", onReady);
-    tag.onerror = () => {
-      window.removeEventListener("pdfjsReady", onReady);
-      reject(new Error("script load failed"));
-    };
+    tag.onerror = () => reject(new Error("Failed to load pdf.js from CDN"));
     document.head.appendChild(tag);
   });
   return _pdfjsLoading;
@@ -60974,7 +60970,6 @@ function OtStepper({
 function SettingsPage({
   tasks,
   events = [],
-  debugId = "",
   today,
   showPoints,
   setShowPoints,
@@ -63297,7 +63292,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v476", debugId ? " · " + debugId : ""))))), diagOpen && (() => {
+  }, "v476"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
