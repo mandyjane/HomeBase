@@ -13404,8 +13404,14 @@ function App({
     };
   }
   const sharedGoal = rewards.shared || DEFAULT_REWARDS.shared;
-  const sharedPool = poolFor(sharedGoal.period);
-  const sharedCurrent = (sharedPool.her || 0) + (sharedPool.him || 0);
+  // v497 · Household goal reads from ground truth (collectCompletedTasks) instead
+  // of the incremental pointsPeriods bucket which drifts after resets/recounts.
+  // Same pattern as the personal level cards (v491).
+  const _sharedBk = periodBucket(migratePeriod(sharedGoal.period), fp);
+  const _sharedPStart = _sharedBk ? _sharedBk.key : null;
+  const _sharedActs = collectCompletedTasks(visTasks, "shared", _sharedPStart, null, null);
+  const _sharedBActs = collectBonusActivity(bonusLog, "shared", _sharedPStart, null, null);
+  const sharedCurrent = [..._sharedActs, ..._sharedBActs].reduce((s, t) => s + (t.points || 0), 0);
   const sharedPct = Math.max(0, Math.min(1, sharedCurrent / (sharedGoal.target || 100)));
   const sharedToGo = Math.max(0, (sharedGoal.target || 100) - sharedCurrent);
   const isSleek = C.mood === "sleek";
@@ -64471,7 +64477,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v496"))))), diagOpen && (() => {
+  }, "v497"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
