@@ -24523,7 +24523,11 @@ function AmountAsk({
   people,
   askPayer,
   billPayer = true,
-  cardTerms = null
+  cardTerms = null,
+  billTitle = "",
+  billCatLabel = "",
+  billCatColor = "",
+  billRecur = ""
 }) {
   const [v, setV] = useState(expected > 0 ? String(expected) : "");
   // WHO PAID, asked inline rather than as a second full-screen prompt.
@@ -24593,7 +24597,42 @@ function AmountAsk({
     style: {
       padding: "12px 2px"
     }
-  }, /*#__PURE__*/React.createElement("p", {
+  }, billTitle && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 3
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "serif",
+    style: {
+      fontSize: 17,
+      fontStyle: "italic",
+      color: C.ink
+    }
+  }, billTitle), billCatLabel && /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 9,
+      fontWeight: 700,
+      letterSpacing: .5,
+      padding: "2px 8px",
+      borderRadius: 5,
+      background: softTint(billCatColor || C.accent),
+      color: billCatColor || C.accent
+    }
+  }, billCatLabel)), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute
+    }
+  }, [dueDate && `Due ${shortDate(dueDate)}`, expected > 0 && `usually ${fmtMoney(expected)}`, billRecur && billRecur !== "none" && billRecur].filter(Boolean).join(" · "))), /*#__PURE__*/React.createElement("p", {
     className: "sans",
     style: {
       fontSize: 12,
@@ -25375,7 +25414,11 @@ function AgendaRow({
     people: people,
     askPayer: bill ? needsPayer(t.assignee) : shared,
     billPayer: billPayer,
-    cardTerms: isCardBill(t) ? t.cardTerms : null
+    cardTerms: isCardBill(t) ? t.cardTerms : null,
+    billTitle: bill ? t.title : "",
+    billCatLabel: bill ? taskCatLabel(t) : "",
+    billCatColor: bill ? taskMeta(t).grad[0] : "",
+    billRecur: t.recur || ""
   }) : pointsAsk ? /*#__PURE__*/React.createElement("div", {
     onClick: e => e.stopPropagation(),
     style: {
@@ -26675,7 +26718,11 @@ function TaskCard({
       people: people,
       askPayer: bill ? needsPayer(task.assignee) : shared,
       billPayer: billPayer,
-      cardTerms: isCardBill(task) ? task.cardTerms : null
+      cardTerms: isCardBill(task) ? task.cardTerms : null,
+      billTitle: bill ? task.title : "",
+      billCatLabel: bill ? taskCatLabel(task) : "",
+      billCatColor: bill ? taskMeta(task).grad[0] : "",
+      billRecur: task.recur || ""
     })) : pointsAsk ? /*#__PURE__*/React.createElement("div", {
       onClick: e => e.stopPropagation(),
       style: {
@@ -64704,7 +64751,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v505"))))), diagOpen && (() => {
+  }, "v506"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
