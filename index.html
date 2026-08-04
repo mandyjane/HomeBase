@@ -2709,6 +2709,7 @@ function findDuplicateTasks(tasks) {
         const a = sorted[i],
           b = sorted[j];
         if (a.recur !== b.recur) continue; // same cadence only
+        if ((a.assignee || "") !== (b.assignee || "")) continue; // different assignees = separate records
         // Determine which is "live" (keep) and which is "dead" (remove).
         // Prefer open-ended; if both open or both ended, keep the earlier one.
         let live, dead;
@@ -2783,15 +2784,17 @@ function mergeDuplicateTask(tasks, pair) {
 }
 // Recount cumulative points from every completed task/occurrence's stored award.
 // Period buckets (week/fort/month) are NOT recounted — they roll over naturally.
-function recountPointsFromTasks(tasks) {
+// cutoffISO: if provided, only count completions whose OCCURRENCE DATE is on or after
+// this ISO timestamp's date portion. This respects the points-reset boundary.
+function recountPointsFromTasks(tasks, cutoffISO) {
   const totals = {
     her: 0,
     him: 0
   };
+  const cutoffDate = cutoffISO ? cutoffISO.slice(0, 10) : null;
   tasks.forEach(t => {
     if (!t) return;
     const pts = t.points || 0;
-    if (pts <= 0 && !t.rewardTask) return; // skip 0-point tasks unless reward
     if (t.rewardTask) return; // reward tasks never award points
     const recurring = t.recur && t.recur !== "none";
     if (recurring) {
@@ -2799,11 +2802,13 @@ function recountPointsFromTasks(tasks) {
       Object.keys(ex).forEach(k => {
         const e = ex[k];
         if (!e || !e.done || e.deleted) return;
+        if (cutoffDate && k < cutoffDate) return; // occurrence date before reset
         const aw = e.award || splitAward_pure(t.assignee, pts);
         totals.her += aw.her || 0;
         totals.him += aw.him || 0;
       });
     } else if (t.done) {
+      if (cutoffDate && (t.dueDate || "") < cutoffDate) return; // task date before reset
       const aw = t.award || splitAward_pure(t.assignee, pts);
       totals.her += aw.her || 0;
       totals.him += aw.him || 0;
@@ -17652,7 +17657,8 @@ function App({
       points: points,
       people: people,
       onMerge: mergeTaskDuplicate,
-      onRecountPoints: applyRecountedPoints
+      onRecountPoints: applyRecountedPoints,
+      pointsResetAt: effectiveResetAt
     }), showMortSettings && /*#__PURE__*/React.createElement(MortgageSettingsSheet, {
       data: mortgageData,
       onSave: saveMortgage,
@@ -43711,7 +43717,8 @@ function DataRepairSheet({
   points,
   people,
   onMerge,
-  onRecountPoints
+  onRecountPoints,
+  pointsResetAt
 }) {
   const pairs = React.useMemo(() => findDuplicateTasks(tasks), [tasks]);
   const [merged, setMerged] = React.useState({}); // id → true after merge
@@ -43730,7 +43737,7 @@ function DataRepairSheet({
   if (!open) return null;
   const activePairs = pairs.filter(p => !merged[p.dead.id]);
   const mergedPairs = pairs.filter(p => merged[p.dead.id]);
-  const recount = recountPointsFromTasks(tasks);
+  const recount = recountPointsFromTasks(tasks, pointsResetAt);
   const diff = {
     her: points.her - (recount.her || 0),
     him: points.him - (recount.him || 0)
@@ -58817,6 +58824,10 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd, resetAfter) {
       if (!doneAt) return;
       // v363 · skip tasks completed before the last points reset
       if (resetAfter && doneAt < resetAfter) return;
+      // v484 · also skip by OCCURRENCE DATE, not just when ticked. If old
+      // occurrences were ticked after the reset (catch-up), doneAt passes
+      // but the occurrence itself predates the reset boundary.
+      if (resetAfter && date < resetAfter.slice(0, 10)) return;
       const dd = toLocalYMD(new Date(doneAt));
       if (!dd) return;
       if (periodStart && dd < periodStart) return;
@@ -64257,7 +64268,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v484"))))), diagOpen && (() => {
+  }, "v485"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
