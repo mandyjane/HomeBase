@@ -7510,6 +7510,7 @@ function App({
       setIdbReady(true);
       return;
     }
+    // v480: preload pdf.js in background so thumbnails are ready
     idbBoot().then(() => setIdbReady(true)).catch(() => setIdbReady(true));
   });
   // Seed id counters above any persisted ids so freshly-added items can't collide
@@ -20811,44 +20812,50 @@ function PdfThumb({
   height = 150
 }) {
   const canvasRef = useRef(null);
+  const cancelRef = useRef(false);
   const [ready, setReady] = useState(false);
+  const [err, setErr] = useState(false);
   useEffect(() => {
-    if (!src) return;
-    let cancelled = false;
-    loadPdfJs().then(pdfjs => {
-      if (cancelled) return;
-      return pdfjs.getDocument({
-        data: dataUrlToArrayBuffer(src)
-      }).promise;
-    }).then(doc => {
-      if (cancelled || !doc) return;
-      return doc.getPage(1);
-    }).then(page => {
-      if (cancelled || !page || !canvasRef.current) return;
-      const dpr = window.devicePixelRatio || 1;
-      const vp = page.getViewport({
-        scale: 1
-      });
-      // Scale so the rendered height matches the thumbnail height
-      const scale = height * dpr / vp.height;
-      const scaledVp = page.getViewport({
-        scale
-      });
-      const canvas = canvasRef.current;
-      canvas.width = scaledVp.width;
-      canvas.height = scaledVp.height;
-      canvas.style.width = Math.round(scaledVp.width / dpr) + "px";
-      canvas.style.height = Math.round(scaledVp.height / dpr) + "px";
-      const ctx = canvas.getContext("2d");
-      page.render({
-        canvasContext: ctx,
-        viewport: scaledVp
-      }).promise.then(() => {
-        if (!cancelled) setReady(true);
-      });
-    }).catch(() => {});
+    if (!src || !attIsPdf(src)) return;
+    cancelRef.current = false;
+    setReady(false);
+    setErr(false);
+    async function go() {
+      try {
+        const pdfjs = await loadPdfJs();
+        if (cancelRef.current) return;
+        const doc = await pdfjs.getDocument({
+          data: dataUrlToArrayBuffer(src)
+        }).promise;
+        if (cancelRef.current) return;
+        const page = await doc.getPage(1);
+        if (cancelRef.current || !canvasRef.current) return;
+        const dpr = window.devicePixelRatio || 1;
+        const vp = page.getViewport({
+          scale: 1
+        });
+        const scale = height * dpr / vp.height;
+        const scaledVp = page.getViewport({
+          scale
+        });
+        const canvas = canvasRef.current;
+        canvas.width = scaledVp.width;
+        canvas.height = scaledVp.height;
+        canvas.style.width = Math.round(scaledVp.width / dpr) + "px";
+        canvas.style.height = Math.round(scaledVp.height / dpr) + "px";
+        const ctx = canvas.getContext("2d");
+        await page.render({
+          canvasContext: ctx,
+          viewport: scaledVp
+        }).promise;
+        if (!cancelRef.current) setReady(true);
+      } catch (e) {
+        if (!cancelRef.current) setErr(true);
+      }
+    }
+    go();
     return () => {
-      cancelled = true;
+      cancelRef.current = true;
     };
   }, [src, height]);
   return /*#__PURE__*/React.createElement("div", {
@@ -20897,7 +20904,7 @@ function PdfThumb({
       color: C.urgent,
       fontWeight: 600
     }
-  }, fmtBytes(attBytes(src)))));
+  }, err ? "PDF" : fmtBytes(attBytes(src)))));
 }
 
 // Full-screen document viewer. Scrolls, and pinch-to-zoom works because the image is a
@@ -32406,6 +32413,10 @@ function BillsTab({
     })));
   })()))) : view === "docs" ? /*#__PURE__*/React.createElement(React.Fragment, null, (() => {
     const all = billDocs(bills);
+    // v480: preload pdf.js if any doc is a PDF, so thumbnails render fast
+    if (all.some(d => attIsPdf(docRead(d.ref)))) try {
+      loadPdfJs();
+    } catch {}
     const used = idbUsage();
     const pctUsed = Math.min(100, used / IDB_BUDGET * 100);
     const tight = pctUsed >= 75;
@@ -63347,7 +63358,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v479"))))), diagOpen && (() => {
+  }, "v480"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
