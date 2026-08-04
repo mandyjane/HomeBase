@@ -20804,6 +20804,102 @@ function PdfInlineViewer({
   }, "›")));
 }
 
+// v479 · PDF thumbnail — renders page 1 to a small canvas for the Documents grid.
+// Falls back to the file-icon placeholder if pdf.js hasn't loaded yet.
+function PdfThumb({
+  src,
+  height = 150
+}) {
+  const canvasRef = useRef(null);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!src) return;
+    let cancelled = false;
+    loadPdfJs().then(pdfjs => {
+      if (cancelled) return;
+      return pdfjs.getDocument({
+        data: dataUrlToArrayBuffer(src)
+      }).promise;
+    }).then(doc => {
+      if (cancelled || !doc) return;
+      return doc.getPage(1);
+    }).then(page => {
+      if (cancelled || !page || !canvasRef.current) return;
+      const dpr = window.devicePixelRatio || 1;
+      const vp = page.getViewport({
+        scale: 1
+      });
+      // Scale so the rendered height matches the thumbnail height
+      const scale = height * dpr / vp.height;
+      const scaledVp = page.getViewport({
+        scale
+      });
+      const canvas = canvasRef.current;
+      canvas.width = scaledVp.width;
+      canvas.height = scaledVp.height;
+      canvas.style.width = Math.round(scaledVp.width / dpr) + "px";
+      canvas.style.height = Math.round(scaledVp.height / dpr) + "px";
+      const ctx = canvas.getContext("2d");
+      page.render({
+        canvasContext: ctx,
+        viewport: scaledVp
+      }).promise.then(() => {
+        if (!cancelled) setReady(true);
+      });
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [src, height]);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: "100%",
+      height,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+      borderRadius: 10
+    }
+  }, /*#__PURE__*/React.createElement("canvas", {
+    ref: canvasRef,
+    style: {
+      display: ready ? "block" : "none",
+      maxWidth: "100%",
+      maxHeight: height,
+      objectFit: "contain",
+      borderRadius: 6
+    }
+  }), !ready && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "28",
+    height: "28",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.urgent,
+    strokeWidth: "1.5",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M14 2v6h6"
+  })), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.urgent,
+      fontWeight: 600
+    }
+  }, fmtBytes(attBytes(src)))));
+}
+
 // Full-screen document viewer. Scrolls, and pinch-to-zoom works because the image is a
 // plain <img> at natural width inside a scroll container — no transform hijacking.
 function DocViewer({
@@ -20929,69 +21025,27 @@ function DocThumb({
   if (!src) return null;
   const pdf = attIsPdf(src);
   if (pdf) {
+    // v479: render page 1 as a visual thumbnail, same layout as image thumbs
     return /*#__PURE__*/React.createElement("button", {
       onClick: onOpen,
-      className: "sans",
+      "aria-label": "Open PDF",
       style: {
+        position: "relative",
         width: "100%",
-        display: "flex",
-        alignItems: "center",
-        gap: 11,
-        padding: "12px 13px",
+        height,
+        padding: 0,
+        marginBottom: 8,
         borderRadius: 12,
         border: `1px solid ${C.rule}`,
         background: C.pageWarm,
         cursor: "pointer",
-        textAlign: "left",
-        marginBottom: 8
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        flexShrink: 0,
-        width: 34,
-        height: 34,
-        borderRadius: 9,
-        background: softTint(C.urgent),
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }
-    }, /*#__PURE__*/React.createElement("svg", {
-      width: "17",
-      height: "17",
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: C.urgent,
-      strokeWidth: "1.8",
-      strokeLinecap: "round",
-      strokeLinejoin: "round"
-    }, /*#__PURE__*/React.createElement("path", {
-      d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-    }), /*#__PURE__*/React.createElement("path", {
-      d: "M14 2v6h6"
-    }))), /*#__PURE__*/React.createElement("span", {
-      style: {
-        flex: 1,
-        minWidth: 0
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        display: "block",
-        fontSize: 13,
-        fontWeight: 600,
-        color: C.ink,
         overflow: "hidden",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap"
+        display: "block"
       }
-    }, title || "PDF document"), /*#__PURE__*/React.createElement("span", {
-      style: {
-        display: "block",
-        fontSize: 11,
-        color: C.inkMute,
-        marginTop: 1
-      }
-    }, "PDF · ", fmtBytes(attBytes(src)), " · tap to open")));
+    }, /*#__PURE__*/React.createElement(PdfThumb, {
+      src: src,
+      height: height
+    }));
   }
   return /*#__PURE__*/React.createElement("button", {
     onClick: onOpen,
@@ -63293,7 +63347,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v478"))))), diagOpen && (() => {
+  }, "v479"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
