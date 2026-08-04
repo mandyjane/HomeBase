@@ -2830,7 +2830,7 @@ function recountAllPoints(tasks, bonusLog, rewardReset, cutoffISO) {
     });
   };
   (tasks || []).forEach(t => {
-    if (!t || t.rewardTask) return;
+    if (!t || t.rewardTask || isBill(t)) return;
     const pts = t.points || 0;
     const recurring = t.recur && t.recur !== "none";
     if (recurring) {
@@ -44455,7 +44455,6 @@ function DataRepairSheet({
     }
   }, `${people.her?.name || "Her"}: ${diff.her > 0 ? "+" : ""}${diff.her}  ·  ${people.him?.name || "Him"}: ${diff.him > 0 ? "+" : ""}${diff.him}`)), React.createElement("button", {
     className: "sans",
-    disabled: recounted && !hasDiff,
     onClick: () => {
       onRecountPoints(recount, recountResult.periods);
       setRecounted(true);
@@ -44466,11 +44465,11 @@ function DataRepairSheet({
       borderRadius: 11,
       border: "none",
       marginTop: 12,
-      background: hasDiff && !recounted ? `linear-gradient(150deg,${C.heroTop},${C.heroBot})` : C.rule,
-      color: hasDiff && !recounted ? C.onAccent : C.inkFaint,
+      background: recounted ? C.rule : `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
+      color: recounted ? C.inkFaint : C.onAccent,
       fontSize: 13,
       fontWeight: 700,
-      cursor: hasDiff && !recounted ? "pointer" : "default"
+      cursor: recounted ? "default" : "pointer"
     }
   }, recounted ? "Points recounted" : "Recount Points from Task History"), React.createElement("div", {
     className: "sans",
@@ -64421,7 +64420,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v489"))))), diagOpen && (() => {
+  }, "v490"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
