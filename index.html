@@ -14121,20 +14121,7 @@ function App({
         cursor: "pointer",
         overflow: "hidden"
       }
-    }, treatsWaiting(goalLog, key, rewards, points, fp) > 0 && /*#__PURE__*/React.createElement("span", {
-      "aria-label": "a treat is waiting to be claimed",
-      style: {
-        position: "absolute",
-        top: 26,
-        right: 9,
-        color: C.rewardGold,
-        display: "flex",
-        filter: `drop-shadow(0 0 5px ${rgbaFromHex(C.rewardGold, 0.75)})`,
-        animation: "trophy 2.2s ease-in-out infinite"
-      }
-    }, /*#__PURE__*/React.createElement(Trophy, {
-      size: 17
-    })), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         justifyContent: "space-between",
@@ -14159,7 +14146,23 @@ function App({
         borderRadius: "50%",
         background: col
       }
-    }), label), /*#__PURE__*/React.createElement("span", {
+    }), label), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 5
+      }
+    }, treatsWaiting(goalLog, key, rewards, points, fp) > 0 && /*#__PURE__*/React.createElement("span", {
+      "aria-label": "a treat is waiting to be claimed",
+      style: {
+        color: C.rewardGold,
+        display: "flex",
+        filter: `drop-shadow(0 0 5px ${rgbaFromHex(C.rewardGold, 0.75)})`,
+        animation: "trophy 2.2s ease-in-out infinite"
+      }
+    }, /*#__PURE__*/React.createElement(Trophy, {
+      size: 15
+    })), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
         fontSize: 8,
@@ -14169,7 +14172,7 @@ function App({
         background: softTint(col),
         color: col
       }
-    }, "Lv ", lv.level)), (() => {
+    }, "Lv ", lv.level))), (() => {
       const g = rewards[key] || DEFAULT_REWARDS[key];
       const p = migratePeriod(g.period);
       const bk = periodBucket(p, fp);
@@ -63366,7 +63369,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v482"))))), diagOpen && (() => {
+  }, "v483"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
