@@ -22300,8 +22300,8 @@ function BillExpansion({
       justifyContent: "center",
       borderRadius: BR,
       cursor: "pointer",
-      background: C.ruleSoft,
-      border: `1px solid ${C.rule}`,
+      background: C.page,
+      border: `1.5px solid ${C.rule}`,
       color: C.inkMute,
       padding: 0
     }
@@ -22338,18 +22338,19 @@ function BillExpansion({
     className: "sans",
     style: {
       height: BH,
-      padding: "0 13px",
+      padding: "0 10px",
       borderRadius: BR,
       border: "none",
       background: `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
       color: "#fff",
-      fontSize: 11.5,
+      fontSize: 11,
       fontWeight: 700,
       cursor: "pointer",
       opacity: panel === "update" ? .4 : 1,
       display: "flex",
       alignItems: "center",
-      gap: 5
+      gap: 5,
+      whiteSpace: "nowrap"
     }
   }, "Mark paid")), /*#__PURE__*/React.createElement(NotifSheet, {
     open: showNotif,
@@ -64804,7 +64805,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v509"))))), diagOpen && (() => {
+  }, "v510"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
