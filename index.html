@@ -2845,6 +2845,79 @@ function splitAward_pure(assignee, pts) {
     him: amt - half
   };
 }
+// v488 · Recount period buckets from task history + bonus log.
+// Walks all completed tasks and bonuses whose occurrence/award date falls within
+// each current period boundary, returning corrected {week,fort,month} buckets.
+function recountPeriodPoints(tasks, bonusLog, rewardReset, cutoffISO) {
+  const fp = freshPeriods(null, rewardReset); // get current period keys
+  const cutoffDate = cutoffISO ? cutoffISO.slice(0, 10) : null;
+  const buckets = {
+    week: {
+      ...fp.week,
+      her: 0,
+      him: 0
+    },
+    fort: {
+      ...fp.fort,
+      her: 0,
+      him: 0
+    },
+    month: {
+      ...fp.month,
+      her: 0,
+      him: 0
+    }
+  };
+  // Period date ranges
+  const ranges = {};
+  ["week", "fort", "month"].forEach(k => {
+    const period = k === "week" ? "weekly" : k === "fort" ? "fortnightly" : "monthly";
+    const startDate = fp[k].key; // YYYY-MM-DD
+    const endObj = periodEnd(period, startDate);
+    const endDate = toLocalYMD(endObj);
+    ranges[k] = {
+      start: startDate,
+      end: endDate
+    };
+  });
+  const addToBuckets = (date, award) => {
+    if (cutoffDate && date < cutoffDate) return;
+    ["week", "fort", "month"].forEach(k => {
+      if (date >= ranges[k].start && date <= ranges[k].end) {
+        buckets[k].her += award.her || 0;
+        buckets[k].him += award.him || 0;
+      }
+    });
+  };
+  // Walk tasks
+  (tasks || []).forEach(t => {
+    if (!t) return;
+    if (t.rewardTask) return;
+    const pts = t.points || 0;
+    const recurring = t.recur && t.recur !== "none";
+    if (recurring) {
+      const ex = t.exceptions || {};
+      Object.keys(ex).forEach(date => {
+        const e = ex[date];
+        if (!e || !e.done || e.deleted) return;
+        const aw = e.award || splitAward_pure(t.assignee, pts);
+        addToBuckets(date, aw);
+      });
+    } else if (t.done) {
+      const date = t.dueDate || "";
+      const aw = t.award || splitAward_pure(t.assignee, pts);
+      addToBuckets(date, aw);
+    }
+  });
+  // Walk bonus log
+  (bonusLog || []).forEach(e => {
+    if (!e || !e.ts || e.neg) return;
+    const date = typeof e.ts === "number" ? toLocalYMD(new Date(e.ts)) : e.ts.length >= 10 ? e.ts.slice(0, 10) : "";
+    const aw = e.award || {};
+    if ((aw.her || 0) > 0 || (aw.him || 0) > 0) addToBuckets(date, aw);
+  });
+  return buckets;
+}
 // ── REPAIR: a series CUT IN HALF by "this and all future" *(v113)* ────────────────────
 // Ending a repeat doesn't end the bill — it ends the SERIES. A new record gets created for
 // the remainder, and now two records describe one bill. Mandy's Water: id 46 `recurEnd`
@@ -17657,13 +17730,18 @@ function App({
       points: points,
       people: people,
       onMerge: mergeTaskDuplicate,
-      onRecountPoints: applyRecountedPoints,
+      onRecountPoints: (totals, periodBuckets) => {
+        applyRecountedPoints(totals);
+        if (periodBuckets) setPointsPeriods(periodBuckets);
+      },
       pointsResetAt: effectiveResetAt,
       rawResetAt: pointsResetAt,
       onSetResetDate: iso => {
         setPointsResetAt(iso);
         showToast("Reset boundary updated", "success");
-      }
+      },
+      bonusLog: bonusLog,
+      rewardReset: rewardReset
     }), showMortSettings && /*#__PURE__*/React.createElement(MortgageSettingsSheet, {
       data: mortgageData,
       onSave: saveMortgage,
@@ -19187,8 +19265,7 @@ function EventCard({
     style: {
       fontSize: 10,
       fontWeight: 600,
-      letterSpacing: 0.5,
-      textTransform: "uppercase",
+      letterSpacing: 0.3,
       background: softTint(whoColor),
       color: whoColor,
       padding: "3px 8px",
@@ -25577,8 +25654,9 @@ function AgendaRow({
       whiteSpace: "nowrap"
     }
   }, row.missCount, " missed"), (() => {
-    // "never" hides both; "events" shows only event times; "all" shows both.
-    // Either way the time renders muted grey italic — never the bright accent.
+    // v487 · time moved to the right column — suppressed here to avoid duplication.
+    // Kept for compact rows (which don't render the right column).
+    if (!compact) return null;
     const showThis = showTimes === "all" || showTimes === "events" && row.kind === "event";
     const label = row.kind === "event" ? row.time : row.taskTime;
     return showThis && label ? /*#__PURE__*/React.createElement("span", {
@@ -25831,7 +25909,18 @@ function AgendaRow({
         whiteSpace: "nowrap"
       }
     }, fmtMoney(t.amount)) : null;
-    if (!nameEl && !amtEl) return null;
+    // v487 · time label moves to the right column, BELOW the name badge.
+    const showThisTime = showTimes === "all" || showTimes === "events" && row.kind === "event";
+    const tLabel = row.kind === "event" ? row.time : row.taskTime;
+    const timeEl = showThisTime && tLabel ? /*#__PURE__*/React.createElement("span", {
+      className: timeClass(),
+      style: {
+        ...TIME_STYLE,
+        color: C.inkMute,
+        flexShrink: 0
+      }
+    }, tLabel) : null;
+    if (!nameEl && !amtEl && !timeEl) return null;
     return /*#__PURE__*/React.createElement("div", {
       style: {
         flexShrink: 0,
@@ -25842,7 +25931,7 @@ function AgendaRow({
         marginTop: isRewardRow ? 0 : 1,
         alignSelf: isRewardRow ? "center" : "auto"
       }
-    }, amtEl, nameEl);
+    }, amtEl, nameEl, timeEl);
   })()), open && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: compact ? "0 0 2px" : "0 2px 14px 46px"
@@ -43727,7 +43816,9 @@ function DataRepairSheet({
   onRecountPoints,
   pointsResetAt,
   rawResetAt,
-  onSetResetDate
+  onSetResetDate,
+  bonusLog,
+  rewardReset
 }) {
   const pairs = React.useMemo(() => findDuplicateTasks(tasks), [tasks]);
   const [merged, setMerged] = React.useState({}); // id → true after merge
@@ -44398,7 +44489,8 @@ function DataRepairSheet({
     className: "sans",
     disabled: recounted && !hasDiff,
     onClick: () => {
-      onRecountPoints(recount);
+      const periodBuckets = recountPeriodPoints(tasks, bonusLog, rewardReset, cutoffISO);
+      onRecountPoints(recount, periodBuckets);
       setRecounted(true);
     },
     style: {
@@ -64362,7 +64454,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v486"))))), diagOpen && (() => {
+  }, "v488"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
