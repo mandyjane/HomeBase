@@ -12623,8 +12623,9 @@ function App({
   ["Overdue", "Today", "Upcoming"].forEach(k => groups[k].sort((a, b) => a.dueDate.localeCompare(b.dueDate) || (a.time ? 0 : 1) - (b.time ? 0 : 1) || (a.time || "").localeCompare(b.time || "") || b.priority - a.priority));
 
   // Project event series into occurrences within the next 2 weeks (+ today).
+  // v498 · `allEvents` includes public holidays (when enabled); raw `events` does not.
   const listEvents = [];
-  events.forEach(e => {
+  allEvents.forEach(e => {
     if (!e.recur || e.recur === "none") {
       listEvents.push(e);
       return;
@@ -23263,7 +23264,8 @@ function CombinedList({
   const totalEmpty = buckets.every(b => !b.tasks.length && !b.events.length);
   // "all" keeps its internal key so a saved hb_range preference still resolves —
   // only the LABEL changed to "Upcoming". "done" is the new completed-only range.
-  const RANGES = [["week", "Upcoming"], ["deadlines", "Deadlines"], ["all", "All"], ["done", showEvents && !showTasks ? "Past" : "Done"]];
+  // v498 · Deadlines view only applies to tasks — hide it on the Events page.
+  const RANGES = [["week", "Upcoming"], ...(showTasks ? [["deadlines", "Deadlines"]] : []), ["all", "All"], ["done", showEvents && !showTasks ? "Past" : "Done"]];
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -64477,7 +64479,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v498"))))), diagOpen && (() => {
+  }, "v499"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
