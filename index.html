@@ -52205,6 +52205,7 @@ function TaskModal({
   // opens the grid, scrolls to it, and says what's missing.
   const [catErr, setCatErr] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false); // v279 · card details sheet
+  const [payMethodsOpen, setPayMethodsOpen] = useState(() => !!(task?.cardId || task?.autoPay || isPlan(task))); // v503 · payment methods collapsible
   const catRef = useRef(null);
   // The points MODE is its own state, not derived from the value — see the Points
   // block below. Seeded from the task so opening one worth 47 opens in Custom.
@@ -53229,7 +53230,79 @@ function TaskModal({
     tint: CARD_TINT,
     onSave: t => set("cardTerms", t),
     onClose: () => setTermsOpen(false)
-  }), billForm && form.billCat !== CARD_CAT && (() => {
+  }), billForm && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setPayMethodsOpen(o => !o),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      padding: "13px 14px",
+      background: C.card,
+      border: `1.5px solid ${C.rule}`,
+      borderRadius: payMethodsOpen ? "14px 14px 0 0" : 14,
+      cursor: "pointer",
+      ...(payMethodsOpen ? {
+        borderBottom: "none"
+      } : {})
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: C.inkMute,
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "2",
+    y: "5",
+    width: "20",
+    height: "14",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M2 10h20"
+  })), "Payment methods"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.inkFaint,
+      display: "flex",
+      transition: "transform .2s",
+      transform: payMethodsOpen ? "rotate(180deg)" : "none"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M6 9l6 6 6-6"
+  }))))), billForm && payMethodsOpen && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      border: `1.5px solid ${C.rule}`,
+      borderTop: "none",
+      borderRadius: "0 0 14px 14px",
+      padding: "10px 14px 14px"
+    }
+  }, billForm && form.billCat !== CARD_CAT && (() => {
     const cards = (existingBills || []).filter(b => isCardBill(b) && b.id !== task?.id);
     const picked = cards.find(c => c.id === form.cardId) || null;
     return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(L, null, "Paid by card"), /*#__PURE__*/React.createElement("button", {
@@ -53462,19 +53535,17 @@ function TaskModal({
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
-    strokeWidth: "1.9",
+    strokeWidth: "1.8",
     strokeLinecap: "round",
     strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "2",
-    y: "5",
-    width: "20",
-    height: "14",
-    rx: "2"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M2 10h20"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M6 15h4"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M12 3v12M8 11l4 4 4-4"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "17",
+    width: "18",
+    height: "4",
+    rx: "1"
   }))), /*#__PURE__*/React.createElement("span", {
     style: {
       flex: 1,
@@ -53900,17 +53971,15 @@ function TaskModal({
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
-    strokeWidth: "1.9",
+    strokeWidth: "1.8",
     strokeLinecap: "round",
     strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "2",
-    y: "5",
-    width: "20",
-    height: "14",
-    rx: "2"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M12 2L2 7l10 5 10-5-10-5z"
   }), /*#__PURE__*/React.createElement("path", {
-    d: "M2 10h20"
+    d: "M2 17l10 5 10-5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M2 12l10 5 10-5"
   })), "Payment plan · Afterpay, Zip"), /*#__PURE__*/React.createElement("span", {
     style: {
       width: 20,
@@ -54290,19 +54359,10 @@ function TaskModal({
         color: on ? v === "day" ? C.onAccent : "#fff" : C.inkMute
       }
     }, lbl);
-  }))), billForm ?
+  })))), billForm ?
   /*#__PURE__*/
-  /* v268 · grouped "When" card, matching the event and shift forms. A bill has a
-     single due date (no time), so the card holds just the date. */
-  React.createElement("div", {
-    style: {
-      background: C.card,
-      border: `1.5px solid ${C.rule}`,
-      borderRadius: 14,
-      padding: "14px",
-      overflow: "hidden"
-    }
-  }, /*#__PURE__*/React.createElement(L, null, "Due date"), /*#__PURE__*/React.createElement("input", {
+  /* v503 · Due date is now a plain field (no card box), matching Amount. */
+  React.createElement("div", null, /*#__PURE__*/React.createElement(L, null, "Due date"), /*#__PURE__*/React.createElement("input", {
     type: "date",
     value: form.dueDate,
     onChange: e => set("dueDate", e.target.value),
@@ -64591,7 +64651,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v502"))))), diagOpen && (() => {
+  }, "v503"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
