@@ -48564,7 +48564,33 @@ function StatsTab({
   const topRooms = Object.entries(roomCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const maxRoom = Math.max(...topRooms.map(r => r[1]), 1);
   const drillRows = drill ? selected.filter(t => (t.room || "Other") === drill).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || (a.dueDate || "").localeCompare(b.dueDate || "")) : [];
-  const graph = aggregatePoints(pointsLog || [], range);
+
+  // v508 · Build graph data from collectCompletedTasks (ground truth) instead of
+  // the append-only pointsLog which gets emptied on resets. This guarantees the
+  // graph always reflects actual task completions, matching the level card approach.
+  const graphLog = useMemo(() => {
+    const herActs = collectCompletedTasks(tasks, "her", null, null, null);
+    const himActs = collectCompletedTasks(tasks, "him", null, null, null);
+    const herBonus = collectBonusActivity(bonusLog, "her", null, null, null);
+    const himBonus = collectBonusActivity(bonusLog, "him", null, null, null);
+    const byDate = {};
+    const add = (date, who, pts) => {
+      if (!date || !pts) return;
+      const d = date.slice(0, 10);
+      if (!byDate[d]) byDate[d] = {
+        date: d,
+        her: 0,
+        him: 0
+      };
+      byDate[d][who] += pts;
+    };
+    herActs.forEach(t => add(t.doneAt || t.date, "her", t.points || 0));
+    himActs.forEach(t => add(t.doneAt || t.date, "him", t.points || 0));
+    herBonus.forEach(t => add(t.date, "her", t.points || 0));
+    himBonus.forEach(t => add(t.date, "him", t.points || 0));
+    return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+  }, [tasks, bonusLog]);
+  const graph = aggregatePoints(graphLog, range);
   const maxBar = Math.max(...graph.bars.map(b => b.her + b.him), 1);
   const rangeLabel = {
     daily: "Daily",
@@ -64755,7 +64781,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v507"))))), diagOpen && (() => {
+  }, "v508"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
