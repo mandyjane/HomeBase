@@ -10811,10 +10811,28 @@ function App({
     showToast(`Completed ${ymd === todayStr() ? "today" : shortDate(ymd)}`, "success");
   }
 
+  // v496 · Immediately cancel pending alerts for a task/event in Supabase when its
+  // date or time changes. The useEffect that reschedules alerts runs asynchronously
+  // after state updates, leaving a window where the Supabase cron could fire the OLD
+  // alert before the effect deletes it. This closes the gap by cancelling first.
+  function cancelStaleAlerts(id, prefix) {
+    if (!sbClient || !sbHouseholdId) return;
+    const pfx = prefix || "t";
+    // Alert IDs follow the pattern "t-{taskId}-{alertIndex}" or "e-{eventId}-{alertIndex}"
+    // Delete all unsent rows for this item. The effect will re-insert correct ones.
+    sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false).like("id", `${pfx}-${id}-%`).then(({
+      error
+    }) => {
+      if (error) console.warn("[cancelStaleAlerts]", error.message);
+    });
+  }
+
   // saveTask handles new, and edit-scope for recurring (this/all/forward).
   function saveTask(task, scope, carry) {
     if (task.id && tasks.find(t => t.id === task.id)) {
       const orig = tasks.find(t => t.id === task.id);
+      // v496 · cancel stale alerts immediately if date/time changed
+      if (orig.dueDate !== task.dueDate || orig.time !== task.time) cancelStaleAlerts(orig.id, "t");
       const isRecurring = orig.recur && orig.recur !== "none";
       if (isRecurring && scope && task._occDate) {
         const d = task._occDate;
@@ -11077,6 +11095,7 @@ function App({
   // deleteTask: scope "one" (skip this date) | "series" | undefined(one-off)
   function deleteTask(occ, scope) {
     const seriesId = occ && occ._seriesId || occ && occ.id || occ;
+    cancelStaleAlerts(seriesId, "t"); // v496 · cancel alerts immediately
     if ((scope === "one" || scope === "one-purge") && occ && occ._occDate) {
       const d = occ._occDate;
       // DELETING AN OCCURRENCE MUST NOT LEAVE ITS PAYMENT BEHIND *(v105)*
@@ -11300,6 +11319,8 @@ function App({
   function saveEvent(ev, scope) {
     if (ev.id && events.find(e => e.id === ev.id)) {
       const orig = events.find(e => e.id === ev.id);
+      // v496 · cancel stale alerts immediately if date/time changed
+      if (orig.date !== ev.date || orig.time !== ev.time) cancelStaleAlerts(orig.id, "e");
       // v244 · LOG BEFORE MUTATING. `orig` is the last moment the previous state exists -
       // every branch below either overwrites it or folds it into an exception. recordWork
       // is a no-op for non-work events and for a save that changed nothing.
@@ -11828,6 +11849,7 @@ function App({
   }
   function deleteEvent(occ, scope) {
     const seriesId = occ && occ._seriesId || occ && occ.id || occ;
+    cancelStaleAlerts(seriesId, "e"); // v496 · cancel alerts immediately
     if (scope === "one" && occ && occ._occDate) {
       const d = occ._occDate;
       setEvents(es => es.map(e => e.id === seriesId ? {
@@ -64449,7 +64471,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v495"))))), diagOpen && (() => {
+  }, "v496"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
