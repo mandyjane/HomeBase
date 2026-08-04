@@ -14420,11 +14420,17 @@ function App({
       const g = rewards[key] || DEFAULT_REWARDS[key];
       const p = migratePeriod(g.period);
       const bk = periodBucket(p, fp);
-      const earned = bk ? bk[key] || 0 : 0;
       const target = g.target || 100;
-      const pct = Math.min(earned / target, 1);
       const end = bk ? periodEnd(p, bk.key) : null;
       const dl = end ? Math.max(0, Math.round((end - new Date()) / 864e5)) : 0;
+      /* v491 · compute earned from ground truth (same as PersonSheet) instead of
+         the incremental period bucket which gets out of sync after resets. */
+      const _pStart = bk ? bk.key : null;
+      const _resetF = key === "shared" ? null : effectiveResetAt;
+      const _acts = collectCompletedTasks(visTasks, key, _pStart, null, _resetF);
+      const _bActs = collectBonusActivity(bonusLog, key, _pStart, null, _resetF);
+      const earned = [..._acts, ..._bActs].reduce((s, t) => s + (t.points || 0), 0);
+      const pct = Math.min(earned / target, 1);
       return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
@@ -43808,8 +43814,17 @@ function DataRepairSheet({
   if (!open) return null;
   const activePairs = pairs.filter(p => !merged[p.dead.id]);
   const mergedPairs = pairs.filter(p => merged[p.dead.id]);
-  const recountResult = recountAllPoints(tasks, bonusLog, rewardReset, cutoffISO);
-  const recount = recountResult.cumulative;
+  // v491 · compute recount from collectCompletedTasks (same source as PersonSheet
+  // and level card) — guarantees all numbers match exactly.
+  const _herActs = [...collectCompletedTasks(tasks, "her", null, null, cutoffISO), ...collectBonusActivity(bonusLog, "her", null, null, cutoffISO)];
+  const _himActs = [...collectCompletedTasks(tasks, "him", null, null, cutoffISO), ...collectBonusActivity(bonusLog, "him", null, null, cutoffISO)];
+  const recount = {
+    her: _herActs.reduce((s, t) => s + (t.points || 0), 0),
+    him: _himActs.reduce((s, t) => s + (t.points || 0), 0)
+  };
+  const recountResult = {
+    cumulative: recount
+  };
   const diff = {
     her: points.her - (recount.her || 0),
     him: points.him - (recount.him || 0)
@@ -44456,7 +44471,7 @@ function DataRepairSheet({
   }, `${people.her?.name || "Her"}: ${diff.her > 0 ? "+" : ""}${diff.her}  ·  ${people.him?.name || "Him"}: ${diff.him > 0 ? "+" : ""}${diff.him}`)), React.createElement("button", {
     className: "sans",
     onClick: () => {
-      onRecountPoints(recount, recountResult.periods);
+      onRecountPoints(recount);
       setRecounted(true);
     },
     style: {
@@ -64420,7 +64435,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v490"))))), diagOpen && (() => {
+  }, "v491"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
