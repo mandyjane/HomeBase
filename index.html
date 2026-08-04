@@ -19145,6 +19145,22 @@ function EventCard({
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 20
+  })) : ev.publicHoliday ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 42,
+      flexShrink: 0,
+      background: softTint(C.phColor || "#E5484D"),
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: C.phColor || "#E5484D"
+    }
+  }, ev.phIcon ? /*#__PURE__*/React.createElement(PhIcon, {
+    name: ev.phIcon,
+    size: 20
+  }) : /*#__PURE__*/React.createElement(EventIcon, {
+    name: "flag",
+    size: 20
   })) : /*#__PURE__*/React.createElement("div", {
     style: {
       width: 42,
@@ -25906,7 +25922,7 @@ function AgendaRow({
     size: 11
   }), "Fine window"))), !compact && (() => {
     const showName = row.pName && !(bill && !billPayer);
-    const nameEl = showName ? row.ref && row.ref.assignee ? /*#__PURE__*/React.createElement(AssigneeBadges, {
+    const nameEl = showName ? row.ref && (row.ref.assignee || row.ref.done && row.ref.award) ? /*#__PURE__*/React.createElement(AssigneeBadges, {
       assignee: row.ref.assignee,
       people: people,
       size: "row",
@@ -64651,7 +64667,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v503"))))), diagOpen && (() => {
+  }, "v504"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -67669,8 +67685,9 @@ function EventModal({
       borderRadius: "50%",
       top: 2.5,
       left: form.allDay ? 18.5 : 2.5,
-      background: C.card,
-      transition: "left .15s"
+      background: "#fff",
+      transition: "left .15s",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.18)"
     }
   })))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(L, null, form.multiDay ? "Starts" : "Date"), /*#__PURE__*/React.createElement("input", {
     type: "date",
