@@ -18001,6 +18001,14 @@ function App({
       onSubmitTreat: submitTreatRequest,
       onCancelRequest: cancelTreatRequest,
       onDismissResult: dismissTreatResult,
+      householdProposer: householdProposer,
+      onSetProposer: setHouseholdProposer,
+      onToggleApproval: () => setPinSheet({
+        action: "toggle",
+        title: "Enter PIN",
+        sub: "Required to change approval settings"
+      }),
+      onChangePin: () => setChangePinSheet(true),
       onSave: r => {
         setRewards(r);
         setShowRewards(false);
@@ -59537,7 +59545,11 @@ function RewardsModal({
   treatRequests = [],
   onSubmitTreat,
   onCancelRequest,
-  onDismissResult
+  onDismissResult,
+  householdProposer = "first",
+  onSetProposer,
+  onToggleApproval,
+  onChangePin
 }) {
   const [form, setForm] = useState(() => {
     const g = w => {
@@ -59885,6 +59897,53 @@ function RewardsModal({
       border: `1px solid ${C.rule}`,
       borderRadius: 16,
       padding: 15,
+      marginBottom: 14,
+      ...(!treatApproval ? {
+        opacity: 0.35,
+        pointerEvents: "none"
+      } : {})
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink,
+      marginBottom: 8
+    }
+  }, "Household treat — who proposes first"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      background: C.ruleSoft,
+      borderRadius: 10,
+      padding: 3,
+      gap: 3
+    }
+  }, [["first", "First in"], ["alternate", "Take turns"], ["topScorer", "Top scorer"]].map(([val, lbl]) => {
+    const on = householdProposer === val;
+    return /*#__PURE__*/React.createElement("button", {
+      key: val,
+      onClick: () => onSetProposer(val),
+      className: "sans",
+      style: {
+        flex: 1,
+        padding: "8px 4px",
+        borderRadius: 7,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 11,
+        fontWeight: 700,
+        background: on ? C.low : "transparent",
+        color: on ? C.onAccent : C.inkMute
+      }
+    }, lbl);
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 16,
+      padding: 15,
       marginBottom: 14
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -60132,7 +60191,174 @@ function RewardsModal({
       fontSize: 12,
       fontWeight: 700
     }
-  }, v))))), /*#__PURE__*/React.createElement("button", {
+  }, v))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 16,
+      overflow: "hidden",
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onToggleApproval,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      width: "100%",
+      padding: "14px 15px",
+      background: "transparent",
+      border: "none",
+      cursor: "pointer",
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      background: softTint(C.accent),
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+      color: C.accent
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "11",
+    width: "18",
+    height: "11",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M7 11V7a5 5 0 0 1 10 0v4"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Require treat approval"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, treatApproval ? "Partner must approve treat changes" : "Off — treats can be set freely")), /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 44,
+      height: 26,
+      borderRadius: 13,
+      background: treatApproval ? C.accent : C.rule,
+      position: "relative",
+      flexShrink: 0,
+      transition: "background 0.2s"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: 3,
+      left: treatApproval ? 21 : 3,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      background: "#fff",
+      transition: "left 0.2s",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.18)"
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: C.ruleSoft,
+      margin: "0 15px"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: onChangePin,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      width: "100%",
+      padding: "14px 15px",
+      background: "transparent",
+      border: "none",
+      cursor: "pointer",
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      background: softTint(C.accent),
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+      color: C.accent
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "4",
+    y: "2",
+    width: "16",
+    height: "20",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h8"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Change PIN"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, "Change the 4-digit approval PIN")), /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.inkMute,
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "m9 18 6-6-6-6"
+  })))), /*#__PURE__*/React.createElement("button", {
     onClick: () => onSave(form),
     className: "sans",
     style: {
@@ -62822,139 +63048,7 @@ function SettingsPage({
       fontSize: 11.5,
       color: C.inkMute
     }
-  }, "Period, targets & household goal")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
-    hb: "household treat proposer first turns scorer"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      ...rowBase,
-      flexDirection: "column",
-      alignItems: "stretch",
-      gap: 0,
-      ...(!treatApproval ? {
-        opacity: 0.35,
-        pointerEvents: "none"
-      } : {})
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "block",
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink,
-      marginBottom: 8
-    }
-  }, "Household treat — who proposes first"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      background: C.ruleSoft,
-      borderRadius: 10,
-      padding: 3,
-      gap: 3
-    }
-  }, [["first", "First in"], ["alternate", "Take turns"], ["topScorer", "Top scorer"]].map(([val, lbl]) => {
-    const on = householdProposer === val;
-    return /*#__PURE__*/React.createElement("button", {
-      key: val,
-      onClick: () => onSetProposer(val),
-      className: "sans",
-      style: {
-        flex: 1,
-        padding: "8px 4px",
-        borderRadius: 7,
-        border: "none",
-        cursor: "pointer",
-        fontSize: 11,
-        fontWeight: 700,
-        background: on ? C.low : "transparent",
-        color: on ? C.onAccent : C.inkMute
-      }
-    }, lbl);
-  })))), /*#__PURE__*/React.createElement(SRow, {
-    hb: "treat approval approve deny partner pin lock reward"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onToggleApproval,
-    style: {
-      ...rowBase
-    }
-  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
-    width: "18",
-    height: "18",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "3",
-    y: "11",
-    width: "18",
-    height: "11",
-    rx: "2"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M7 11V7a5 5 0 0 1 10 0v4"
-  }))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "block",
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Require treat approval"), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 11.5,
-      color: C.inkMute
-    }
-  }, treatApproval ? "Partner must approve treat changes" : "Off — treats can be set freely")), /*#__PURE__*/React.createElement(Toggle, {
-    on: treatApproval
-  }))), /*#__PURE__*/React.createElement(SRow, {
-    hb: "change pin code lock password"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: onChangePin,
-    style: {
-      ...rowBase
-    }
-  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
-    width: "18",
-    height: "18",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "4",
-    y: "2",
-    width: "16",
-    height: "20",
-    rx: "2"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01M8 18h8"
-  }))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "block",
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Change PIN"), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 11.5,
-      color: C.inkMute
-    }
-  }, "Change the 4-digit approval PIN")), /*#__PURE__*/React.createElement(Chev, null)))), showPoints && /*#__PURE__*/React.createElement(SRow, {
+  }, "Period, targets & household goal")), /*#__PURE__*/React.createElement(Chev, null)))), showPoints && /*#__PURE__*/React.createElement(SRow, {
     hb: "levels points per level"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onLevels,
@@ -64479,7 +64573,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v499"))))), diagOpen && (() => {
+  }, "v500"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
