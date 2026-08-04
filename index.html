@@ -2697,48 +2697,53 @@ function findDuplicateTasks(tasks) {
   const pairs = [];
   Object.values(byTitle).forEach(group => {
     if (group.length < 2) return;
-    // Sort: ended series first, then by dueDate ascending.
-    const sorted = [...group].sort((a, b) => {
-      if (a.recurEnd && !b.recurEnd) return -1;
-      if (!a.recurEnd && b.recurEnd) return 1;
-      return (a.dueDate || "").localeCompare(b.dueDate || "");
-    });
-    // Pair each ended ("dead") series with the first open-ended ("live") one that overlaps.
-    const live = sorted.filter(t => !t.recurEnd);
-    const dead = sorted.filter(t => !!t.recurEnd);
-    if (!live.length) return; // all ended — nothing to merge into
-    dead.forEach(d => {
-      const l = live.find(l => {
-        // Overlap: live starts at or before dead ends, and same recurrence.
-        return l.recur === d.recur && l.dueDate <= (d.recurEnd || "9999-12-31");
-      });
-      if (!l) return;
-      // Count completions and overlapping dates.
-      const dEx = d.exceptions || {},
-        lEx = l.exceptions || {};
-      const dDone = Object.keys(dEx).filter(k => dEx[k] && dEx[k].done && !dEx[k].deleted).length;
-      const lDone = Object.keys(lEx).filter(k => lEx[k] && lEx[k].done && !lEx[k].deleted).length;
-      // Overlapping dates: dates where BOTH series would generate an occurrence
-      // and both have a completion recorded.
-      const overlapStart = l.dueDate > d.dueDate ? l.dueDate : d.dueDate;
-      const overlapEnd = d.recurEnd || "9999-12-31";
-      let overlap = 0;
-      if (overlapStart <= overlapEnd) {
+    // Sort by dueDate ascending so we pick the earliest as the survivor.
+    const sorted = [...group].sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
+    const used = new Set();
+    // For each pair, designate "dead" (to be removed) and "live" (to keep).
+    // Strategy: prefer keeping the open-ended one, or the earlier-started one.
+    for (let i = 0; i < sorted.length; i++) {
+      if (used.has(sorted[i].id)) continue;
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (used.has(sorted[j].id)) continue;
+        const a = sorted[i],
+          b = sorted[j];
+        if (a.recur !== b.recur) continue; // same cadence only
+        // Determine which is "live" (keep) and which is "dead" (remove).
+        // Prefer open-ended; if both open or both ended, keep the earlier one.
+        let live, dead;
+        if (a.recurEnd && !b.recurEnd) {
+          dead = a;
+          live = b;
+        } else if (!a.recurEnd && b.recurEnd) {
+          live = a;
+          dead = b;
+        } else {
+          live = a;
+          dead = b;
+        } // both open or both ended — keep earlier
+        // Count completions.
+        const dEx = dead.exceptions || {},
+          lEx = live.exceptions || {};
+        const dDone = Object.keys(dEx).filter(k => dEx[k] && dEx[k].done && !dEx[k].deleted).length;
+        const lDone = Object.keys(lEx).filter(k => lEx[k] && lEx[k].done && !lEx[k].deleted).length;
+        // Overlapping completions: dates where BOTH have a completion.
+        let overlap = 0;
         Object.keys(dEx).forEach(k => {
-          if (k >= overlapStart && k <= overlapEnd && dEx[k] && dEx[k].done && !dEx[k].deleted) {
-            if (lEx[k] && lEx[k].done && !lEx[k].deleted) overlap++;
-          }
+          if (dEx[k] && dEx[k].done && !dEx[k].deleted && lEx[k] && lEx[k].done && !lEx[k].deleted) overlap++;
         });
+        pairs.push({
+          dead,
+          live,
+          deadDone: dDone,
+          liveDone: lDone,
+          overlap,
+          overlapPts: overlap * (dead.points || 0)
+        });
+        used.add(dead.id);
+        break; // each task paired at most once
       }
-      pairs.push({
-        dead: d,
-        live: l,
-        deadDone: dDone,
-        liveDone: lDone,
-        overlap,
-        overlapPts: overlap * (d.points || 0)
-      });
-    });
+    }
   });
   return pairs;
 }
@@ -43951,14 +43956,14 @@ function DataRepairSheet({
         letterSpacing: 0.5,
         color: C.inkMute
       }
-    }, "Ended"), React.createElement("span", {
+    }, p.dead.recurEnd ? "Ended" : "Since"), React.createElement("span", {
       className: "sans",
       style: {
         fontSize: 12.5,
         fontWeight: 500,
         color: C.inkSoft
       }
-    }, fmtDate(p.dead.recurEnd))), React.createElement("div", {
+    }, fmtDate(p.dead.recurEnd || p.dead.dueDate))), React.createElement("div", {
       style: {
         display: "flex",
         justifyContent: "space-between"
