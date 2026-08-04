@@ -17658,7 +17658,12 @@ function App({
       people: people,
       onMerge: mergeTaskDuplicate,
       onRecountPoints: applyRecountedPoints,
-      pointsResetAt: effectiveResetAt
+      pointsResetAt: effectiveResetAt,
+      rawResetAt: pointsResetAt,
+      onSetResetDate: iso => {
+        setPointsResetAt(iso);
+        showToast("Reset boundary updated", "success");
+      }
     }), showMortSettings && /*#__PURE__*/React.createElement(MortgageSettingsSheet, {
       data: mortgageData,
       onSave: saveMortgage,
@@ -25070,7 +25075,9 @@ function AgendaRow({
   // tile; the right-hand name column also needs it (reward rows centre the name badge
   // vertically, everything else keeps its top alignment). One binding, both readers.
   const isRewardRow = row.kind === "event" && row.ref && row.ref.category === "Reward";
-  const shared = isTask && t.assignee === "both";
+  // v485 · unassigned tasks also need the who-completed prompt — needsPayer covers
+  // both "both" and falsy/unassigned, matching the bill behaviour.
+  const shared = isTask && needsPayer(t.assignee);
   const bill = isTask && isBill(t);
   // A shared bill needs BOTH prompts. Amount first (it's the concrete fact), then
   // who pays. paidRef carries the amount across the second prompt.
@@ -26388,7 +26395,7 @@ function TaskCard({
   // Deadline chip label: overdue after the end date, else "By <date>" or a range.
   const deadlineLabel = isDeadline ? deadlineCountdown(task.dueDate, task.done && task.doneAt ? toLocalYMD(new Date(task.doneAt)) : today) : null;
   const recurring = task._isOccurrence;
-  const shared = task.assignee === "both";
+  const shared = needsPayer(task.assignee); // v485 · include unassigned
   function runComplete(pointsTo) {
     setPointsAsk(false);
     setAmountAsk(false);
@@ -43718,11 +43725,17 @@ function DataRepairSheet({
   people,
   onMerge,
   onRecountPoints,
-  pointsResetAt
+  pointsResetAt,
+  rawResetAt,
+  onSetResetDate
 }) {
   const pairs = React.useMemo(() => findDuplicateTasks(tasks), [tasks]);
   const [merged, setMerged] = React.useState({}); // id → true after merge
   const [recounted, setRecounted] = React.useState(false);
+  const initDate = pointsResetAt ? pointsResetAt.slice(0, 10) : "";
+  const [resetDate, setResetDate] = React.useState(initDate);
+  // Use the manually-set date for recount, converting to ISO start-of-day
+  const cutoffISO = resetDate ? resetDate + "T00:00:00.000Z" : null;
   const fmtDate = d => {
     if (!d) return "—";
     const [y, m, dd] = d.split("-");
@@ -43737,7 +43750,7 @@ function DataRepairSheet({
   if (!open) return null;
   const activePairs = pairs.filter(p => !merged[p.dead.id]);
   const mergedPairs = pairs.filter(p => merged[p.dead.id]);
-  const recount = recountPointsFromTasks(tasks, pointsResetAt);
+  const recount = recountPointsFromTasks(tasks, cutoffISO);
   const diff = {
     her: points.her - (recount.her || 0),
     him: points.him - (recount.him || 0)
@@ -44210,6 +44223,87 @@ function DataRepairSheet({
       color: C.accent
     }
   }, `${p.dead.title} — merged`)))),
+  // ── Reset boundary section
+  React.createElement("div", {
+    style: {
+      borderTop: `1px solid ${C.rule}`,
+      margin: "18px 0 12px",
+      paddingTop: 12
+    }
+  }), React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      color: C.inkMute,
+      marginBottom: 10
+    }
+  }, "RESET BOUNDARY"), React.createElement("div", {
+    style: {
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 14,
+      padding: "14px 16px"
+    }
+  }, React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      color: C.inkMute,
+      marginBottom: 10,
+      lineHeight: 1.4
+    }
+  }, "Only completions on or after this date count toward points and activity. Set this to the date you started using the app for real."), React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10
+    }
+  }, React.createElement("input", {
+    type: "date",
+    value: resetDate,
+    onChange: e => setResetDate(e.target.value),
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: "10px 12px",
+      borderRadius: 10,
+      border: `1.5px solid ${C.rule}`,
+      background: C.pageWarm,
+      color: C.ink,
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }), React.createElement("button", {
+    className: "sans",
+    onClick: () => {
+      if (!resetDate) {
+        return;
+      }
+      onSetResetDate(resetDate + "T00:00:00.000Z");
+      setRecounted(false); // allow re-recount with new date
+    },
+    style: {
+      padding: "10px 16px",
+      borderRadius: 10,
+      border: "none",
+      background: `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
+      color: C.onAccent,
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer",
+      whiteSpace: "nowrap"
+    }
+  }, "Set")), rawResetAt && React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10.5,
+      color: C.inkFaint,
+      marginTop: 8
+    }
+  }, `Currently stored: ${rawResetAt.slice(0, 10)}`)),
   // ── Points section
   React.createElement("div", {
     style: {
@@ -64268,7 +64362,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v485"))))), diagOpen && (() => {
+  }, "v486"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
