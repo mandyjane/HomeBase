@@ -20597,10 +20597,28 @@ let _pdfjsLoading = null;
 function loadPdfJs() {
   if (_pdfjsLib) return Promise.resolve(_pdfjsLib);
   if (_pdfjsLoading) return _pdfjsLoading;
-  _pdfjsLoading = import(PDFJS_CDN).then(mod => {
-    _pdfjsLib = mod;
-    _pdfjsLib.GlobalWorkerOptions.workerSrc = "";
-    return _pdfjsLib;
+  _pdfjsLoading = new Promise((resolve, reject) => {
+    // Use a <script type="module"> shim: define a global, then resolve.
+    // This avoids dynamic import() which is blocked on file:// origins.
+    const tag = document.createElement("script");
+    tag.type = "module";
+    tag.textContent = `import * as pdfjsLib from "${PDFJS_CDN}"; window.__pdfjsLib=pdfjsLib; window.dispatchEvent(new Event("pdfjsReady"));`;
+    const onReady = () => {
+      window.removeEventListener("pdfjsReady", onReady);
+      _pdfjsLib = window.__pdfjsLib;
+      if (_pdfjsLib) {
+        _pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+        resolve(_pdfjsLib);
+      } else {
+        reject(new Error("pdf.js failed to load"));
+      }
+    };
+    window.addEventListener("pdfjsReady", onReady);
+    tag.onerror = () => {
+      window.removeEventListener("pdfjsReady", onReady);
+      reject(new Error("script load failed"));
+    };
+    document.head.appendChild(tag);
   });
   return _pdfjsLoading;
 }
