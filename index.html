@@ -43731,10 +43731,85 @@ function DataRepairSheet({
     him: points.him - (recount.him || 0)
   };
   const hasDiff = Math.abs(diff.her) > 0 || Math.abs(diff.him) > 0;
-  return React.createElement(Sheet, {
-    open,
-    onClose,
-    title: "Data Repair"
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.target === e.currentTarget && onClose(),
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(36,31,24,0.5)",
+      backdropFilter: "blur(3px)",
+      zIndex: Z_EDITOR,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "hb-sa",
+    style: {
+      background: C.page,
+      borderRadius: "26px 26px 0 0",
+      width: "100%",
+      maxWidth: 480,
+      maxHeight: "94vh",
+      overflowY: "auto",
+      animation: "sheet 0.3s cubic-bezier(0.22,1,0.36,1)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "18px 20px 10px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 40,
+      height: 4,
+      background: C.mood === "sleek" ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.12)",
+      borderRadius: 20,
+      margin: "0 auto 14px"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "20",
+    height: "20",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.accent,
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M14.5 2.5L17.5 5.5L7 16L3 17L4 13L14.5 2.5Z"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 5L15 8"
+  })), /*#__PURE__*/React.createElement("h2", {
+    className: "serif",
+    style: {
+      fontSize: 22,
+      fontStyle: "italic",
+      color: C.ink,
+      flex: 1
+    }
+  }, "Data Repair"), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    "aria-label": "Done",
+    className: "serif",
+    style: {
+      background: "none",
+      border: "none",
+      color: C.accent,
+      fontSize: 16,
+      fontStyle: "italic",
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Done"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "4px 18px 32px"
+    }
   }, React.createElement("div", {
     style: {
       padding: "0 2px"
@@ -44244,7 +44319,7 @@ function DataRepairSheet({
       color: C.accent,
       background: C.accentSoft
     }
-  }, "Recalculates both totals from every completed task — safe to run anytime"))));
+  }, "Recalculates both totals from every completed task — safe to run anytime"))))));
 }
 // ─── BILL SETTINGS SHEET (v306) ──────────────────────────────────────────────
 // All bill-display settings in one bottom sheet, reachable via the cog button on the
