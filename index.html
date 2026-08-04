@@ -24609,10 +24609,14 @@ function AmountAsk({
       marginBottom: 3
     }
   }, /*#__PURE__*/React.createElement("span", {
-    className: "serif",
+    className: lsGet("hb_cardTitleFont", "serif") === "sans" ? "sans" : "serif",
     style: {
       fontSize: 17,
-      fontStyle: "italic",
+      ...(lsGet("hb_cardTitleFont", "serif") === "sans" ? {
+        fontWeight: 700
+      } : {
+        fontStyle: "italic"
+      }),
       color: C.ink
     }
   }, billTitle), billCatLabel && /*#__PURE__*/React.createElement("span", {
@@ -64751,7 +64755,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v506"))))), diagOpen && (() => {
+  }, "v507"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
