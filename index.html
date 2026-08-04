@@ -1172,8 +1172,8 @@ function lastWeekday(year, month, weekday) {
   return d;
 }
 function ymd(d) {
-  return d.toISOString().slice(0, 10);
-}
+  return toLocalYMD(d);
+} // v504 · was toISOString which shifts to UTC — wrong in AEST
 
 // Ekka (Brisbane) + Royal Ipswich Show — not formula-derivable, hardcoded per year
 const EKKA_DATES = {
@@ -1185,7 +1185,7 @@ const EKKA_DATES = {
 const IPSWICH_SHOW_DATES = {
   2025: "2025-05-23",
   2026: "2026-05-22",
-  2027: "2027-05-28",
+  2027: "2027-05-14",
   2028: "2028-05-26"
 };
 function generatePublicHolidays(year) {
@@ -1197,7 +1197,7 @@ function generatePublicHolidays(year) {
   const easterMon = new Date(easter);
   easterMon.setDate(easter.getDate() + 1);
   const labourDay = nthWeekday(year, 4, 1, 1); // first Monday in May (month 4 = May)
-  const kingsBday = lastWeekday(year, 9, 1); // last Monday in October (month 9 = Oct)
+  const kingsBday = nthWeekday(year, 9, 1, 1); // v504 · FIRST Monday in October (QLD)
 
   const holidays = [{
     title: "New Year's Day",
@@ -19179,23 +19179,26 @@ function EventCard({
     }
   }, /*#__PURE__*/React.createElement(Trophy, {
     size: 20
-  })) : ev.publicHoliday ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 42,
-      flexShrink: 0,
-      background: softTint(C.phColor || "#E5484D"),
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      color: C.phColor || "#E5484D"
-    }
-  }, ev.phIcon ? /*#__PURE__*/React.createElement(PhIcon, {
-    name: ev.phIcon,
-    size: 20
-  }) : /*#__PURE__*/React.createElement(EventIcon, {
-    name: "flag",
-    size: 20
-  })) : /*#__PURE__*/React.createElement("div", {
+  })) : ev.publicHoliday ? (() => {
+    const _phc = lsGet("hb_phColor", "#E5484D");
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 42,
+        flexShrink: 0,
+        background: softTint(_phc),
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: _phc === "$ffffff" || _phc === "#ffffff" ? "#bbb" : _phc
+      }
+    }, ev.phIcon ? /*#__PURE__*/React.createElement(PhIcon, {
+      name: ev.phIcon,
+      size: 20
+    }) : /*#__PURE__*/React.createElement(EventIcon, {
+      name: "flag",
+      size: 20
+    }));
+  })() : /*#__PURE__*/React.createElement("div", {
     style: {
       width: 42,
       flexShrink: 0,
@@ -64701,7 +64704,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v504"))))), diagOpen && (() => {
+  }, "v505"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
