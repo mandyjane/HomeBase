@@ -13672,10 +13672,10 @@ function App({
         @keyframes bonusShine{0%{transform:translateX(-250%) rotate(25deg)}100%{transform:translateX(250%) rotate(25deg)}}
         .bonus-shine{position:relative;overflow:hidden}
         .bonus-shine::after{content:"";position:absolute;top:-4px;bottom:-4px;width:12px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent);transform:rotate(25deg);animation:bonusShine 2.5s ease-in-out infinite}
-        .hb-hue-slider::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid rgba(0,0,0,0.18);box-shadow:0 1px 4px rgba(0,0,0,0.3);cursor:pointer;margin-top:-11px}
+        .hb-hue-slider::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid rgba(0,0,0,0.18);box-shadow:0 1px 4px rgba(0,0,0,0.3);cursor:pointer;margin-top:0}
         .hb-hue-slider::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#fff;border:2px solid rgba(0,0,0,0.18);box-shadow:0 1px 4px rgba(0,0,0,0.3);cursor:pointer}
-        .hb-hue-slider::-webkit-slider-runnable-track{height:4px;background:transparent;border:none}
-        .hb-hue-slider::-moz-range-track{height:4px;background:transparent;border:none}
+        .hb-hue-slider::-webkit-slider-runnable-track{height:100%;background:none;border:none;border-radius:14px}
+        .hb-hue-slider::-moz-range-track{height:100%;background:none;border:none;border-radius:14px}
         .tickdraw{stroke-dasharray:16;stroke-dashoffset:16;animation:drawtick .4s .05s ease forwards}
         .cbdone{animation:cbpop .4s ease}
         .cbring{position:absolute;inset:-4px;border-radius:50%;border:2px solid currentColor;opacity:0;pointer-events:none;animation:cbburst .5s ease forwards}
@@ -64870,7 +64870,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v514"))))), diagOpen && (() => {
+  }, "v515"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -65443,6 +65443,7 @@ function SettingsPage({
       position: "relative",
       height: 28,
       borderRadius: 14,
+      overflow: "hidden",
       background: "linear-gradient(to right, hsl(0,75%,55%), hsl(60,75%,55%), hsl(120,75%,55%), hsl(180,75%,55%), hsl(240,75%,55%), hsl(300,75%,55%), hsl(360,75%,55%))"
     }
   }, /*#__PURE__*/React.createElement("input", {
