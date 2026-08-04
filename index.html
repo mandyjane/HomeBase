@@ -3977,9 +3977,15 @@ function AssigneeBadges({
     }
   }, label);
   // Completed shared task awarded to ONE person -> show only that person.
-  const solo = assignee === "both" ? awardedSolo(task) : null;
+  // v501 · Same logic for UNASSIGNED tasks — once completed with a "who did it?"
+  // pick, show that person instead of the stale "Unassigned" badge.
+  const solo = assignee === "both" || !assignee ? awardedSolo(task) : null;
   if (solo === "her") return chip(people.her.name, personColor(people.her.color), "her");
   if (solo === "him") return chip(people.him.name, personColor(people.him.color), "him");
+  // An unassigned task completed as "Both" → show both names
+  if (!assignee && task?.done && task?.award && task.award.her > 0 && task.award.him > 0) {
+    return /*#__PURE__*/React.createElement(React.Fragment, null, chip(people.her.name, personColor(people.her.color), "her"), chip(people.him.name, personColor(people.him.color), "him"));
+  }
   if (assignee === "both" && SHARED.named) {
     return /*#__PURE__*/React.createElement(React.Fragment, null, chip(people.her.name, personColor(people.her.color), "her"), chip(people.him.name, personColor(people.him.color), "him"));
   }
@@ -16807,7 +16813,8 @@ function App({
       },
       onSaveQuick: saveQuickAdd,
       isQuickSaved: isQuickSaved,
-      onClearCompleted: clearCompleted
+      onClearCompleted: clearCompleted,
+      onChangeCompletedBy: changeCompletedBy
     })), tab === "work" && /*#__PURE__*/React.createElement(WorkTab, {
       q: tabQ,
       events: events,
@@ -23175,7 +23182,8 @@ function CombinedList({
   onSaveQuick,
   isQuickSaved,
   onClearCompleted,
-  billPayer = true
+  billPayer = true,
+  onChangeCompletedBy
 }) {
   const showTasks = listType !== "events";
   const showEvents = listType !== "tasks";
@@ -23459,7 +23467,7 @@ function CombinedList({
         onSaveQuick: onSaveQuick,
         isQuickSaved: isQuickSaved,
         onSetDoneAt: setDoneAt,
-        onChangeCompletedBy: task.done && !isBill(task) ? newPT => changeCompletedBy(task, newPT) : null
+        onChangeCompletedBy: task.done && !isBill(task) && onChangeCompletedBy ? newPT => onChangeCompletedBy(task, newPT) : null
       })));
     }
     const count = b.tasks.length + b.events.length;
@@ -23544,7 +23552,7 @@ function CombinedList({
       onSaveQuick: onSaveQuick,
       isQuickSaved: isQuickSaved,
       onSetDoneAt: setDoneAt,
-      onChangeCompletedBy: task.done && !isBill(task) ? newPT => changeCompletedBy(task, newPT) : null
+      onChangeCompletedBy: task.done && !isBill(task) && onChangeCompletedBy ? newPT => onChangeCompletedBy(task, newPT) : null
     })));
   }), confirmClear && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setConfirmClear(false),
@@ -64573,7 +64581,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v500"))))), diagOpen && (() => {
+  }, "v501"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
