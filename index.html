@@ -7725,13 +7725,15 @@ function App({
       t.alerts.forEach((a, i) => {
         const ft = calcFireMs(t.dueDate, t.time, a);
         if (!ft || ft <= now || ft > serverHorizon) return;
+        const exUid = t.assignee && t.assignee !== "both" ? lsGet("hb_userId_" + (t.assignee === "her" ? "him" : "her"), "") : null;
         rows.push({
           id: "t-" + t.id + "-" + i,
           fire_at: new Date(ft).toISOString(),
           title: t.title,
           body: taskCatLabel(t) + " — due " + shortDate(t.dueDate),
           household_id: sbHouseholdId,
-          sent: false
+          sent: false,
+          exclude_user_id: exUid || null
         });
         if (ft <= localHorizon) {
           localCount++;
@@ -7746,13 +7748,15 @@ function App({
       e.alerts.forEach((a, i) => {
         const ft = calcFireMs(e.date, e.time, a);
         if (!ft || ft <= now || ft > serverHorizon) return;
+        const exUidE = e.assignee && e.assignee !== "both" ? lsGet("hb_userId_" + (e.assignee === "her" ? "him" : "her"), "") : null;
         rows.push({
           id: "e-" + e.id + "-" + i,
           fire_at: new Date(ft).toISOString(),
           title: e.title,
           body: (e.category || "Event") + " — " + shortDate(e.date),
           household_id: sbHouseholdId,
-          sent: false
+          sent: false,
+          exclude_user_id: exUidE || null
         });
         if (ft <= localHorizon) {
           localCount++;
@@ -8388,7 +8392,11 @@ function App({
       lsSet(roleKey, currentUser);
       setStoredRole(currentUser);
     }
-  }, [currentUser, roleKey, storedRole]);
+    // v482: store role→userId mapping so alert scheduling knows both user IDs
+    if (currentUser && _sbUserId) {
+      lsSet("hb_userId_" + currentUser, _sbUserId);
+    }
+  }, [currentUser, roleKey, storedRole, _sbUserId]);
   // Show "Who are you?" picker when logged in but identity unknown
   const needsRolePick = !!_sbUserId && !currentUser;
   // v445 · PRIVATE — hidden from the other person, no points.
@@ -63358,7 +63366,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v481"))))), diagOpen && (() => {
+  }, "v482"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
