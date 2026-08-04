@@ -7684,7 +7684,7 @@ function App({
         // renders e.title directly and a blank one would draw an unnamed row. A name she
         // typed herself is not a type label, so it is kept untouched.
         const t = (rest.title || "").trim();
-        const isLabel = Object.values(WORKEX_META).some(m => m.label === t) || Object.values(DAYOFF_META).some(m => m.label === t);
+        const isLabel = Object.values(WORKEX_META).some(m => m.label === t) || Object.values(DAYOFF_META).some(m => m.label === t) || t === "Day off"; // v498 · older events stored the short form
         if (!isLabel) return rest;
         let def = SHIFT_TITLE;
         try {
@@ -17569,7 +17569,7 @@ function App({
           // simply being blocked by the inherited title. Mandy can still edit the field.
           // A title that is NOT a known type label is a name she typed, so it is kept.
           const carried = (src.title || "").trim();
-          const isTypeLabel = Object.values(WORKEX_META).some(m => m.label === carried) || Object.values(DAYOFF_META).some(m => m.label === carried);
+          const isTypeLabel = Object.values(WORKEX_META).some(m => m.label === carried) || Object.values(DAYOFF_META).some(m => m.label === carried) || carried === "Day off"; // v498 · older events stored the short form
           setEditShift({
             ...carry,
             title: isTypeLabel ? "" : carried,
@@ -64477,7 +64477,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v497"))))), diagOpen && (() => {
+  }, "v498"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -66334,11 +66334,15 @@ function ShiftModal({
     // record claimed to be both things at once (real case: id 399, 28 Jul).
     // `workEx` is destructured out ABOVE and deliberately not re-added: absence is the
     // value, per the project rule - never set it to "" or null.
+    // v498 · EXCEPT: saveEvent merges `{...e, ...clean}`, and omitting `workEx` lets
+    // the old e.workEx survive. Explicitly setting `undefined` ensures the spread
+    // overwrites the stale flag. Same for `worked`/`workedHours` which belong to RDOs.
     return {
       ...rest,
       category: SHIFT_CAT,
       dayOff: sick ? "sick" : null,
       dayOffHours: sick ? parseFloat(sickHours) || shiftHours(form.time, form.end) : 0,
+      workEx: undefined,
       ...(wfh ? {
         wfh: true
       } : {})
