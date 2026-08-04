@@ -2679,6 +2679,162 @@ function occAmount(series, dateStr) {
   }
   return parseAmt(series.amount);
 }
+// ── v484 · REPAIR: OVERLAPPING RECURRING TASK DUPLICATES ──────────────────────────────
+// A non-schedule edit (e.g. assignee change) via "This and all future" could trigger a
+// false split when the form's dueDate differed from the series start — see the v484 fix
+// in saveTask. The damage is two records with the same title and overlapping date ranges,
+// each generating occurrences for the same dates. Points were double-awarded when both
+// copies were ticked. This detector finds such pairs across ALL recurring tasks (not just
+// bills), and the merge absorbs the dead series' completions into the live one.
+function findDuplicateTasks(tasks) {
+  const recurring = tasks.filter(t => t && t.recur && t.recur !== "none" && !t.done);
+  const byTitle = {};
+  recurring.forEach(t => {
+    const key = (t.title || "").trim().toLowerCase();
+    if (!key) return;
+    (byTitle[key] = byTitle[key] || []).push(t);
+  });
+  const pairs = [];
+  Object.values(byTitle).forEach(group => {
+    if (group.length < 2) return;
+    // Sort: ended series first, then by dueDate ascending.
+    const sorted = [...group].sort((a, b) => {
+      if (a.recurEnd && !b.recurEnd) return -1;
+      if (!a.recurEnd && b.recurEnd) return 1;
+      return (a.dueDate || "").localeCompare(b.dueDate || "");
+    });
+    // Pair each ended ("dead") series with the first open-ended ("live") one that overlaps.
+    const live = sorted.filter(t => !t.recurEnd);
+    const dead = sorted.filter(t => !!t.recurEnd);
+    if (!live.length) return; // all ended — nothing to merge into
+    dead.forEach(d => {
+      const l = live.find(l => {
+        // Overlap: live starts at or before dead ends, and same recurrence.
+        return l.recur === d.recur && l.dueDate <= (d.recurEnd || "9999-12-31");
+      });
+      if (!l) return;
+      // Count completions and overlapping dates.
+      const dEx = d.exceptions || {},
+        lEx = l.exceptions || {};
+      const dDone = Object.keys(dEx).filter(k => dEx[k] && dEx[k].done && !dEx[k].deleted).length;
+      const lDone = Object.keys(lEx).filter(k => lEx[k] && lEx[k].done && !lEx[k].deleted).length;
+      // Overlapping dates: dates where BOTH series would generate an occurrence
+      // and both have a completion recorded.
+      const overlapStart = l.dueDate > d.dueDate ? l.dueDate : d.dueDate;
+      const overlapEnd = d.recurEnd || "9999-12-31";
+      let overlap = 0;
+      if (overlapStart <= overlapEnd) {
+        Object.keys(dEx).forEach(k => {
+          if (k >= overlapStart && k <= overlapEnd && dEx[k] && dEx[k].done && !dEx[k].deleted) {
+            if (lEx[k] && lEx[k].done && !lEx[k].deleted) overlap++;
+          }
+        });
+      }
+      pairs.push({
+        dead: d,
+        live: l,
+        deadDone: dDone,
+        liveDone: lDone,
+        overlap,
+        overlapPts: overlap * (d.points || 0)
+      });
+    });
+  });
+  return pairs;
+}
+function mergeDuplicateTask(tasks, pair) {
+  const {
+    dead,
+    live
+  } = pair;
+  const dEx = dead.exceptions || {};
+  const lEx = {
+    ...(live.exceptions || {})
+  };
+  let absorbed = 0;
+  // Copy dead's completions to live (don't overwrite existing live completions).
+  Object.keys(dEx).forEach(k => {
+    if (dEx[k] && dEx[k].done && !dEx[k].deleted && !lEx[k]) {
+      lEx[k] = {
+        ...dEx[k]
+      };
+      absorbed++;
+    }
+  });
+  // Extend live's start date back to cover the dead series' range.
+  const newStart = dead.dueDate < live.dueDate ? dead.dueDate : live.dueDate;
+  const merged = {
+    ...live,
+    dueDate: newStart,
+    exceptions: lEx
+  };
+  // Preserve the anchor day from the extended start.
+  if (newStart !== live.dueDate) merged.anchorDay = Number(newStart.slice(8, 10));
+  return {
+    merged,
+    removeId: dead.id,
+    absorbed
+  };
+}
+// Recount cumulative points from every completed task/occurrence's stored award.
+// Period buckets (week/fort/month) are NOT recounted — they roll over naturally.
+function recountPointsFromTasks(tasks) {
+  const totals = {
+    her: 0,
+    him: 0
+  };
+  tasks.forEach(t => {
+    if (!t) return;
+    const pts = t.points || 0;
+    if (pts <= 0 && !t.rewardTask) return; // skip 0-point tasks unless reward
+    if (t.rewardTask) return; // reward tasks never award points
+    const recurring = t.recur && t.recur !== "none";
+    if (recurring) {
+      const ex = t.exceptions || {};
+      Object.keys(ex).forEach(k => {
+        const e = ex[k];
+        if (!e || !e.done || e.deleted) return;
+        const aw = e.award || splitAward_pure(t.assignee, pts);
+        totals.her += aw.her || 0;
+        totals.him += aw.him || 0;
+      });
+    } else if (t.done) {
+      const aw = t.award || splitAward_pure(t.assignee, pts);
+      totals.her += aw.her || 0;
+      totals.him += aw.him || 0;
+    }
+  });
+  return totals;
+}
+// Pure version of splitAward for use outside React (no state access needed).
+function splitAward_pure(assignee, pts) {
+  const amt = pts || 0;
+  if (amt <= 0) return {
+    her: 0,
+    him: 0
+  };
+  if (assignee === "both" || assignee === "split") {
+    const half = Math.floor(amt / 2);
+    return {
+      her: half,
+      him: amt - half
+    };
+  }
+  if (assignee === "her") return {
+    her: amt,
+    him: 0
+  };
+  if (assignee === "him") return {
+    her: 0,
+    him: amt
+  };
+  // Unassigned — split evenly (same as "both").
+  const half = Math.floor(amt / 2);
+  return {
+    her: half,
+    him: amt - half
+  };
+}
 // ── REPAIR: a series CUT IN HALF by "this and all future" *(v113)* ────────────────────
 // Ending a repeat doesn't end the bill — it ends the SERIES. A new record gets created for
 // the remainder, and now two records describe one bill. Mandy's Water: id 46 `recurEnd`
@@ -7843,6 +7999,7 @@ function App({
   const [showWorkSettings, setShowWorkSettings] = useState(false);
   // v306 · Bills settings cog — same pattern as Work. Bottom sheet at App level.
   const [showBillSettings, setShowBillSettings] = useState(false);
+  const [showDataRepair, setShowDataRepair] = useState(false);
   // v307 · Mortgage view data — stored in localStorage, seeded from MORT_DEFAULT.
   const [mortgageData, setMortgageData] = useState(() => lsGet("hb_mortgage", MORT_DEFAULT));
   // v359 · ref for the header + Add button to open the extra payment form inside MortgageView
@@ -9447,6 +9604,21 @@ function App({
     setTasks(next);
     showToast(`Merged ${done} split bill${done > 1 ? "s" : ""} · ${moved} payment${moved > 1 ? "s" : ""} kept`, "success");
   }
+  // v484 · merge a duplicate task pair (from DataRepairSheet)
+  function mergeTaskDuplicate(pair) {
+    const r = mergeDuplicateTask(tasks, pair);
+    if (!r) {
+      showToast("Nothing to merge", "info");
+      return;
+    }
+    setTasks(ts => ts.filter(t => t.id !== r.removeId).map(t => t.id === r.merged.id ? r.merged : t));
+    showToast(`Merged — ${r.absorbed} completion${r.absorbed !== 1 ? "s" : ""} absorbed`, "success");
+  }
+  // v484 · set points to recounted totals
+  function applyRecountedPoints(totals) {
+    setPoints(totals);
+    showToast(`Points recounted: ${people.her?.name || "Her"} ${totals.her}, ${people.him?.name || "Him"} ${totals.him}`, "success");
+  }
   function resetPoints() {
     setPoints({
       her: 0,
@@ -10656,7 +10828,22 @@ function App({
           // series that both list payments forever (Mandy's duplicate Telstra: $80 ended,
           // $84 begun). When nothing schedule-bearing changed, update in place instead —
           // which also KEEPS the payment history on one record rather than orphaning it.
-          if (!scheduleMoved(orig, task, "dueDate")) {
+          //
+          // v484 · COMPARE AGAINST THE OCCURRENCE, NOT THE SERIES START. The form's
+          // dueDate is the OCCURRENCE date (e.g. 2026-07-13), and its anchorDay is derived
+          // from that date — both always differ from the series' original start/anchor.
+          // Comparing orig (series) vs task (form) therefore sees a "moved" schedule on
+          // EVERY occurrence that isn't the first, triggering a split for a pure assignee
+          // or amount change. That is exactly how Feed Leo was duplicated: an assignee
+          // edit on a daily task triggered a false split because day 200's date ≠ day 1's.
+          // Building the baseline from the occurrence's own values makes the comparison
+          // test what the USER changed, not what differs from the series origin.
+          const occBase = {
+            ...orig,
+            dueDate: d,
+            anchorDay: Number(d.slice(8, 10))
+          };
+          if (!scheduleMoved(occBase, task, "dueDate")) {
             const {
               id: _i,
               _seriesId,
@@ -11107,7 +11294,14 @@ function App({
           } = ev;
           const newStart = ev.date;
           // v206 · same rule as saveTask — no schedule change, no split.
-          if (!scheduleMoved(orig, ev, "date")) {
+          // v484 · same occurrence-baseline fix as saveTask — compare the form against the
+          // occurrence's own date/anchor, not the series start, to avoid false splits.
+          const evOccBase = {
+            ...orig,
+            date: d,
+            anchorDay: Number(d.slice(8, 10))
+          };
+          if (!scheduleMoved(evOccBase, ev, "date")) {
             const {
               id: _i,
               _seriesId,
@@ -16895,6 +17089,8 @@ function App({
       onResetPoints: resetPoints,
       onClearRewards: clearRewardHistory,
       onRepairSplits: repairSplits,
+      onOpenDataRepair: () => setShowDataRepair(true),
+      dupTaskCount: findDuplicateTasks(tasks).length,
       notifEnabled: notifEnabled,
       notifPerm: notifPerm,
       toggleNotif: toggleNotif,
@@ -17444,6 +17640,14 @@ function App({
       setBillQuickPay: setBillQuickPay,
       onRepairSplits: repairSplits,
       onClose: () => setShowBillSettings(false)
+    }), showDataRepair && /*#__PURE__*/React.createElement(DataRepairSheet, {
+      open: showDataRepair,
+      onClose: () => setShowDataRepair(false),
+      tasks: tasks,
+      points: points,
+      people: people,
+      onMerge: mergeTaskDuplicate,
+      onRecountPoints: applyRecountedPoints
     }), showMortSettings && /*#__PURE__*/React.createElement(MortgageSettingsSheet, {
       data: mortgageData,
       onSave: saveMortgage,
@@ -43491,6 +43695,557 @@ function MortgageSettingsSheet({
   }, "Save settings"))));
 }
 
+// ─── DATA REPAIR SHEET (v484) ────────────────────────────────────────────────
+// Shows detected duplicate recurring tasks and lets the user merge them. Also
+// offers a "Recount points" button that recalculates cumulative totals from
+// every completed task's stored award, fixing double-counted points from overlaps.
+function DataRepairSheet({
+  open,
+  onClose,
+  tasks,
+  points,
+  people,
+  onMerge,
+  onRecountPoints
+}) {
+  const pairs = React.useMemo(() => findDuplicateTasks(tasks), [tasks]);
+  const [merged, setMerged] = React.useState({}); // id → true after merge
+  const [recounted, setRecounted] = React.useState(false);
+  const fmtDate = d => {
+    if (!d) return "—";
+    const [y, m, dd] = d.split("-");
+    const mn = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][+m - 1];
+    return `${+dd} ${mn} ${y}`;
+  };
+  const fmtAssignee = (a, pp) => {
+    if (!a || a === "none") return "Unassigned";
+    if (a === "both") return "Both";
+    return pp[a]?.name || a;
+  };
+  if (!open) return null;
+  const activePairs = pairs.filter(p => !merged[p.dead.id]);
+  const mergedPairs = pairs.filter(p => merged[p.dead.id]);
+  const recount = recountPointsFromTasks(tasks);
+  const diff = {
+    her: points.her - (recount.her || 0),
+    him: points.him - (recount.him || 0)
+  };
+  const hasDiff = Math.abs(diff.her) > 0 || Math.abs(diff.him) > 0;
+  return React.createElement(Sheet, {
+    open,
+    onClose,
+    title: "Data Repair"
+  }, React.createElement("div", {
+    style: {
+      padding: "0 2px"
+    }
+  },
+  // ── Summary
+  React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      color: C.inkMute,
+      marginBottom: 16,
+      lineHeight: 1.4
+    }
+  }, pairs.length ? `Found ${pairs.length} duplicate recurring task${pairs.length > 1 ? "s" : ""} with overlapping occurrences.` : "No duplicate tasks found."),
+  // ── Active pairs
+  activePairs.map((p, i) => {
+    const deadPts = Object.keys(p.dead.exceptions || {}).filter(k => {
+      const e = (p.dead.exceptions || {})[k];
+      return e && e.done && !e.deleted;
+    }).reduce((s, k) => {
+      const aw = (p.dead.exceptions || {})[k].award;
+      return s + (aw ? (aw.her || 0) + (aw.him || 0) : p.dead.points || 0);
+    }, 0);
+    return React.createElement("div", {
+      key: p.dead.id,
+      style: {
+        background: C.card,
+        border: `1px solid ${C.rule}`,
+        borderRadius: 14,
+        padding: "14px 16px",
+        marginBottom: 12
+      }
+    },
+    // Title
+    React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 10
+      }
+    }, React.createElement("svg", {
+      width: 16,
+      height: 16,
+      viewBox: "0 0 20 20",
+      fill: "none",
+      stroke: C.urgent,
+      strokeWidth: 2,
+      strokeLinecap: "round"
+    }, React.createElement("path", {
+      d: "M10 6v5M10 14h.01"
+    }), React.createElement("circle", {
+      cx: 10,
+      cy: 10,
+      r: 8.5
+    })), React.createElement("span", {
+      className: "serif",
+      style: {
+        fontSize: 15,
+        fontWeight: 700,
+        color: C.ink
+      }
+    }, p.dead.title)),
+    // Dead series block
+    React.createElement("div", {
+      style: {
+        padding: "8px 10px",
+        borderRadius: 9,
+        marginBottom: 6,
+        background: C.mood === "sleek" ? "rgba(94,231,180,0.06)" : "rgba(240,99,46,0.04)"
+      }
+    }, React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 9.5,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        color: C.urgent,
+        marginBottom: 3
+      }
+    }, "DEAD SERIES"), React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 4
+      }
+    }, React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        color: C.inkMute
+      }
+    }, "Assignee"), React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12.5,
+        fontWeight: 500,
+        color: C.inkSoft
+      }
+    }, fmtAssignee(p.dead.assignee, people))), React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 4
+      }
+    }, React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        color: C.inkMute
+      }
+    }, "Recurrence"), React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12.5,
+        fontWeight: 500,
+        color: C.inkSoft
+      }
+    }, p.dead.recur)), React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 4
+      }
+    }, React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        color: C.inkMute
+      }
+    }, "Ended"), React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12.5,
+        fontWeight: 500,
+        color: C.inkSoft
+      }
+    }, fmtDate(p.dead.recurEnd))), React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between"
+      }
+    }, React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        color: C.inkMute
+      }
+    }, "Completions"), React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12.5,
+        fontWeight: 500,
+        color: C.inkSoft
+      }
+    }, p.deadDone))),
+    // Live series block
+    React.createElement("div", {
+      style: {
+        padding: "8px 10px",
+        borderRadius: 9,
+        marginBottom: 6,
+        background: C.mood === "sleek" ? "rgba(94,231,180,0.06)" : "rgba(240,99,46,0.04)"
+      }
+    }, React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 9.5,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        color: C.accent,
+        marginBottom: 3
+      }
+    }, "LIVE SERIES"), React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 4
+      }
+    }, React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        color: C.inkMute
+      }
+    }, "Assignee"), React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12.5,
+        fontWeight: 500,
+        color: C.inkSoft
+      }
+    }, fmtAssignee(p.live.assignee, people))), React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 4
+      }
+    }, React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        color: C.inkMute
+      }
+    }, "Recurrence"), React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12.5,
+        fontWeight: 500,
+        color: C.inkSoft
+      }
+    }, p.live.recur)), React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        marginBottom: 4
+      }
+    }, React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        color: C.inkMute
+      }
+    }, "Since"), React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12.5,
+        fontWeight: 500,
+        color: C.inkSoft
+      }
+    }, fmtDate(p.live.dueDate))), React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between"
+      }
+    }, React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        color: C.inkMute
+      }
+    }, "Completions"), React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12.5,
+        fontWeight: 500,
+        color: C.inkSoft
+      }
+    }, p.liveDone))),
+    // Warning
+    p.overlap > 0 && React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        padding: "5px 10px",
+        borderRadius: 8,
+        marginTop: 10,
+        lineHeight: 1.4,
+        color: C.urgent,
+        background: C.urgentSoft
+      }
+    }, `${p.overlap} overlapping date${p.overlap > 1 ? "s" : ""} — both series had completions ticked separately`),
+    // Info
+    React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 600,
+        padding: "5px 10px",
+        borderRadius: 8,
+        marginTop: 6,
+        lineHeight: 1.4,
+        color: C.accent,
+        background: C.accentSoft
+      }
+    }, "Merge will keep the live series, absorb the dead series\u2019 completions, and remove the duplicate"),
+    // Buttons
+    React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 8,
+        marginTop: 14
+      }
+    }, React.createElement("button", {
+      className: "sans",
+      onClick: () => {
+        setMerged(m => ({
+          ...m,
+          [p.dead.id]: true
+        }));
+      },
+      style: {
+        flex: 1,
+        padding: "11px 0",
+        borderRadius: 11,
+        border: "none",
+        background: C.rule,
+        color: C.inkSoft,
+        fontSize: 13,
+        fontWeight: 700,
+        cursor: "pointer"
+      }
+    }, "Skip"), React.createElement("button", {
+      className: "sans",
+      onClick: () => {
+        onMerge(p);
+        setMerged(m => ({
+          ...m,
+          [p.dead.id]: true
+        }));
+      },
+      style: {
+        flex: 2,
+        padding: "11px 0",
+        borderRadius: 11,
+        border: "none",
+        background: `linear-gradient(150deg,${C.heroTop},${C.heroBot})`,
+        color: C.onAccent,
+        fontSize: 13,
+        fontWeight: 700,
+        cursor: "pointer"
+      }
+    }, "Merge")));
+  }),
+  // ── Merged confirmations
+  mergedPairs.map(p => React.createElement("div", {
+    key: "m_" + p.dead.id,
+    style: {
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderLeft: `3px solid ${C.accent}`,
+      borderRadius: 14,
+      padding: "14px 16px",
+      marginBottom: 12
+    }
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, React.createElement("svg", {
+    width: 16,
+    height: 16,
+    viewBox: "0 0 20 20",
+    fill: "none",
+    stroke: C.accent,
+    strokeWidth: 2.5,
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, React.createElement("path", {
+    d: "M5 10.5L8.5 14L15 6.5"
+  })), React.createElement("span", {
+    className: "serif",
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: C.accent
+    }
+  }, `${p.dead.title} — merged`)))),
+  // ── Points section
+  React.createElement("div", {
+    style: {
+      borderTop: `1px solid ${C.rule}`,
+      margin: "18px 0 12px",
+      paddingTop: 12
+    }
+  }), React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      color: C.inkMute,
+      marginBottom: 10
+    }
+  }, "POINTS"), React.createElement("div", {
+    style: {
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 14,
+      padding: "14px 16px"
+    }
+  }, React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 5
+    }
+  }, React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      color: C.inkMute
+    }
+  }, "Current totals"), React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 12.5,
+      fontWeight: 500,
+      color: C.inkSoft
+    }
+  }, `${people.her?.name || "Her"}: ${points.her}  ·  ${people.him?.name || "Him"}: ${points.him}`)), React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 5
+    }
+  }, React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      color: C.inkMute
+    }
+  }, "Recounted from tasks"), React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 12.5,
+      fontWeight: 500,
+      color: C.inkSoft
+    }
+  }, `${people.her?.name || "Her"}: ${recount.her}  ·  ${people.him?.name || "Him"}: ${recount.him}`)), hasDiff && React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 5
+    }
+  }, React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      color: C.inkMute
+    }
+  }, "Difference"), React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 12.5,
+      fontWeight: 700,
+      color: C.urgent
+    }
+  }, `${people.her?.name || "Her"}: ${diff.her > 0 ? "+" : ""}${diff.her}  ·  ${people.him?.name || "Him"}: ${diff.him > 0 ? "+" : ""}${diff.him}`)), React.createElement("button", {
+    className: "sans",
+    disabled: recounted && !hasDiff,
+    onClick: () => {
+      onRecountPoints(recount);
+      setRecounted(true);
+    },
+    style: {
+      width: "100%",
+      padding: "12px",
+      borderRadius: 11,
+      border: "none",
+      marginTop: 12,
+      background: hasDiff && !recounted ? `linear-gradient(150deg,${C.heroTop},${C.heroBot})` : C.rule,
+      color: hasDiff && !recounted ? C.onAccent : C.inkFaint,
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: hasDiff && !recounted ? "pointer" : "default"
+    }
+  }, recounted ? "Points recounted" : "Recount Points from Task History"), React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      padding: "5px 10px",
+      borderRadius: 8,
+      marginTop: 8,
+      lineHeight: 1.4,
+      color: C.accent,
+      background: C.accentSoft
+    }
+  }, "Recalculates both totals from every completed task — safe to run anytime"))));
+}
 // ─── BILL SETTINGS SHEET (v306) ──────────────────────────────────────────────
 // All bill-display settings in one bottom sheet, reachable via the cog button on the
 // Bills tab header. Mirrors WorkSettingsSheet in structure. The Bills group in
@@ -61135,7 +61890,9 @@ function SettingsPage({
   onPhColor,
   onChangePin,
   householdProposer = "first",
-  onSetProposer
+  onSetProposer,
+  onOpenDataRepair,
+  dupTaskCount = 0
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClearRewards, setConfirmClearRewards] = useState(false);
@@ -63097,7 +63854,58 @@ function SettingsPage({
       fontSize: 11.5,
       color: C.inkMute
     }
-  }, "Removes all past reward events")), /*#__PURE__*/React.createElement(Chev, null)))), /*#__PURE__*/React.createElement(SGroup, {
+  }, "Removes all past reward events")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
+    hb: "data repair duplicate merge fix overlap recount points"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onOpenDataRepair,
+    style: {
+      ...rowBase,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M14.5 2.5L17.5 5.5L7 16L3 17L4 13L14.5 2.5Z"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 5L15 8"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Data Repair"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, "Find & merge duplicate tasks, recount points")), dupTaskCount > 0 && /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      padding: "2px 7px",
+      borderRadius: 8,
+      background: C.urgentSoft,
+      color: C.urgent,
+      flexShrink: 0
+    }
+  }, dupTaskCount, " found"), /*#__PURE__*/React.createElement(Chev, null)))), /*#__PURE__*/React.createElement(SGroup, {
     q: q,
     label: "Testing",
     GroupLabel: GroupLabel
@@ -63369,7 +64177,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v483"))))), diagOpen && (() => {
+  }, "v484"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
