@@ -2782,39 +2782,78 @@ function mergeDuplicateTask(tasks, pair) {
     absorbed
   };
 }
-// Recount cumulative points from every completed task/occurrence's stored award.
-// Period buckets (week/fort/month) are NOT recounted — they roll over naturally.
-// cutoffISO: if provided, only count completions whose OCCURRENCE DATE is on or after
-// this ISO timestamp's date portion. This respects the points-reset boundary.
-function recountPointsFromTasks(tasks, cutoffISO) {
-  const totals = {
+// v489 · Recount ALL points from ground truth: tasks + bonus log.
+// Returns {cumulative: {her, him}, periods: {week, fort, month}} — everything needed
+// to correct both the lifetime total and the period buckets in one shot.
+function recountAllPoints(tasks, bonusLog, rewardReset, cutoffISO) {
+  const cutoffDate = cutoffISO ? cutoffISO.slice(0, 10) : null;
+  const cumulative = {
     her: 0,
     him: 0
   };
-  const cutoffDate = cutoffISO ? cutoffISO.slice(0, 10) : null;
-  tasks.forEach(t => {
-    if (!t) return;
+  const fp = freshPeriods(null, rewardReset);
+  const periods = {
+    week: {
+      ...fp.week,
+      her: 0,
+      him: 0
+    },
+    fort: {
+      ...fp.fort,
+      her: 0,
+      him: 0
+    },
+    month: {
+      ...fp.month,
+      her: 0,
+      him: 0
+    }
+  };
+  const ranges = {};
+  ["week", "fort", "month"].forEach(k => {
+    const period = k === "week" ? "weekly" : k === "fort" ? "fortnightly" : "monthly";
+    const endObj = periodEnd(period, fp[k].key);
+    ranges[k] = {
+      start: fp[k].key,
+      end: toLocalYMD(endObj)
+    };
+  });
+  const add = (date, award) => {
+    if (cutoffDate && date < cutoffDate) return;
+    cumulative.her += award.her || 0;
+    cumulative.him += award.him || 0;
+    ["week", "fort", "month"].forEach(k => {
+      if (date >= ranges[k].start && date <= ranges[k].end) {
+        periods[k].her += award.her || 0;
+        periods[k].him += award.him || 0;
+      }
+    });
+  };
+  (tasks || []).forEach(t => {
+    if (!t || t.rewardTask) return;
     const pts = t.points || 0;
-    if (t.rewardTask) return; // reward tasks never award points
     const recurring = t.recur && t.recur !== "none";
     if (recurring) {
       const ex = t.exceptions || {};
-      Object.keys(ex).forEach(k => {
-        const e = ex[k];
+      Object.keys(ex).forEach(date => {
+        const e = ex[date];
         if (!e || !e.done || e.deleted) return;
-        if (cutoffDate && k < cutoffDate) return; // occurrence date before reset
-        const aw = e.award || splitAward_pure(t.assignee, pts);
-        totals.her += aw.her || 0;
-        totals.him += aw.him || 0;
+        add(date, e.award || splitAward_pure(t.assignee, pts));
       });
     } else if (t.done) {
-      if (cutoffDate && (t.dueDate || "") < cutoffDate) return; // task date before reset
-      const aw = t.award || splitAward_pure(t.assignee, pts);
-      totals.her += aw.her || 0;
-      totals.him += aw.him || 0;
+      add(t.dueDate || "", t.award || splitAward_pure(t.assignee, pts));
     }
   });
-  return totals;
+  (bonusLog || []).forEach(e => {
+    if (!e || !e.ts || e.neg) return;
+    const date = typeof e.ts === "number" ? toLocalYMD(new Date(e.ts)) : e.ts.length >= 10 ? e.ts.slice(0, 10) : "";
+    const aw = e.award || {};
+    if ((aw.her || 0) > 0 || (aw.him || 0) > 0) add(date, aw);
+  });
+  return {
+    cumulative,
+    periods
+  };
 }
 // Pure version of splitAward for use outside React (no state access needed).
 function splitAward_pure(assignee, pts) {
@@ -2845,79 +2884,7 @@ function splitAward_pure(assignee, pts) {
     him: amt - half
   };
 }
-// v488 · Recount period buckets from task history + bonus log.
-// Walks all completed tasks and bonuses whose occurrence/award date falls within
-// each current period boundary, returning corrected {week,fort,month} buckets.
-function recountPeriodPoints(tasks, bonusLog, rewardReset, cutoffISO) {
-  const fp = freshPeriods(null, rewardReset); // get current period keys
-  const cutoffDate = cutoffISO ? cutoffISO.slice(0, 10) : null;
-  const buckets = {
-    week: {
-      ...fp.week,
-      her: 0,
-      him: 0
-    },
-    fort: {
-      ...fp.fort,
-      her: 0,
-      him: 0
-    },
-    month: {
-      ...fp.month,
-      her: 0,
-      him: 0
-    }
-  };
-  // Period date ranges
-  const ranges = {};
-  ["week", "fort", "month"].forEach(k => {
-    const period = k === "week" ? "weekly" : k === "fort" ? "fortnightly" : "monthly";
-    const startDate = fp[k].key; // YYYY-MM-DD
-    const endObj = periodEnd(period, startDate);
-    const endDate = toLocalYMD(endObj);
-    ranges[k] = {
-      start: startDate,
-      end: endDate
-    };
-  });
-  const addToBuckets = (date, award) => {
-    if (cutoffDate && date < cutoffDate) return;
-    ["week", "fort", "month"].forEach(k => {
-      if (date >= ranges[k].start && date <= ranges[k].end) {
-        buckets[k].her += award.her || 0;
-        buckets[k].him += award.him || 0;
-      }
-    });
-  };
-  // Walk tasks
-  (tasks || []).forEach(t => {
-    if (!t) return;
-    if (t.rewardTask) return;
-    const pts = t.points || 0;
-    const recurring = t.recur && t.recur !== "none";
-    if (recurring) {
-      const ex = t.exceptions || {};
-      Object.keys(ex).forEach(date => {
-        const e = ex[date];
-        if (!e || !e.done || e.deleted) return;
-        const aw = e.award || splitAward_pure(t.assignee, pts);
-        addToBuckets(date, aw);
-      });
-    } else if (t.done) {
-      const date = t.dueDate || "";
-      const aw = t.award || splitAward_pure(t.assignee, pts);
-      addToBuckets(date, aw);
-    }
-  });
-  // Walk bonus log
-  (bonusLog || []).forEach(e => {
-    if (!e || !e.ts || e.neg) return;
-    const date = typeof e.ts === "number" ? toLocalYMD(new Date(e.ts)) : e.ts.length >= 10 ? e.ts.slice(0, 10) : "";
-    const aw = e.award || {};
-    if ((aw.her || 0) > 0 || (aw.him || 0) > 0) addToBuckets(date, aw);
-  });
-  return buckets;
-}
+
 // ── REPAIR: a series CUT IN HALF by "this and all future" *(v113)* ────────────────────
 // Ending a repeat doesn't end the bill — it ends the SERIES. A new record gets created for
 // the remainder, and now two records describe one bill. Mandy's Water: id 46 `recurEnd`
@@ -43841,7 +43808,8 @@ function DataRepairSheet({
   if (!open) return null;
   const activePairs = pairs.filter(p => !merged[p.dead.id]);
   const mergedPairs = pairs.filter(p => merged[p.dead.id]);
-  const recount = recountPointsFromTasks(tasks, cutoffISO);
+  const recountResult = recountAllPoints(tasks, bonusLog, rewardReset, cutoffISO);
+  const recount = recountResult.cumulative;
   const diff = {
     her: points.her - (recount.her || 0),
     him: points.him - (recount.him || 0)
@@ -44489,8 +44457,7 @@ function DataRepairSheet({
     className: "sans",
     disabled: recounted && !hasDiff,
     onClick: () => {
-      const periodBuckets = recountPeriodPoints(tasks, bonusLog, rewardReset, cutoffISO);
-      onRecountPoints(recount, periodBuckets);
+      onRecountPoints(recount, recountResult.periods);
       setRecounted(true);
     },
     style: {
@@ -64454,7 +64421,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v488"))))), diagOpen && (() => {
+  }, "v489"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
