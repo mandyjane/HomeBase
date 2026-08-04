@@ -20666,12 +20666,13 @@ function PdfInlineViewer({
     let cancelled = false;
     pages[0].getPage(pageNum).then(page => {
       if (cancelled) return;
-      // Scale to fit phone width (~360px content area) with good quality
+      // Scale to fit phone width, rendered at device pixel ratio for sharpness
+      const dpr = window.devicePixelRatio || 1;
       const vp = page.getViewport({
         scale: 1
       });
       const containerWidth = Math.min(window.innerWidth - 28, 900);
-      const scale = containerWidth / vp.width;
+      const scale = containerWidth / vp.width * dpr;
       const scaledVp = page.getViewport({
         scale
       });
@@ -20679,6 +20680,8 @@ function PdfInlineViewer({
       if (!canvas) return;
       canvas.width = scaledVp.width;
       canvas.height = scaledVp.height;
+      canvas.style.width = Math.round(scaledVp.width / dpr) + "px";
+      canvas.style.height = Math.round(scaledVp.height / dpr) + "px";
       const ctx = canvas.getContext("2d");
       page.render({
         canvasContext: ctx,
@@ -20744,9 +20747,7 @@ function PdfInlineViewer({
   }, /*#__PURE__*/React.createElement("canvas", {
     ref: canvasRef,
     style: {
-      width: "100%",
-      maxWidth: 900,
-      height: "auto",
+      maxWidth: "100%",
       borderRadius: 6,
       display: "block"
     }
@@ -63292,7 +63293,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v477"))))), diagOpen && (() => {
+  }, "v478"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
