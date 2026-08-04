@@ -43814,10 +43814,22 @@ function DataRepairSheet({
   if (!open) return null;
   const activePairs = pairs.filter(p => !merged[p.dead.id]);
   const mergedPairs = pairs.filter(p => merged[p.dead.id]);
-  // v491 · compute recount from collectCompletedTasks (same source as PersonSheet
-  // and level card) — guarantees all numbers match exactly.
-  const _herActs = [...collectCompletedTasks(tasks, "her", null, null, cutoffISO), ...collectBonusActivity(bonusLog, "her", null, null, cutoffISO)];
-  const _himActs = [...collectCompletedTasks(tasks, "him", null, null, cutoffISO), ...collectBonusActivity(bonusLog, "him", null, null, cutoffISO)];
+  // v492 · compute recount from collectCompletedTasks, using the CURRENT PERIOD
+  // start as the floor for cumulative. This guarantees the person card total matches
+  // the level card and PersonSheet "Points earned" exactly — no gap from tasks that
+  // fell between the reset date and the period boundary.
+  const _fp = freshPeriods(null, rewardReset);
+  // Sum across all three period types, taking the EARLIEST start as the floor.
+  // For most users this is the week start; the fortnight and month may be earlier.
+  // Using the earliest ensures no period's tasks are missed.
+  const _allStarts = [_fp.week.key, _fp.fort.key, _fp.month.key].filter(Boolean).sort();
+  const _periodFloor = _allStarts.length ? _allStarts[0] : null;
+  // The effective cutoff is the LATER of the reset date and the earliest period start.
+  // This covers both "reset was before the period" (use period start) and
+  // "reset was mid-period" (use reset date) correctly.
+  const _effectiveCutoff = cutoffISO && _periodFloor ? cutoffISO.slice(0, 10) > _periodFloor ? cutoffISO : _periodFloor + "T00:00:00.000Z" : cutoffISO || (_periodFloor ? _periodFloor + "T00:00:00.000Z" : null);
+  const _herActs = [...collectCompletedTasks(tasks, "her", null, null, _effectiveCutoff), ...collectBonusActivity(bonusLog, "her", null, null, _effectiveCutoff)];
+  const _himActs = [...collectCompletedTasks(tasks, "him", null, null, _effectiveCutoff), ...collectBonusActivity(bonusLog, "him", null, null, _effectiveCutoff)];
   const recount = {
     her: _herActs.reduce((s, t) => s + (t.points || 0), 0),
     him: _himActs.reduce((s, t) => s + (t.points || 0), 0)
@@ -64435,7 +64447,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v491"))))), diagOpen && (() => {
+  }, "v492"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
