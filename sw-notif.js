@@ -9,7 +9,6 @@ self.addEventListener("push", (event) => {
       data = event.data.json();
     }
   } catch (e) {
-    // If JSON parse fails, try text
     try {
       data = { title: "HomeBase", body: event.data.text() };
     } catch {}
@@ -18,7 +17,7 @@ self.addEventListener("push", (event) => {
   const options = {
     body: data.body || "",
     icon: "icon-192.png",
-    badge: "icon-192.png",
+    badge: "badge-96.png",
     vibrate: [200, 100, 200],
     tag: data.tag || "hb-" + Date.now(),
     renotify: true,
@@ -38,13 +37,11 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      // If a window is already open, focus it
       for (const client of clientList) {
         if (client.url.includes(self.registration.scope) && "focus" in client) {
           return client.focus();
         }
       }
-      // Otherwise open a new window
       return clients.openWindow(url);
     })
   );
@@ -58,4 +55,9 @@ self.addEventListener("activate", (event) => {
 // Install — skip waiting so updates take effect immediately
 self.addEventListener("install", (event) => {
   self.skipWaiting();
+});
+
+// Minimal fetch handler for PWA installability
+self.addEventListener("fetch", (event) => {
+  // Pass through — no caching
 });
