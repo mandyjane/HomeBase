@@ -5693,11 +5693,40 @@ const RECUR_WORD = {
 // silently render nothing. The bill card now needs the same label on its meta line, and a
 // THIRD copy is how the three drift apart. One map, derived, no literals to keep in step.
 // Returns "" for a non-recurring item, so a caller can render it unguarded.
-function recurLabel(recur) {
+function recurLabel(recur, series) {
+  // v542 · custom recurrence labels
+  if (recur === "custom" && series) {
+    if (series.recurDays && series.recurDays.length > 0) {
+      const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const days = series.recurDays.sort((a, b) => a - b).map(d => names[d]);
+      if (days.length === 1) return "Repeats every " + days[0];
+      return "Repeats " + days.slice(0, -1).join(", ") + " & " + days[days.length - 1];
+    }
+    const n = series.recurInterval || 1;
+    const u = series.recurUnit || "days";
+    if (n === 1) return "Repeats every " + (u === "days" ? "day" : u === "weeks" ? "week" : "month");
+    return "Repeats every " + n + " " + u;
+  }
   const w = RECUR_WORD[recur];
   return w ? "Repeats " + w : "";
 }
-function stepDate(dateStr, recur, anchorDay) {
+function stepDate(dateStr, recur, anchorDay, series) {
+  // v542 · custom recurrence stepping
+  if (recur === "custom" && series) {
+    if (series.recurDays && series.recurDays.length > 0) {
+      const d = new Date(dateStr + "T00:00:00");
+      for (let i = 1; i <= 7; i++) {
+        d.setDate(d.getDate() + 1);
+        if (series.recurDays.includes(d.getDay())) return toLocalYMD(d);
+      }
+      return addDays(dateStr, 1);
+    }
+    const interval = series.recurInterval || 1;
+    const unit = series.recurUnit || "days";
+    if (unit === "months") return addMonths(dateStr, interval, anchorDay);
+    if (unit === "weeks") return addDays(dateStr, interval * 7);
+    return addDays(dateStr, interval);
+  }
   const mo = RECUR_MONTHS[recur];
   if (mo) return addMonths(dateStr, mo, anchorDay);
   return addDays(dateStr, RECUR_DAYS[recur] || 0);
@@ -5713,8 +5742,8 @@ function anchorOf(series, dateField) {
 }
 
 // Generate occurrence date-strings for a series between [from,to] inclusive.
-function occurrenceDates(startDate, recur, recurEnd, from, to, anchorDay) {
-  if (recur === "none" || !RECUR_DAYS[recur] && !RECUR_MONTHS[recur]) {
+function occurrenceDates(startDate, recur, recurEnd, from, to, anchorDay, series) {
+  if (recur === "none" || !RECUR_DAYS[recur] && !RECUR_MONTHS[recur] && recur !== "custom") {
     return startDate >= from && startDate <= to ? [startDate] : [];
   }
   // Default the anchor to the start date's own day-of-month, so callers that don't
@@ -5725,13 +5754,13 @@ function occurrenceDates(startDate, recur, recurEnd, from, to, anchorDay) {
   // fast-forward to >= from
   let guard = 0;
   while (d < from && guard < 2000) {
-    d = stepDate(d, recur, anchor);
+    d = stepDate(d, recur, anchor, series);
     guard++;
   }
   while (d <= to && guard < 4000) {
     if (recurEnd && d > recurEnd) break;
     out.push(d);
-    d = stepDate(d, recur, anchor);
+    d = stepDate(d, recur, anchor, series);
     guard++;
   }
   return out;
@@ -5888,7 +5917,7 @@ function repairOrphanedExceptions(t) {
   while (g++ < 2000) {
     grid.push(d);
     if (d > last && grid.length >= keys.length + 2) break;
-    const nd = stepDate(d, t.recur, anchor);
+    const nd = stepDate(d, t.recur, anchor, t);
     if (!nd || nd === d) break;
     d = nd;
   }
@@ -5921,7 +5950,7 @@ function repairOrphanedExceptions(t) {
 // Getting this list WRONG in the other direction is the dangerous case — a missing
 // field means a real schedule change silently stops splitting (the rego bug). Every
 // field here is individually probed.
-const SCHEDULE_FIELDS = ["recur", "recurEnd", "anchorDay"];
+const SCHEDULE_FIELDS = ["recur", "recurEnd", "anchorDay", "recurInterval", "recurUnit", "recurDays"];
 
 // `dateField` is "dueDate" for tasks/bills and "date" for events — the same rule,
 // two field names, ONE implementation (a second copy is how these drift apart).
@@ -5964,7 +5993,7 @@ function rekeyExceptions(oldSeries, newSeries, dateField) {
     while (g++ < LIMIT) {
       out.push(d);
       if (d > last && out.length >= keys.length) break;
-      const nd = stepDate(d, series.recur, anchor);
+      const nd = stepDate(d, series.recur, anchor, series);
       if (!nd || nd === d) break; // non-recurring: one date only
       d = nd;
     }
@@ -6035,7 +6064,7 @@ function repairStolenPaidDates(t) {
 }
 function seriesDates(series, dateField, from, to) {
   if (isPlan(series)) return series.plan.dates.filter(d => d >= from && d <= to);
-  return occurrenceDates(series[dateField], series.recur, series.recurEnd, from, to, anchorOf(series, dateField));
+  return occurrenceDates(series[dateField], series.recur, series.recurEnd, from, to, anchorOf(series, dateField), series);
 }
 
 // Build a concrete occurrence object from a series + a date, applying exceptions.
@@ -26554,7 +26583,7 @@ function AgendaRow({
     // and again here. An expansion ADDS; it does not repeat the header.
     if (recurs) parts.push(/*#__PURE__*/React.createElement("span", {
       key: "r"
-    }, recurLabel(t.recur)));
+    }, recurLabel(t.recur, t)));
     // NOTE: no "N paid" here. The History header already says
     // "avg $1,200.00 · 10 paid" — adding it here duplicated it.
     // Interleave with a soft dot, so the parts read as one quiet sentence
@@ -32536,7 +32565,7 @@ function BillsTab({
         color: hasOverdue ? C.urgent : C.inkMute
       }
     }, overdueCount > 0 ? `${overdueCount} month${overdueCount > 1 ? "s" : ""} overdue · Due ${relLabel(displayDate, today)}` : r.paid ? `Paid ${relLabel(displayDate, today)}` : `Due ${relLabel(displayDate, today)}`, (() => {
-      const rl = r.recurring ? recurLabel(r.bill.recur) : "";
+      const rl = r.recurring ? recurLabel(r.bill.recur, r.bill) : "";
       return rl ? ` · ${rl}` : null;
     })(), (() => {
       const ex = (r.bill.exceptions || {})[r.date];
@@ -50718,7 +50747,7 @@ function CardManager({
         color: elsewhere ? tint : C.inkMute,
         marginTop: 1
       }
-    }, elsewhere ? `On ${other ? other.title : "another card"}` : recurLabel(b.recur) || "One-off")), /*#__PURE__*/React.createElement("span", {
+    }, elsewhere ? `On ${other ? other.title : "another card"}` : recurLabel(b.recur, b) || "One-off")), /*#__PURE__*/React.createElement("span", {
       className: numClass(),
       style: {
         flexShrink: 0,
@@ -52860,6 +52889,9 @@ function TaskModal({
     // A bill is almost always monthly — default it, rather than making you set it
     // every time. An explicit recur on the seeded task still wins.
     recur: task?.recur || (task?.taskKind === BILL_KIND ? "monthly" : "none"),
+    recurInterval: task?.recurInterval || 2,
+    recurUnit: task?.recurUnit || "days",
+    recurDays: task?.recurDays || [],
     notes: task?.notes || "",
     alerts: task?.alerts || [],
     amount: task?.amount ?? "",
@@ -55082,7 +55114,155 @@ function TaskModal({
     value: "halfyearly"
   }, "Half-yearly"), /*#__PURE__*/React.createElement("option", {
     value: "yearly"
-  }, "Yearly"))), billForm && !planOn && billSpan(form) > 1 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(L, null, "Billing period"), /*#__PURE__*/React.createElement("div", {
+  }, "Yearly"), /*#__PURE__*/React.createElement("option", {
+    value: "custom"
+  }, "Custom...")), form.recur === "custom" && (() => {
+    const mode = form.recurDays && form.recurDays.length > 0 ? "days" : "interval";
+    const setMode = m => {
+      if (m === "days") set("recurDays", form.recurDays && form.recurDays.length ? form.recurDays : [1]);else {
+        set("recurDays", []);
+        if (!form.recurInterval) set("recurInterval", 2);
+        if (!form.recurUnit) set("recurUnit", "days");
+      }
+    };
+    const DAY_NAMES = ["S", "M", "T", "W", "T", "F", "S"];
+    const toggleDay = d => {
+      const cur = form.recurDays || [];
+      const has = cur.includes(d);
+      if (has && cur.length <= 1) return;
+      set("recurDays", has ? cur.filter(x => x !== d) : [...cur, d].sort((a, b) => a - b));
+    };
+    const FULL_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const preview = mode === "days" ? (() => {
+      const ds = (form.recurDays || []).sort((a, b) => a - b).map(d => FULL_NAMES[d]);
+      return ds.length === 1 ? "Every " + ds[0] : ds.slice(0, -1).join(", ") + " & " + ds[ds.length - 1];
+    })() : "Every " + (form.recurInterval || 2) + " " + (form.recurUnit || "days");
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.pageWarm,
+        border: `1.5px dashed ${softTint(C.accent)}`,
+        borderRadius: 12,
+        padding: 14,
+        marginTop: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 0,
+        borderRadius: 10,
+        overflow: "hidden",
+        border: `1px solid ${C.rule}`,
+        marginBottom: 14
+      }
+    }, [["interval", "Every N"], ["days", "Specific days"]].map(([k, lbl]) => {
+      const on = mode === k;
+      return /*#__PURE__*/React.createElement("button", {
+        key: k,
+        onClick: () => setMode(k),
+        className: "sans",
+        style: {
+          flex: 1,
+          padding: "10px 8px",
+          textAlign: "center",
+          fontSize: 12,
+          fontWeight: 700,
+          background: on ? softTint(C.accent) : "transparent",
+          border: "none",
+          color: on ? C.accent : C.inkMute,
+          cursor: "pointer"
+        }
+      }, lbl);
+    })), mode === "interval" ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        justifyContent: "center",
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      min: "1",
+      max: "365",
+      value: form.recurInterval || 2,
+      onChange: e => {
+        const v = Math.max(1, parseInt(e.target.value) || 1);
+        set("recurInterval", v);
+      },
+      className: "sans",
+      style: {
+        width: 56,
+        textAlign: "center",
+        padding: "10px 8px",
+        fontSize: 16,
+        borderRadius: 10,
+        border: `1px solid ${C.rule}`,
+        background: C.card,
+        color: C.ink
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6
+      }
+    }, ["days", "weeks", "months"].map(u => {
+      const on = (form.recurUnit || "days") === u;
+      return /*#__PURE__*/React.createElement("button", {
+        key: u,
+        onClick: () => set("recurUnit", u),
+        className: "sans",
+        style: {
+          padding: "10px 14px",
+          borderRadius: 10,
+          border: `1px solid ${on ? C.accent : C.rule}`,
+          background: on ? softTint(C.accent) : "transparent",
+          color: on ? C.accent : C.inkMute,
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: "pointer"
+        }
+      }, u);
+    })))) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6,
+        justifyContent: "center"
+      }
+    }, DAY_NAMES.map((lbl, i) => {
+      const on = (form.recurDays || []).includes(i);
+      return /*#__PURE__*/React.createElement("button", {
+        key: i,
+        onClick: () => toggleDay(i),
+        className: "sans",
+        style: {
+          width: 40,
+          height: 40,
+          borderRadius: 10,
+          border: `1px solid ${on ? C.accent : C.rule}`,
+          background: on ? softTint(C.accent) : "transparent",
+          color: on ? C.accent : C.inkMute,
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }
+      }, lbl);
+    })), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 12,
+        color: C.accent,
+        marginTop: 10,
+        padding: "8px 10px",
+        background: softTint(C.accent),
+        borderRadius: 8,
+        textAlign: "center",
+        fontWeight: 500
+      }
+    }, preview));
+  })()), billForm && !planOn && billSpan(form) > 1 && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(L, null, "Billing period"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6
@@ -63008,7 +63188,8 @@ function OtStepper({
 // ── COUNTDOWN SYSTEM *(v529)* ─────────────────────────────────────────────────
 // Data: hb_countdowns = [{id, title, date, format, source, sourceId, color}]
 // Sources: "event" | "task" | "mortgage" | "standalone"
-// Formats: "days" | "weeks" | "months" | "years"
+// v542 · format is now an array of units, e.g. ["years","months","days"]
+// Legacy single-string formats are auto-migrated on read.
 
 function countdownDaysLeft(dateStr) {
   if (!dateStr) return 0;
@@ -63017,33 +63198,63 @@ function countdownDaysLeft(dateStr) {
   n.setHours(0, 0, 0, 0);
   return Math.max(0, Math.ceil((t - n) / 86400000));
 }
+function countdownMigrateFmt(fmt) {
+  // v542 · migrate old single-string format to array
+  if (Array.isArray(fmt)) return fmt;
+  if (fmt === "years") return ["years", "months", "days"];
+  if (fmt === "months") return ["months", "days"];
+  if (fmt === "weeks") return ["weeks"];
+  return ["days"];
+}
 function countdownDisplay(dateStr, fmt) {
-  const d = countdownDaysLeft(dateStr);
-  if (fmt === "weeks") return {
-    n: Math.floor(d / 7),
-    unit: "weeks"
-  };
-  if (fmt === "months") {
-    const m = Math.round(d / 30.44);
-    return {
-      n: m,
-      unit: "months"
-    };
+  const totalDays = countdownDaysLeft(dateStr);
+  const units = countdownMigrateFmt(fmt);
+  const parts = [];
+  let rem = totalDays;
+  if (units.includes("years")) {
+    const y = Math.floor(rem / 365.25);
+    if (y > 0) {
+      parts.push({
+        n: y,
+        unit: "yr"
+      });
+      rem -= Math.round(y * 365.25);
+    }
   }
-  if (fmt === "years") {
-    const y = d / 365.25;
-    return y >= 2 ? {
-      n: Math.round(y),
-      unit: "years"
-    } : {
-      n: Math.round(d / 30.44),
-      unit: "months"
-    };
+  if (units.includes("months")) {
+    const m = Math.floor(rem / 30.44);
+    if (m > 0 || parts.length > 0) {
+      parts.push({
+        n: m,
+        unit: "mo"
+      });
+      rem -= Math.round(m * 30.44);
+    }
   }
-  return {
-    n: d,
-    unit: "days"
-  };
+  if (units.includes("weeks")) {
+    const w = Math.floor(rem / 7);
+    if (w > 0 || parts.length > 0) {
+      parts.push({
+        n: w,
+        unit: "wk"
+      });
+      rem -= w * 7;
+    }
+  }
+  if (units.includes("days")) {
+    parts.push({
+      n: Math.max(0, rem),
+      unit: rem === 1 ? "day" : "days"
+    });
+  }
+  // If nothing matched (e.g. only greyed-out units selected), fall back to days
+  if (!parts.length) parts.push({
+    n: totalDays,
+    unit: totalDays === 1 ? "day" : "days"
+  });
+  // Clean up: drop leading zero parts except the last
+  while (parts.length > 1 && parts[0].n === 0) parts.shift();
+  return parts;
 }
 function CountdownCard({
   countdowns,
@@ -63218,10 +63429,7 @@ function CountdownCard({
       cursor: "pointer"
     }
   }, "See all >")), items.map(c => {
-    const {
-      n,
-      unit
-    } = countdownDisplay(c.date, c.format || "days");
+    const parts = countdownDisplay(c.date, c.format || "days");
     const col = c.color || C.accent;
     return /*#__PURE__*/React.createElement("div", {
       key: c.id,
@@ -63274,22 +63482,23 @@ function CountdownCard({
         textAlign: "right",
         flexShrink: 0
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("span", {
       className: "serif",
       style: {
-        fontSize: 20,
+        fontSize: 17,
         fontWeight: 700,
         color: col
       }
-    }, n), /*#__PURE__*/React.createElement("div", {
+    }, parts.map((p, i) => /*#__PURE__*/React.createElement("span", {
+      key: i
+    }, p.n, /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        fontSize: 9,
-        color: C.inkMute,
-        textTransform: "uppercase",
-        letterSpacing: .5
+        fontSize: 10,
+        fontWeight: 500,
+        color: C.inkMute
       }
-    }, unit)));
+    }, " ", p.unit, i < parts.length - 1 ? " " : ""))))));
   }));
 }
 function CountdownsSheet({
@@ -63305,7 +63514,7 @@ function CountdownsSheet({
   const [form, setForm] = useState({
     title: "",
     date: "",
-    format: "days",
+    format: ["days"],
     color: C.accent
   });
   if (!open) return null;
@@ -63326,7 +63535,7 @@ function CountdownsSheet({
       sourceId: item.id || null,
       title: item.title,
       date: item.date,
-      format: "days",
+      format: ["months", "days"],
       color: source === "event" ? C.accent : source === "task" ? C.him : source === "mortgage" ? C.low : C.deadline
     };
     setCountdowns(p => [...p, cd]);
@@ -63341,7 +63550,7 @@ function CountdownsSheet({
       sourceId: null,
       title: "Mortgage Payoff",
       date: dt,
-      format: "years",
+      format: ["years", "months", "days"],
       color: C.low
     };
     setCountdowns(p => {
@@ -63365,7 +63574,7 @@ function CountdownsSheet({
     setForm({
       title: "",
       date: "",
-      format: "days",
+      format: ["days"],
       color: C.accent
     });
     setAddMode(null);
@@ -63379,20 +63588,44 @@ function CountdownsSheet({
       format: fmt
     } : c));
   }
-  const fmtBtns = (id, current) => ["days", "weeks", "months", "years"].map(f => /*#__PURE__*/React.createElement("button", {
-    key: f,
-    onClick: () => setFormat(id, f),
-    className: "sans",
-    style: {
-      fontSize: 9,
-      padding: "2px 7px",
-      borderRadius: 6,
-      border: `1px solid ${f === current ? C.accent : C.rule}`,
-      background: f === current ? softTint(C.accent) : "transparent",
-      color: f === current ? C.accent : C.inkMute,
-      cursor: "pointer"
-    }
-  }, f.charAt(0).toUpperCase() + f.slice(1)));
+  function toggleFmtUnit(id, unit) {
+    setCountdowns(p => p.map(c => {
+      if (c.id !== id) return c;
+      const cur = countdownMigrateFmt(c.format);
+      const has = cur.includes(unit);
+      if (has && cur.length <= 1) return c; // can't deselect last unit
+      const next = has ? cur.filter(u => u !== unit) : [...cur, unit];
+      // maintain order: years, months, weeks, days
+      const order = ["years", "months", "weeks", "days"];
+      return {
+        ...c,
+        format: order.filter(u => next.includes(u))
+      };
+    }));
+  }
+  const fmtBtns = (id, current, dateStr) => {
+    const cur = countdownMigrateFmt(current);
+    const d = countdownDaysLeft(dateStr);
+    return ["years", "months", "weeks", "days"].map(f => {
+      const on = cur.includes(f);
+      const grey = f === "years" && d < 365 || f === "months" && d < 30 || f === "weeks" && d < 7;
+      return /*#__PURE__*/React.createElement("button", {
+        key: f,
+        onClick: () => !grey && toggleFmtUnit(id, f),
+        className: "sans",
+        style: {
+          fontSize: 9,
+          padding: "2px 7px",
+          borderRadius: 6,
+          border: `1px solid ${on && !grey ? C.accent : C.rule}`,
+          background: on && !grey ? softTint(C.accent) : "transparent",
+          color: on && !grey ? C.accent : C.inkMute,
+          cursor: grey ? "default" : "pointer",
+          opacity: grey ? .3 : 1
+        }
+      }, f.charAt(0).toUpperCase() + f.slice(1));
+    });
+  };
   const sourceLabel = s => ({
     event: "EVENT",
     task: "TASK",
@@ -63475,10 +63708,7 @@ function CountdownsSheet({
       fontSize: 13
     }
   }, "No countdowns yet. Tap + Add to get started."), sorted.map(c => {
-    const {
-      n,
-      unit
-    } = countdownDisplay(c.date, c.format || "days");
+    const parts = countdownDisplay(c.date, c.format || "days");
     const col = c.color || C.accent;
     const sc = sourceColor(c.source);
     return /*#__PURE__*/React.createElement("div", {
@@ -63534,27 +63764,27 @@ function CountdownsSheet({
         gap: 4,
         marginTop: 4
       }
-    }, fmtBtns(c.id, c.format || "days"))), /*#__PURE__*/React.createElement("div", {
+    }, fmtBtns(c.id, c.format || "days", c.date))), /*#__PURE__*/React.createElement("div", {
       style: {
         textAlign: "right",
         flexShrink: 0
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, parts.map((p, i) => /*#__PURE__*/React.createElement("div", {
+      key: i
+    }, /*#__PURE__*/React.createElement("span", {
       className: "serif",
       style: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 700,
         color: col
       }
-    }, n), /*#__PURE__*/React.createElement("div", {
+    }, p.n), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
         fontSize: 10,
-        color: C.inkMute,
-        textTransform: "uppercase",
-        letterSpacing: .5
+        color: C.inkMute
       }
-    }, unit)), /*#__PURE__*/React.createElement("button", {
+    }, " ", p.unit)))), /*#__PURE__*/React.createElement("button", {
       onClick: () => remove(c.id),
       style: {
         background: "none",
@@ -66804,7 +67034,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v541"))))), diagOpen && (() => {
+  }, "v542"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
