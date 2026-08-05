@@ -2552,7 +2552,9 @@ const[changePinSheet,setChangePinSheet]=useState(false);// Which weekday a WEEKL
 // THIS IS NOT weekStart AND NOT otWeekKey. See the note at REWARD_RESET_DEFAULT.
 const[rewardReset,setRewardReset]=useState(()=>{const v=lsGet("hb_rewardReset",REWARD_RESET_DEFAULT);return Number.isInteger(v)&&v>=0&&v<=6?v:REWARD_RESET_DEFAULT;});useEffect(()=>{lsSet("hb_rewardReset",rewardReset);},[rewardReset]);// THE GOAL LOG — source of truth for what is owed. Append-only in practice: entries
 // are added at rollover and only ever mutated by a claim. Never rewritten.
-const[goalLog,setGoalLog]=useState(()=>{const v=lsGet("hb_goalLog",[]);return Array.isArray(v)?v:[];});useEffect(()=>{lsSet("hb_goalLog",goalLog);},[goalLog]);const[levelCfg,setLevelCfg]=useState(()=>lsGet("hb_levelCfg",{base:60,grow:0}));const[billAvgMethod,setBillAvgMethod]=useState(()=>lsGet("hb_billAvg","last3"));// Monthly bill budget. 0 = off (no bar, nothing changes) — deliberately opt-in.
+const[goalLog,setGoalLog]=useState(()=>{let v=lsGet("hb_goalLog",[]);if(!Array.isArray(v))v=[];// v524 · One-shot cleanup: remove phantom missed entries from the transition
+// period (score 0, target never reachable before the system was in use).
+if(!lsGet("hb_goalLogCleaned")){v=v.filter(e=>!(e.met===false&&(e.score||0)===0));lsSet("hb_goalLogCleaned",true);}return v;});useEffect(()=>{lsSet("hb_goalLog",goalLog);},[goalLog]);const[levelCfg,setLevelCfg]=useState(()=>lsGet("hb_levelCfg",{base:60,grow:0}));const[billAvgMethod,setBillAvgMethod]=useState(()=>lsGet("hb_billAvg","last3"));// Monthly bill budget. 0 = off (no bar, nothing changes) — deliberately opt-in.
 const[billBudget,setBillBudget]=useState(()=>lsGet("hb_billBudget",0));// Spread an annual/quarterly bill across the months it covers, in the GRAPH ONLY.
 // The stored payment stays on the day it was paid; this is a view, not a rewrite.
 const[billSmooth,setBillSmooth]=useState(()=>lsGet("hb_billSmooth",false));// Show a $ total on each Bills section header (Overdue / This week / …).
