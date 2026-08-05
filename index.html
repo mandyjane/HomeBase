@@ -7162,6 +7162,55 @@ function docDelete(v) {
   const cacheKey = String(v).slice(DOC_REF.length);
   _docCache.delete(cacheKey);
   idbDel(cacheKey);
+  // also remove any cached thumbnail
+  _docCache.delete("t:" + cacheKey);
+  idbDel("t:" + cacheKey);
+}
+// ── PDF THUMBNAIL CACHE *(v520)* ──────────────────────────────────────────────
+// Pre-rendered JPEG thumbnails stored alongside docs with `t:` prefix keys.
+// Populated at upload time and lazily on successful CDN render.
+function thumbRead(photoRef) {
+  if (!photoRef) return null;
+  const k = isDocRef(photoRef) ? "t:" + String(photoRef).slice(DOC_REF.length) : null;
+  return k ? _docCache.get(k) || null : null;
+}
+function thumbWrite(photoRef, thumbUrl) {
+  if (!photoRef || !thumbUrl) return;
+  const k = isDocRef(photoRef) ? "t:" + String(photoRef).slice(DOC_REF.length) : null;
+  if (!k) return;
+  _docCache.set(k, thumbUrl);
+  idbPut(k, thumbUrl);
+}
+async function generatePdfThumb(pdfDataUrl, maxH) {
+  maxH = maxH || 150;
+  try {
+    const pdfjs = await loadPdfJs();
+    const doc = await pdfjs.getDocument({
+      data: dataUrlToArrayBuffer(pdfDataUrl)
+    }).promise;
+    const page = await doc.getPage(1);
+    const vp = page.getViewport({
+      scale: 1
+    });
+    const dpr = window.devicePixelRatio || 1;
+    const scale = maxH * dpr / vp.height;
+    const svp = page.getViewport({
+      scale
+    });
+    const cv = document.createElement("canvas");
+    cv.width = svp.width;
+    cv.height = svp.height;
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    await page.render({
+      canvasContext: ctx,
+      viewport: svp
+    }).promise;
+    return cv.toDataURL("image/jpeg", 0.72);
+  } catch {
+    return null;
+  }
 }
 // Every doc key currently in store, newest first, with its size. Drives both the
 // "which one do you want to drop?" chooser and the Documents library.
@@ -7171,6 +7220,7 @@ function docList() {
   const seen = new Set();
   const out = [];
   for (const [ref, v] of _docCache) {
+    if (ref.startsWith("t:")) continue; // skip thumbnail entries
     seen.add(ref);
     const [sid, occ] = ref.split(":");
     out.push({
@@ -10447,6 +10497,13 @@ function App({
       };
     }));
     showToast("Document attached", "success");
+    // v520: generate PDF thumbnail in background (fire and forget)
+    if (attIsPdf(photo)) {
+      const resolved = docRead(ref);
+      if (resolved) generatePdfThumb(resolved).then(t => {
+        if (t) thumbWrite(ref, t);
+      });
+    }
   }
 
   // ── QUICK BILL UPDATE *(v394)* ────────────────────────────────────────────
@@ -21262,14 +21319,18 @@ function PdfInlineViewer({
 // Falls back to the file-icon placeholder if pdf.js hasn't loaded yet.
 function PdfThumb({
   src,
-  height = 150
+  height = 150,
+  photoRef
 }) {
   const canvasRef = useRef(null);
   const cancelRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState(false);
   const retryRef = useRef(0);
+  // v520: check for pre-rendered thumbnail
+  const cached = thumbRead(photoRef);
   useEffect(() => {
+    if (cached) return; // have a pre-rendered thumb, skip CDN render
     if (!src || !attIsPdf(src)) return;
     cancelRef.current = false;
     retryRef.current = 0;
@@ -21303,7 +21364,15 @@ function PdfThumb({
           canvasContext: ctx,
           viewport: scaledVp
         }).promise;
-        if (!cancelRef.current) setReady(true);
+        if (!cancelRef.current) {
+          setReady(true);
+          // v520: cache the rendered thumb for next time
+          if (photoRef) {
+            try {
+              thumbWrite(photoRef, canvas.toDataURL("image/jpeg", 0.72));
+            } catch {}
+          }
+        }
       } catch (e) {
         if (cancelRef.current) return;
         if (retryRef.current < 2) {
@@ -21320,7 +21389,30 @@ function PdfThumb({
     return () => {
       cancelRef.current = true;
     };
-  }, [src, height]);
+  }, [src, height, cached]);
+  // v520: if we have a cached thumbnail, show it as a plain image
+  if (cached) {
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: "100%",
+        height,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+        borderRadius: 10
+      }
+    }, /*#__PURE__*/React.createElement("img", {
+      src: cached,
+      alt: "PDF page 1",
+      style: {
+        maxWidth: "100%",
+        maxHeight: height,
+        objectFit: "contain",
+        borderRadius: 6
+      }
+    }));
+  }
   return /*#__PURE__*/React.createElement("div", {
     style: {
       width: "100%",
@@ -21490,7 +21582,8 @@ function DocThumb({
   src,
   title,
   onOpen,
-  height = 150
+  height = 150,
+  photoRef
 }) {
   if (!src) return null;
   const pdf = attIsPdf(src);
@@ -21514,7 +21607,8 @@ function DocThumb({
       }
     }, /*#__PURE__*/React.createElement(PdfThumb, {
       src: src,
-      height: height
+      height: height,
+      photoRef: photoRef
     }));
   }
   return /*#__PURE__*/React.createElement("button", {
@@ -21601,6 +21695,7 @@ function billDocs(bills) {
           title: b.title,
           cat,
           src: docRead(ex[d].photo),
+          photoRef: ex[d].photo,
           date: ex[d].doneAt ? toLocalYMD(new Date(ex[d].doneAt)) : d,
           // when it was PAID
           dueDate: d,
@@ -21617,6 +21712,7 @@ function billDocs(bills) {
         title: b.title,
         cat,
         src: docRead(b.photo),
+        photoRef: b.photo,
         date: b.doneAt ? toLocalYMD(new Date(b.doneAt)) : b.dueDate,
         dueDate: b.dueDate,
         amount: parseAmt(b.amount),
@@ -27297,6 +27393,7 @@ function TaskCard({
       src: docRead(task.photo),
       title: task.title,
       height: 170,
+      photoRef: task.photo,
       onOpen: () => setDocOpen(true)
     })), docOpen && /*#__PURE__*/React.createElement(DocViewer, {
       src: docRead(task.photo),
@@ -33153,7 +33250,16 @@ function BillsTab({
           overflow: "hidden",
           position: "relative"
         }
-      }, attIsPdf(d.src) ? /*#__PURE__*/React.createElement("span", {
+      }, attIsPdf(d.src) ? thumbRead(d.photoRef) ? /*#__PURE__*/React.createElement("img", {
+        src: thumbRead(d.photoRef),
+        alt: d.title,
+        style: {
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          display: "block"
+        }
+      }) : /*#__PURE__*/React.createElement("span", {
         style: {
           display: "flex",
           flexDirection: "column",
@@ -55179,6 +55285,7 @@ function TaskModal({
   }, /*#__PURE__*/React.createElement(DocThumb, {
     src: docRead(form.photo),
     title: form.title || "Attachment",
+    photoRef: form.photo,
     onOpen: () => setPhotoOpen(true)
   }), /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -64887,7 +64994,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v519"))))), diagOpen && (() => {
+  }, "v520"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
