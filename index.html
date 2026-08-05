@@ -67034,7 +67034,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v542"))))), diagOpen && (() => {
+  }, "v543"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -68856,6 +68856,9 @@ function ShiftModal({
     assignee: shift?.assignee || "her",
     notes: shift?.notes || "",
     recur: shift?.recur || "none",
+    recurInterval: shift?.recurInterval || 2,
+    recurUnit: shift?.recurUnit || "days",
+    recurDays: shift?.recurDays || [],
     // A sick shift is the SAME record, flagged — not a replacement. time/end are kept so
     // the roster stays legible; `dayOff` is what stops them counting as worked hours.
     sick: shift?.dayOff === "sick",
@@ -69264,7 +69267,154 @@ function ShiftModal({
     value: "fortnightly"
   }, "Fortnightly"), /*#__PURE__*/React.createElement("option", {
     value: "monthly"
-  }, "Monthly"))), /*#__PURE__*/React.createElement("div", {
+  }, "Monthly"), /*#__PURE__*/React.createElement("option", {
+    value: "custom"
+  }, "Custom...")), form.recur === "custom" && (() => {
+    const mode = form.recurDays && form.recurDays.length > 0 ? "days" : "interval";
+    const setMode = m => {
+      if (m === "days") set("recurDays", form.recurDays && form.recurDays.length ? form.recurDays : [1]);else {
+        set("recurDays", []);
+        if (!form.recurInterval) set("recurInterval", 2);
+        if (!form.recurUnit) set("recurUnit", "days");
+      }
+    };
+    const DN = ["S", "M", "T", "W", "T", "F", "S"],
+      FN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const toggleDay = d => {
+      const cur = form.recurDays || [];
+      const has = cur.includes(d);
+      if (has && cur.length <= 1) return;
+      set("recurDays", has ? cur.filter(x => x !== d) : [...cur, d].sort((a, b) => a - b));
+    };
+    const preview = mode === "days" ? (() => {
+      const ds = (form.recurDays || []).sort((a, b) => a - b).map(d => FN[d]);
+      return ds.length === 1 ? "Every " + ds[0] : ds.slice(0, -1).join(", ") + " & " + ds[ds.length - 1];
+    })() : "Every " + (form.recurInterval || 2) + " " + (form.recurUnit || "days");
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.pageWarm,
+        border: `1.5px dashed ${softTint(C.accent)}`,
+        borderRadius: 12,
+        padding: 14,
+        marginTop: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 0,
+        borderRadius: 10,
+        overflow: "hidden",
+        border: `1px solid ${C.rule}`,
+        marginBottom: 14
+      }
+    }, [["interval", "Every N"], ["days", "Specific days"]].map(([k, lbl]) => {
+      const on = mode === k;
+      return /*#__PURE__*/React.createElement("button", {
+        key: k,
+        onClick: () => setMode(k),
+        className: "sans",
+        style: {
+          flex: 1,
+          padding: "10px 8px",
+          textAlign: "center",
+          fontSize: 12,
+          fontWeight: 700,
+          background: on ? softTint(C.accent) : "transparent",
+          border: "none",
+          color: on ? C.accent : C.inkMute,
+          cursor: "pointer"
+        }
+      }, lbl);
+    })), mode === "interval" ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        justifyContent: "center",
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      min: "1",
+      max: "365",
+      value: form.recurInterval || 2,
+      onChange: e => {
+        set("recurInterval", Math.max(1, parseInt(e.target.value) || 1));
+      },
+      className: "sans",
+      style: {
+        width: 56,
+        textAlign: "center",
+        padding: "10px 8px",
+        fontSize: 16,
+        borderRadius: 10,
+        border: `1px solid ${C.rule}`,
+        background: C.card,
+        color: C.ink
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6
+      }
+    }, ["days", "weeks", "months"].map(u => {
+      const on = (form.recurUnit || "days") === u;
+      return /*#__PURE__*/React.createElement("button", {
+        key: u,
+        onClick: () => set("recurUnit", u),
+        className: "sans",
+        style: {
+          padding: "10px 14px",
+          borderRadius: 10,
+          border: `1px solid ${on ? C.accent : C.rule}`,
+          background: on ? softTint(C.accent) : "transparent",
+          color: on ? C.accent : C.inkMute,
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: "pointer"
+        }
+      }, u);
+    }))) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6,
+        justifyContent: "center"
+      }
+    }, DN.map((lbl, i) => {
+      const on = (form.recurDays || []).includes(i);
+      return /*#__PURE__*/React.createElement("button", {
+        key: i,
+        onClick: () => toggleDay(i),
+        className: "sans",
+        style: {
+          width: 40,
+          height: 40,
+          borderRadius: 10,
+          border: `1px solid ${on ? C.accent : C.rule}`,
+          background: on ? softTint(C.accent) : "transparent",
+          color: on ? C.accent : C.inkMute,
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }
+      }, lbl);
+    })), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 12,
+        color: C.accent,
+        marginTop: 10,
+        padding: "8px 10px",
+        background: softTint(C.accent),
+        borderRadius: 8,
+        textAlign: "center",
+        fontWeight: 500
+      }
+    }, preview));
+  })()), /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.card,
       border: `1.5px solid ${form.sick ? SICK_COLOR : C.rule}`,
@@ -69650,6 +69800,9 @@ function EventModal({
     notes: event?.notes || "",
     alerts: event?.alerts || [],
     recur: event?.recur || "none",
+    recurInterval: event?.recurInterval || 2,
+    recurUnit: event?.recurUnit || "days",
+    recurDays: event?.recurDays || [],
     outdoor: event?.outdoor || false,
     // MULTI-DAY *(v220)*. The record stores a LENGTH (spanDays); the sheet shows and takes
     // an END DATE, because that is what a person knows. Converted at both edges — see the
@@ -70313,7 +70466,154 @@ function EventModal({
     value: "halfyearly"
   }, "Half-yearly"), /*#__PURE__*/React.createElement("option", {
     value: "yearly"
-  }, "Yearly"))), /*#__PURE__*/React.createElement(OutdoorToggle, {
+  }, "Yearly"), /*#__PURE__*/React.createElement("option", {
+    value: "custom"
+  }, "Custom...")), form.recur === "custom" && (() => {
+    const mode = form.recurDays && form.recurDays.length > 0 ? "days" : "interval";
+    const setMode = m => {
+      if (m === "days") set("recurDays", form.recurDays && form.recurDays.length ? form.recurDays : [1]);else {
+        set("recurDays", []);
+        if (!form.recurInterval) set("recurInterval", 2);
+        if (!form.recurUnit) set("recurUnit", "days");
+      }
+    };
+    const DN = ["S", "M", "T", "W", "T", "F", "S"],
+      FN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const toggleDay = d => {
+      const cur = form.recurDays || [];
+      const has = cur.includes(d);
+      if (has && cur.length <= 1) return;
+      set("recurDays", has ? cur.filter(x => x !== d) : [...cur, d].sort((a, b) => a - b));
+    };
+    const preview = mode === "days" ? (() => {
+      const ds = (form.recurDays || []).sort((a, b) => a - b).map(d => FN[d]);
+      return ds.length === 1 ? "Every " + ds[0] : ds.slice(0, -1).join(", ") + " & " + ds[ds.length - 1];
+    })() : "Every " + (form.recurInterval || 2) + " " + (form.recurUnit || "days");
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.pageWarm,
+        border: `1.5px dashed ${softTint(C.accent)}`,
+        borderRadius: 12,
+        padding: 14,
+        marginTop: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 0,
+        borderRadius: 10,
+        overflow: "hidden",
+        border: `1px solid ${C.rule}`,
+        marginBottom: 14
+      }
+    }, [["interval", "Every N"], ["days", "Specific days"]].map(([k, lbl]) => {
+      const on = mode === k;
+      return /*#__PURE__*/React.createElement("button", {
+        key: k,
+        onClick: () => setMode(k),
+        className: "sans",
+        style: {
+          flex: 1,
+          padding: "10px 8px",
+          textAlign: "center",
+          fontSize: 12,
+          fontWeight: 700,
+          background: on ? softTint(C.accent) : "transparent",
+          border: "none",
+          color: on ? C.accent : C.inkMute,
+          cursor: "pointer"
+        }
+      }, lbl);
+    })), mode === "interval" ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        justifyContent: "center",
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      min: "1",
+      max: "365",
+      value: form.recurInterval || 2,
+      onChange: e => {
+        set("recurInterval", Math.max(1, parseInt(e.target.value) || 1));
+      },
+      className: "sans",
+      style: {
+        width: 56,
+        textAlign: "center",
+        padding: "10px 8px",
+        fontSize: 16,
+        borderRadius: 10,
+        border: `1px solid ${C.rule}`,
+        background: C.card,
+        color: C.ink
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6
+      }
+    }, ["days", "weeks", "months"].map(u => {
+      const on = (form.recurUnit || "days") === u;
+      return /*#__PURE__*/React.createElement("button", {
+        key: u,
+        onClick: () => set("recurUnit", u),
+        className: "sans",
+        style: {
+          padding: "10px 14px",
+          borderRadius: 10,
+          border: `1px solid ${on ? C.accent : C.rule}`,
+          background: on ? softTint(C.accent) : "transparent",
+          color: on ? C.accent : C.inkMute,
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: "pointer"
+        }
+      }, u);
+    }))) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6,
+        justifyContent: "center"
+      }
+    }, DN.map((lbl, i) => {
+      const on = (form.recurDays || []).includes(i);
+      return /*#__PURE__*/React.createElement("button", {
+        key: i,
+        onClick: () => toggleDay(i),
+        className: "sans",
+        style: {
+          width: 40,
+          height: 40,
+          borderRadius: 10,
+          border: `1px solid ${on ? C.accent : C.rule}`,
+          background: on ? softTint(C.accent) : "transparent",
+          color: on ? C.accent : C.inkMute,
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }
+      }, lbl);
+    })), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 12,
+        color: C.accent,
+        marginTop: 10,
+        padding: "8px 10px",
+        background: softTint(C.accent),
+        borderRadius: 8,
+        textAlign: "center",
+        fontWeight: 500
+      }
+    }, preview));
+  })()), /*#__PURE__*/React.createElement(OutdoorToggle, {
     value: form.outdoor,
     catDefault: false,
     catName: "events",
