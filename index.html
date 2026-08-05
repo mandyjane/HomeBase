@@ -21060,10 +21060,14 @@ function loadPdfJs() {
         _pdfjsLib.GlobalWorkerOptions.workerSrc = "";
         resolve(_pdfjsLib);
       } else {
+        _pdfjsLoading = null;
         reject(new Error("pdf.js loaded but pdfjsLib not found"));
       }
     };
-    tag.onerror = () => reject(new Error("Failed to load pdf.js from CDN"));
+    tag.onerror = () => {
+      _pdfjsLoading = null;
+      reject(new Error("Failed to load pdf.js from CDN"));
+    };
     document.head.appendChild(tag);
   });
   return _pdfjsLoading;
@@ -21264,9 +21268,11 @@ function PdfThumb({
   const cancelRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [err, setErr] = useState(false);
+  const retryRef = useRef(0);
   useEffect(() => {
     if (!src || !attIsPdf(src)) return;
     cancelRef.current = false;
+    retryRef.current = 0;
     setReady(false);
     setErr(false);
     async function go() {
@@ -21299,7 +21305,15 @@ function PdfThumb({
         }).promise;
         if (!cancelRef.current) setReady(true);
       } catch (e) {
-        if (!cancelRef.current) setErr(true);
+        if (cancelRef.current) return;
+        if (retryRef.current < 2) {
+          retryRef.current++;
+          setTimeout(() => {
+            if (!cancelRef.current) go();
+          }, 1500);
+        } else {
+          setErr(true);
+        }
       }
     }
     go();
@@ -64873,7 +64887,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v518"))))), diagOpen && (() => {
+  }, "v519"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
