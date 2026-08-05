@@ -29993,13 +29993,16 @@ function DaySheet({
     d: "M12 5v14M5 12h14"
   })), "Add")), /*#__PURE__*/React.createElement("div", {
     ref: swipeRef,
-    key: dateStr,
     style: {
       flex: 1,
       minHeight: 0,
       overflowY: "auto",
+      WebkitOverflowScrolling: "touch"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    key: dateStr,
+    style: {
       padding: "0 20px 30px",
-      WebkitOverflowScrolling: "touch",
       animation: slideAnim ? `${slideAnim} 0.22s ease-out` : undefined
     }
   }, onStepDay && /*#__PURE__*/React.createElement("button", {
@@ -30125,7 +30128,7 @@ function DaySheet({
     onEdit: () => onEdit(t),
     onDelete: scope => onDeleteTask && onDeleteTask(t, scope),
     onEndRepeatAt: onEndRepeatAt
-  })))))));
+  }))))))));
 }
 
 // ─── BILLS TAB ────────────────────────────────────────────────────────────────
@@ -64870,7 +64873,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v517"))))), diagOpen && (() => {
+  }, "v518"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
