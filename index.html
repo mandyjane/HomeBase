@@ -2510,7 +2510,7 @@ function mortCalc(cfg, today) {
 
     // Snapshot today's values (include accrued but uncapitalised interest)
     if (cursor === today) {
-      todayBalance = Math.max(0, Math.round(balance + accruedInterest));
+      todayBalance = Math.max(0, Math.round(balance)); // v540 · capitalised balance (matches bank statement)
       todayOffset = Math.round(offset);
       todayInterest = Math.round(totalInterest);
       todayWeeklyPmt = Math.round(weeklyPmt);
@@ -66804,7 +66804,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v540"))))), diagOpen && (() => {
+  }, "v541"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
