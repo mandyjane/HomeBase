@@ -64870,7 +64870,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v516"))))), diagOpen && (() => {
+  }, "v517"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -65443,32 +65443,18 @@ function SettingsPage({
       position: "relative",
       height: 28,
       borderRadius: 14,
-      overflow: "hidden",
-      background: "linear-gradient(to right, hsl(0,75%,55%), hsl(60,75%,55%), hsl(120,75%,55%), hsl(180,75%,55%), hsl(240,75%,55%), hsl(300,75%,55%), hsl(360,75%,55%))"
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "range",
-    min: "0",
-    max: "360",
-    value: (() => {
-      const hex = phColor || "#E5484D";
-      if (hex === "#ffffff") return 0;
-      const r = parseInt(hex.slice(1, 3), 16) / 255,
-        g = parseInt(hex.slice(3, 5), 16) / 255,
-        b = parseInt(hex.slice(5, 7), 16) / 255;
-      const mx = Math.max(r, g, b),
-        mn = Math.min(r, g, b),
-        d = mx - mn;
-      if (d === 0) return 0;
-      let h = 0;
-      if (mx === r) h = ((g - b) / d + 6) % 6;else if (mx === g) h = (b - r) / d + 2;else h = (r - g) / d + 4;
-      return Math.round(h * 60);
-    })(),
-    onChange: e => {
-      const h = Number(e.target.value);
+      background: "linear-gradient(to right, hsl(0,75%,55%), hsl(60,75%,55%), hsl(120,75%,55%), hsl(180,75%,55%), hsl(240,75%,55%), hsl(300,75%,55%), hsl(360,75%,55%))",
+      touchAction: "none",
+      cursor: "pointer"
+    },
+    onPointerDown: e => {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const h = Math.round(pct * 360);
       const s = 0.75,
-        l = 0.55;
-      const a2 = s * Math.min(l, 1 - l);
+        l = 0.55,
+        a2 = s * Math.min(l, 1 - l);
       const f = n => {
         const k = (n + h / 30) % 12;
         return l - a2 * Math.max(-1, Math.min(k - 3, 9 - k, 1));
@@ -65479,18 +65465,49 @@ function SettingsPage({
       };
       onPhColor("#" + toHex(f(0)) + toHex(f(8)) + toHex(f(4)));
     },
-    className: "hb-hue-slider",
+    onPointerMove: e => {
+      if (e.buttons === 0 && e.pressure === 0) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const h = Math.round(pct * 360);
+      const s = 0.75,
+        l = 0.55,
+        a2 = s * Math.min(l, 1 - l);
+      const f = n => {
+        const k = (n + h / 30) % 12;
+        return l - a2 * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      };
+      const toHex = v => {
+        const x = Math.round(v * 255);
+        return (x < 16 ? "0" : "") + x.toString(16);
+      };
+      onPhColor("#" + toHex(f(0)) + toHex(f(8)) + toHex(f(4)));
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
-      inset: 0,
-      width: "100%",
-      height: "100%",
-      margin: 0,
-      WebkitAppearance: "none",
-      appearance: "none",
-      background: "transparent",
-      cursor: "pointer",
-      outline: "none"
+      top: 1,
+      width: 26,
+      height: 26,
+      borderRadius: "50%",
+      background: "#fff",
+      border: "2px solid rgba(0,0,0,0.18)",
+      boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+      pointerEvents: "none",
+      left: `calc(${(() => {
+        const hex = phColor || "#E5484D";
+        if (hex === "#ffffff") return 0;
+        const r = parseInt(hex.slice(1, 3), 16) / 255,
+          g = parseInt(hex.slice(3, 5), 16) / 255,
+          b = parseInt(hex.slice(5, 7), 16) / 255;
+        const mx = Math.max(r, g, b),
+          mn = Math.min(r, g, b),
+          d = mx - mn;
+        if (d === 0) return 0;
+        let h = 0;
+        if (mx === r) h = ((g - b) / d + 6) % 6;else if (mx === g) h = (b - r) / d + 2;else h = (r - g) / d + 4;
+        return Math.round(h * 60);
+      })() / 360 * 100}% - 13px)`
     }
   }))))))), expSheet && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setExpSheet(null),
