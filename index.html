@@ -17116,6 +17116,8 @@ function App({
       workListView: workListView,
       rdoWorkedAsk: rdoWorkedAsk,
       workCardTint: workCardTint,
+      publicHolidays: publicHolidays,
+      phColor: phColor,
       onToggleWfh: (person, date, val) => setWfhOverrides(w => {
         const per = {
           ...(w[person] || {})
@@ -47705,6 +47707,8 @@ function WorkTab({
   workListView = "grouped",
   rdoWorkedAsk = false,
   workCardTint = "neutral",
+  publicHolidays = [],
+  phColor = "",
   onToggleWfh,
   onToggleRdoWorked,
   onEditRdoHours,
@@ -47754,6 +47758,15 @@ function WorkTab({
     lsSet("hb_dayOpen", dayOpen);
   }, [dayOpen]);
   const [showPast, setShowPast] = useState(false); // expand past shifts (week-grouped)
+  // v544 · Public holiday lookup by date for day dividers
+  const phByDate = useMemo(() => {
+    const m = {};
+    (publicHolidays || []).forEach(ph => {
+      if (ph.date) m[ph.date] = ph.title;
+    });
+    return m;
+  }, [publicHolidays]);
+  const phCol = phColor || PH_COLOR;
   // v163 Build 4 · which person the "swipe per person" (option D) list is showing.
   const [swipePerson, setSwipePerson] = useState("her");
   const swipe = workListView === "swipe";
@@ -48270,6 +48283,60 @@ function WorkTab({
           return next;
         })
       }));
+      // v544 · Public holiday banner between divider and cards
+      if (phByDate[dateISO]) {
+        out.push(/*#__PURE__*/React.createElement("div", {
+          key: "ph-" + dateISO,
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            margin: "-4px 2px 8px",
+            padding: "4px 8px",
+            background: softTint(phCol),
+            borderRadius: 8
+          }
+        }, /*#__PURE__*/React.createElement("svg", {
+          width: "12",
+          height: "12",
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: phCol,
+          strokeWidth: "2.5",
+          strokeLinecap: "round"
+        }, /*#__PURE__*/React.createElement("path", {
+          d: "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"
+        }), /*#__PURE__*/React.createElement("line", {
+          x1: "4",
+          y1: "22",
+          x2: "4",
+          y2: "15"
+        })), /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: .8,
+            textTransform: "uppercase",
+            color: phCol
+          }
+        }, "Public Holiday"), /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            fontSize: 10,
+            color: phCol,
+            opacity: .7
+          }
+        }, "\u00b7"), /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            fontSize: 10,
+            fontWeight: 600,
+            color: phCol,
+            opacity: .8
+          }
+        }, phByDate[dateISO])));
+      }
       if (folded) return; // heading + summary only
       // Mandy above Liam; within a person keep time order (already sorted in the week items).
       const order = {
@@ -63489,7 +63556,7 @@ function CountdownCard({
         fontWeight: 700,
         color: col
       }
-    }, parts.map((p, i) => /*#__PURE__*/React.createElement("span", {
+    }, parts.filter((p, i) => p.n > 0 || i === parts.length - 1).map((p, i) => /*#__PURE__*/React.createElement("span", {
       key: i
     }, p.n, /*#__PURE__*/React.createElement("span", {
       className: "sans",
@@ -63498,7 +63565,7 @@ function CountdownCard({
         fontWeight: 500,
         color: C.inkMute
       }
-    }, " ", p.unit, i < parts.length - 1 ? " " : ""))))));
+    }, " ", p.unit, " "))))));
   }));
 }
 function CountdownsSheet({
@@ -63769,22 +63836,26 @@ function CountdownsSheet({
         textAlign: "right",
         flexShrink: 0
       }
-    }, parts.map((p, i) => /*#__PURE__*/React.createElement("div", {
-      key: i
-    }, /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        whiteSpace: "nowrap"
+      }
+    }, parts.filter((p, i) => p.n > 0 || i === parts.length - 1).map((p, i, a) => /*#__PURE__*/React.createElement("span", {
+      key: i,
       className: "serif",
       style: {
-        fontSize: 20,
+        fontSize: 14,
         fontWeight: 700,
         color: col
       }
-    }, p.n), /*#__PURE__*/React.createElement("span", {
+    }, p.n, /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        fontSize: 10,
+        fontSize: 9,
+        fontWeight: 500,
         color: C.inkMute
       }
-    }, " ", p.unit)))), /*#__PURE__*/React.createElement("button", {
+    }, p.unit, i < a.length - 1 ? " " : ""))))), /*#__PURE__*/React.createElement("button", {
       onClick: () => remove(c.id),
       style: {
         background: "none",
@@ -67034,7 +67105,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v543"))))), diagOpen && (() => {
+  }, "v545"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
