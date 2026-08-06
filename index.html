@@ -13948,6 +13948,9 @@ function App({
         cursor: "pointer"
       }
     }, p.name || key))))), /*#__PURE__*/React.createElement("style", null, `
+        /* v564 · GLOBAL TAP HIGHLIGHT SUPPRESSION — removes the blue/grey flash on
+           tap across all elements app-wide. */
+        *, *::before, *::after { -webkit-tap-highlight-color: transparent; }
         /* v240 · SANS FACE IS ROBOTO CONDENSED. Archivo was wide: at 393px a long title
            like "Book honeymoon flights" crowded the countdown pill beside it, and the
            person chips ate width the row could not spare. Mandy compared five faces at
@@ -27398,7 +27401,8 @@ function AgendaRow({
         gap: 5,
         marginTop: isRewardRow ? 0 : 1,
         alignSelf: isRewardRow ? "center" : "auto",
-        cursor: "pointer"
+        cursor: "pointer",
+        WebkitTapHighlightColor: "transparent"
       }
     }, amtEl, timeEl, nameEl);
   })()), open && /*#__PURE__*/React.createElement("div", {
@@ -68157,7 +68161,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v562"))))), diagOpen && (() => {
+  }, "v564"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
