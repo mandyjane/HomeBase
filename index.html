@@ -8303,6 +8303,38 @@ function App({
   const [quickAdds, setQuickAdds] = useState(() => lsGet("hb_quickAdds", []));
   // v529 · Countdowns
   const [countdowns, setCountdowns] = useState(() => lsGet(userKey("hb_countdowns"), []));
+  // v556 · Sync countdown titles/dates when source events or tasks are edited
+  useEffect(() => {
+    setCountdowns(prev => {
+      let changed = false;
+      const next = prev.map(c => {
+        if (c.source === "event" && c.sourceId) {
+          const ev = events.find(e => e.id === c.sourceId);
+          if (ev && (ev.title !== c.title || ev.date !== c.date)) {
+            changed = true;
+            return {
+              ...c,
+              title: ev.title,
+              date: ev.date
+            };
+          }
+        }
+        if (c.source === "task" && c.sourceId) {
+          const t = tasks.find(x => x.id === c.sourceId);
+          if (t && (t.title !== c.title || t.dueDate !== c.date)) {
+            changed = true;
+            return {
+              ...c,
+              title: t.title,
+              date: t.dueDate
+            };
+          }
+        }
+        return c;
+      });
+      return changed ? next : prev;
+    });
+  }, [events, tasks]);
   // v535 · Recycle Bin — soft-deleted tasks and events, auto-purge after 30 days
   const [recycleBin, setRecycleBin] = useState(() => {
     const bin = lsGet("hb_recycleBin", []);
@@ -13566,21 +13598,27 @@ function App({
   .filter(t => !outstandingTodaySeriesIds.has(t._seriesId || t.id));
   // ONE list, sorted by time, so tomorrow reads chronologically rather than by type —
   // the whole point is a glance at the shape of the day.
-  const tomorrowRows = [...tomorrowEvents.map(e => ({
-    kind: "event",
-    ref: e,
-    title: dayOffTitle(e),
-    date: tomorrowYMD,
-    sub: `${e.place ? e.place + " · " : ""}${assigneeName(e.assignee, people)}`,
-    pName: assigneeName(e.assignee, people),
-    pColor: assigneeColor(e.assignee, people),
-    dotColor: e.publicHoliday ? phColor || "#E5484D" : EVENT_CATS[e.category] && EVENT_CATS[e.category].color || C.accent,
-    catIcon: e.publicHoliday ? "flag" : EVENT_CATS[e.category] && EVENT_CATS[e.category].icon || EVENT_CATS.Other && EVENT_CATS.Other.icon,
-    phIconKey: e.publicHoliday && phSpecialIcons ? e.phIcon : undefined,
-    done: false,
-    taskTime: e.time ? fmtTime(e.time) : null,
-    _t: e.time || ""
-  })), ...tomorrowTasks.map(t => ({
+  const tomorrowRows = [...tomorrowEvents.map(e => {
+    const span = isSpan(e);
+    const spanInfo = span ? spanBandInfo(e, tomorrowYMD) : null;
+    const dateRange = span ? spanDateRange(e) : "";
+    const dayLabel = span ? `Day ${spanInfo.n} of ${spanInfo.total}` : "";
+    return {
+      kind: "event",
+      ref: e,
+      title: dayOffTitle(e),
+      date: tomorrowYMD,
+      sub: span ? [dateRange, dayLabel, e.place, assigneeName(e.assignee, people)].filter(Boolean).join(" · ") : `${e.place ? e.place + " · " : ""}${assigneeName(e.assignee, people)}`,
+      pName: assigneeName(e.assignee, people),
+      pColor: assigneeColor(e.assignee, people),
+      dotColor: e.publicHoliday ? phColor || "#E5484D" : EVENT_CATS[e.category] && EVENT_CATS[e.category].color || C.accent,
+      catIcon: e.publicHoliday ? "flag" : EVENT_CATS[e.category] && EVENT_CATS[e.category].icon || EVENT_CATS.Other && EVENT_CATS.Other.icon,
+      phIconKey: e.publicHoliday && phSpecialIcons ? e.phIcon : undefined,
+      done: false,
+      taskTime: e.time ? fmtTime(e.time) : null,
+      _t: e.time || ""
+    };
+  }), ...tomorrowTasks.map(t => ({
     kind: "task",
     ref: t,
     title: t.title,
@@ -59998,7 +60036,7 @@ function PersonSheet({
   const fp = freshPeriods(pointsPeriods, rewardReset);
   const mine = (goalLog || []).filter(e => e.who === who); // NEVER mixes people
   const owed = mine.filter(isOwed).length;
-  const [tab, setTab] = useState(() => mine.length || goalProgress(g, who, points, fp, goalLog).met ? "record" : "goal");
+  const [tab, setTab] = useState("activity"); // v556 · default to Activity
   const {
     sheetRef
   } = useSwipeToClose(onClose);
@@ -67994,7 +68032,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v555"))))), diagOpen && (() => {
+  }, "v556"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
