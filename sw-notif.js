@@ -1,7 +1,50 @@
-// HomeBase service worker — handles push notifications and PWA caching
-// v481
+// HomeBase service worker — push notifications + versioned PWA caching
+// v559 — bump this version with every deploy to force cache refresh
 
-// Push event — fires when the server sends a push notification
+const CACHE_NAME = 'hb-v559';
+
+// ── INSTALL: pre-cache the app shell, skip waiting ──────────────────────────
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(['./', './index.html']))
+      .then(() => self.skipWaiting())
+  );
+});
+
+// ── ACTIVATE: delete old caches, claim all clients ──────────────────────────
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      ))
+      .then(() => clients.claim())
+  );
+});
+
+// ── FETCH: network-first for navigation, pass-through for everything else ───
+// When online: always fetches the latest index.html from GitHub Pages and
+// updates the cache. When offline: serves from the versioned cache.
+// Non-navigation requests (fonts, APIs, etc.) go straight to network.
+self.addEventListener("fetch", (event) => {
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // Clone and cache the fresh response for offline use
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+  // Everything else: network only (Supabase, push, etc.)
+});
+
+// ── PUSH: show notification when server sends one ───────────────────────────
 self.addEventListener("push", (event) => {
   let data = { title: "HomeBase", body: "You have a notification" };
   try {
@@ -30,7 +73,7 @@ self.addEventListener("push", (event) => {
   );
 });
 
-// Notification click — open or focus the app
+// ── NOTIFICATION CLICK: open or focus the app ───────────────────────────────
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url || self.registration.scope;
@@ -45,19 +88,4 @@ self.addEventListener("notificationclick", (event) => {
       return clients.openWindow(url);
     })
   );
-});
-
-// Activate — take control of all pages immediately
-self.addEventListener("activate", (event) => {
-  event.waitUntil(clients.claim());
-});
-
-// Install — skip waiting so updates take effect immediately
-self.addEventListener("install", (event) => {
-  self.skipWaiting();
-});
-
-// Minimal fetch handler for PWA installability
-self.addEventListener("fetch", (event) => {
-  // Pass through — no caching
 });
