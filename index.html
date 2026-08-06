@@ -13546,10 +13546,10 @@ function App({
     return hits.length ? materialize(series, ymd, dateField) : null;
   }
   // Events (work AND plain) falling tomorrow.
-  const tomorrowEvents = events.map(e => occursOnDay(e, "date", tomorrowYMD)).filter(Boolean).filter(e => !isPrivateHidden(e)).filter(e => !(hideDaysOff && isPureDayOff(e)));
+  const tomorrowEvents = events.map(e => occursOnDay(e, "date", tomorrowYMD)).filter(Boolean).filter(e => !e.deleted && !e.purged).filter(e => !isPrivateHidden(e)).filter(e => !(hideDaysOff && isPureDayOff(e)));
   // Tasks and bills due tomorrow. A DONE occurrence is excluded — it is not something
   // coming up. Deadlines keep their own section and are not repeated here.
-  const tomorrowTasks = tasks.map(t => occursOnDay(t, "dueDate", tomorrowYMD)).filter(Boolean).filter(t => !isPrivateHidden(t)).filter(t => !isDeadlineTask(t)).filter(t => !(t.exceptions && t.exceptions[tomorrowYMD] && t.exceptions[tomorrowYMD].done) && !t.done)
+  const tomorrowTasks = tasks.map(t => occursOnDay(t, "dueDate", tomorrowYMD)).filter(Boolean).filter(t => !isPrivateHidden(t)).filter(t => !isDeadlineTask(t)).filter(t => !(t.exceptions && t.exceptions[tomorrowYMD] && (t.exceptions[tomorrowYMD].done || t.exceptions[tomorrowYMD].deleted || t.exceptions[tomorrowYMD].purged)) && !t.done)
   // v256 · A SERIES STILL OUTSTANDING TODAY DOES NOT ALSO PREVIEW TOMORROW.
   // A daily task is due today AND tomorrow, so it drew two rows reading exactly
   // "Feed Leo · 6:00 PM · Fur Baby · Both" with nothing to tell them apart. Mandy ticked
@@ -67994,7 +67994,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v554"))))), diagOpen && (() => {
+  }, "v555"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
