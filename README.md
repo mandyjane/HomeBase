@@ -1,2 +1,2 @@
 # HomeBase
-Household organisation app
+Household organisation app 
