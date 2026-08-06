@@ -13190,7 +13190,15 @@ function App({
     });
   }, [overdueCount, showToast]);
   const nextTasks = homeListTasks.filter(t => !t.done && !isDeadlineTask(t) && t.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || b.priority - a.priority).slice(0, 3);
-  const nextEvents = homeListEvents.filter(e => e.date >= today).sort((a, b) => a.date.localeCompare(b.date) || (a.time || "").localeCompare(b.time || "")).slice(0, 3);
+  const nextEvents = homeListEvents.filter(e => {
+    if (e.date >= today) return true;
+    // v557 · A span event that STARTED before today but COVERS today or later.
+    if (isSpan(e)) {
+      const end = spanEndFor(e, e.date);
+      return end >= today;
+    }
+    return false;
+  }).sort((a, b) => a.date.localeCompare(b.date) || (a.time || "").localeCompare(b.time || "")).slice(0, 3);
 
   // Active deadlines for the dashboard: not done, and started (a "between"
   // deadline waits for its startDate). Nearest deadline first.
@@ -13336,7 +13344,7 @@ function App({
     doneAt: t.doneAt,
     taskTime: t.time ? fmtTime(t.time) : null
   }));
-  nextEvents.filter(e => e.date === today && !isPrivateHidden(e)).forEach(e => homeAgenda.push({
+  nextEvents.filter(e => (e.date === today || isSpan(e) && e.date < today && spanEndFor(e, e.date) >= today) && !isPrivateHidden(e)).forEach(e => homeAgenda.push({
     kind: "event",
     ref: e,
     title: dayOffTitle(e),
@@ -13573,7 +13581,17 @@ function App({
     // never appeared. Same recur:"none" blind spot as the occurrence helpers / materialize /
     // billHistory. isPlan has no dateField requirement met above? plan bills always carry a
     // dueDate (= dates[0]) post-v264, and planDueDate covers the pre-v264 case at the guard.
-    if ((!series.recur || series.recur === "none") && !isPlan(series)) return series[dateField] === ymd ? series : null;
+    if ((!series.recur || series.recur === "none") && !isPlan(series)) {
+      if (series[dateField] === ymd) return series;
+      // v557 · SPAN EVENTS COVER MULTIPLE DAYS. A 3-day trip starting yesterday has
+      // date = yesterday, so the exact match above misses today and tomorrow. Check
+      // whether ymd falls within the span range.
+      if (dateField === "date" && isSpan(series)) {
+        const endYMD = spanEndFor(series, series.date);
+        if (ymd >= series.date && ymd <= endYMD) return series;
+      }
+      return null;
+    }
     const hits = seriesDates(series, dateField, ymd, ymd);
     return hits.length ? materialize(series, ymd, dateField) : null;
   }
@@ -68032,7 +68050,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v556"))))), diagOpen && (() => {
+  }, "v557"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
