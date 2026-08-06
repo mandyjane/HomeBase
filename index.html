@@ -6622,12 +6622,16 @@ function sbInit() {
 }
 
 // Push a single key to Supabase (debounced)
+// v553 · Track pending pushes so we can flush on app close/background
+const sbPending = {};
 function sbPush(key, val) {
   if (!sbReady || !sbHouseholdId) return;
+  sbPending[key] = val;
   clearTimeout(sbDebounce[key]);
   sbDebounce[key] = setTimeout(() => {
     if (!sbClient) return;
     sbLastLocalWrite = Date.now();
+    delete sbPending[key];
     sbClient.from("sync_store").upsert({
       household_id: sbHouseholdId,
       key,
@@ -6640,6 +6644,46 @@ function sbPush(key, val) {
       if (error) console.warn("[sb] push error:", key, error.message);
     });
   }, 500);
+}
+// v553 · Flush all pending debounced pushes immediately (called on visibilitychange)
+function sbFlush() {
+  if (!sbClient || !sbHouseholdId) return;
+  const keys = Object.keys(sbPending);
+  if (!keys.length) return;
+  // Also clear any keys still in debounce timers
+  Object.keys(sbDebounce).forEach(k => {
+    clearTimeout(sbDebounce[k]);
+    delete sbDebounce[k];
+  });
+  const rows = keys.map(k => ({
+    household_id: sbHouseholdId,
+    key: k,
+    value: sbPending[k]
+  }));
+  keys.forEach(k => delete sbPending[k]);
+  sbLastLocalWrite = Date.now();
+  // Use keepalive to survive page close
+  try {
+    fetch(SB_URL + "/rest/v1/sync_store", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SB_KEY,
+        "Authorization": "Bearer " + SB_KEY,
+        "Prefer": "resolution=merge-duplicates"
+      },
+      body: JSON.stringify(rows),
+      keepalive: true
+    }).catch(() => {});
+  } catch (e) {
+    console.warn("[sb] flush error:", e);
+  }
+}
+// v553 · Flush on app background/close
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") sbFlush();
+  });
 }
 
 // Pull all keys from Supabase into localStorage
@@ -23284,7 +23328,7 @@ function ConfirmDelete({
       setReady(false);
       return;
     }
-    const t = setTimeout(() => setReady(true), 350);
+    const t = setTimeout(() => setReady(true), 100); // v553 · reduced from 350ms — was blocking taps on some devices
     return () => clearTimeout(t);
   }, [open]);
   if (!open) return null;
@@ -24827,19 +24871,24 @@ function parseVoiceLocal(text, people, todayStr) {
   };
   let remaining = t;
 
-  // Assignee
+  // v552 fix · Strip instruction phrases first
+  remaining = remaining.replace(/\b(?:add|create|set|make|put)\b/i, "");
+  remaining = remaining.replace(/\b(?:to (?:the )?(?:calendar|task list|tasks|events|my calendar))\b/i, "");
+  remaining = remaining.replace(/\b(?:remind me to|reminder for|reminder to|set a reminder)\b/i, "");
+
+  // Assignee — skip names with possessive ('s) as they're part of the title
   const herName = (people.her?.name || "Mandy").toLowerCase();
   const himName = (people.him?.name || "Liam").toLowerCase();
-  const assignPat = new RegExp(`(?:assign(?:ed)?\\s+to|for)\\s+(${herName}|${himName}|me|both|us)`, "i");
+  const assignPat = new RegExp(`(?:assign(?:ed)?\\s+to|for)\\s+(${herName}|${himName}|me|both|us)\\b`, "i");
   const am = remaining.match(assignPat);
   if (am) {
     const who = am[1].toLowerCase();
     if (who === himName) result.assignee = "him";else if (who === herName || who === "me") result.assignee = "her";else if (who === "both" || who === "us") result.assignee = "both";
     remaining = remaining.replace(am[0], "");
-  } else if (new RegExp(`\\b${himName}\\b`, "i").test(remaining)) {
+  } else if (new RegExp(`\\b${himName}(?!')\\b(?!\\s*'s)`, "i").test(remaining) && !new RegExp(`\\b${himName}'s\\b`, "i").test(remaining)) {
     result.assignee = "him";
     remaining = remaining.replace(new RegExp(`\\b${himName}\\b`, "i"), "");
-  } else if (new RegExp(`\\b${herName}\\b`, "i").test(remaining)) {
+  } else if (new RegExp(`\\b${herName}(?!')\\b(?!\\s*'s)`, "i").test(remaining) && !new RegExp(`\\b${herName}'s\\b`, "i").test(remaining)) {
     result.assignee = "her";
     remaining = remaining.replace(new RegExp(`\\b${herName}\\b`, "i"), "");
   }
@@ -24983,13 +25032,24 @@ function parseVoiceLocal(text, people, todayStr) {
         result.date = yr + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
         remaining = remaining.replace(monthDay[0], "");
       }
-      const dayMonth = remaining.match(new RegExp("\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(" + monthNames.join("|") + ")\\b", "i"));
+      const dayMonth = remaining.match(new RegExp("\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(" + monthNames.join("|") + ")\\b", "i"));
       if (!result.date && dayMonth) {
         const d = parseInt(dayMonth[1]);
         const m = monthNames.indexOf(dayMonth[2].toLowerCase());
         const yr = m < today.getMonth() || m === today.getMonth() && d < today.getDate() ? today.getFullYear() + 1 : today.getFullYear();
         result.date = yr + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
         remaining = remaining.replace(dayMonth[0], "");
+      }
+      // v552 fix · "on the 6th of October", "for the 15th of March"
+      if (!result.date) {
+        const onTheDay = remaining.match(new RegExp("(?:on|for)\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(" + monthNames.join("|") + ")\\b", "i"));
+        if (onTheDay) {
+          const d = parseInt(onTheDay[1]);
+          const m = monthNames.indexOf(onTheDay[2].toLowerCase());
+          const yr = m < today.getMonth() || m === today.getMonth() && d < today.getDate() ? today.getFullYear() + 1 : today.getFullYear();
+          result.date = yr + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+          remaining = remaining.replace(onTheDay[0], "");
+        }
       }
     }
   }
@@ -25012,6 +25072,10 @@ function parseVoiceLocal(text, people, todayStr) {
   if (eventWords.test(remaining)) result.type = "event";
 
   // Title: whatever is left, cleaned up
+  // Clean filler words from title
+  remaining = remaining.replace(/\b(?:on|for|the|to|in|at)\s*$/i, ""); // trailing prepositions
+  remaining = remaining.replace(/^\s*(?:on|for|the|to|in|at)\s+/i, ""); // leading prepositions
+  remaining = remaining.replace(/\s+(?:on|for)\s+$/i, ""); // trailing "on"/"for"
   result.title = remaining.replace(/\s+/g, " ").replace(/^[\s,.\-·]+|[\s,.\-·]+$/g, "").replace(/^\w/, c => c.toUpperCase()).trim();
   if (!result.title) result.title = text.replace(/^\w/, c => c.toUpperCase()).trim();
 
@@ -67930,7 +67994,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v552"))))), diagOpen && (() => {
+  }, "v554"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
