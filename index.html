@@ -4020,6 +4020,24 @@ function spanDateRange(ev) {
   return startStr + startTime + " - " + endStr + endTime;
 }
 
+// v559 · SHORT SPAN RANGE for dashboard chips: "Fri 7 – Sun 9 Aug" (no times).
+// Same-month shares the month once; cross-month prints both.
+function spanShortRange(ev) {
+  if (!isSpan(ev)) return "";
+  const d = spanDaysOf(ev);
+  const st = new Date(ev.date + "T00:00:00");
+  const endD = new Date(st);
+  endD.setDate(endD.getDate() + d - 1);
+  const wdS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][st.getDay()];
+  const wdE = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][endD.getDay()];
+  const mS = MON[st.getMonth()],
+    mE = MON[endD.getMonth()];
+  if (mS === mE && st.getFullYear() === endD.getFullYear()) {
+    return wdS + " " + st.getDate() + " – " + wdE + " " + endD.getDate() + " " + mS;
+  }
+  return wdS + " " + st.getDate() + " " + mS + " – " + wdE + " " + endD.getDate() + " " + mE;
+}
+
 // ── ALL-DAY EVENTS *(v230)* ──────────────────────────────────────────────────
 // A timeless event ALREADY worked before this: it saved, rendered and spanned. What was
 // missing was INTENT. `isAllDay` reads a STORED FLAG and never infers from an empty time,
@@ -13349,7 +13367,7 @@ function App({
     ref: e,
     title: dayOffTitle(e),
     sub: `${isSpan(e) ? spanDateRange(e) : e.place ? e.place + " · " : ""}${assigneeName(e.assignee, people)}`,
-    subLabel: isSpan(e) ? spanDateRange(e) : e.place || "",
+    subLabel: isSpan(e) ? spanShortRange(e) : e.place || "",
     pName: assigneeName(e.assignee, people),
     pColor: assigneeColor(e.assignee, people),
     date: e.date,
@@ -13629,7 +13647,8 @@ function App({
       sub: span ? [dateRange, dayLabel, e.place, assigneeName(e.assignee, people)].filter(Boolean).join(" · ") : `${e.place ? e.place + " · " : ""}${assigneeName(e.assignee, people)}`,
       // v557 · subLabel was MISSING from Tomorrow event rows — AgendaRow renders subLabel,
       // not sub. Without it, no place, no date range, no day count ever showed.
-      subLabel: span ? [dateRange, dayLabel].filter(Boolean).join(" · ") : e.place || "",
+      // v559 · Short date range + day count for dashboard chips (no times, no truncation).
+      subLabel: span ? [spanShortRange(e), dayLabel].filter(Boolean).join(" · ") : e.place || "",
       pName: assigneeName(e.assignee, people),
       pColor: assigneeColor(e.assignee, people),
       dotColor: e.publicHoliday ? phColor || "#E5484D" : EVENT_CATS[e.category] && EVENT_CATS[e.category].color || C.accent,
@@ -19697,7 +19716,21 @@ function EventCard({
       color: C.accent,
       whiteSpace: "nowrap"
     }
-  }, "All day")), /*#__PURE__*/React.createElement("div", {
+  }, "All day"), isSpan(ev) && /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 8.5,
+      fontWeight: 800,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      padding: "2px 6px",
+      borderRadius: 5,
+      background: softTint(cat.color),
+      color: cat.color,
+      whiteSpace: "nowrap",
+      flexShrink: 0
+    }
+  }, spanDaysOf(ev), " days")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -19717,7 +19750,15 @@ function EventCard({
       padding: "3px 8px",
       borderRadius: 6
     }
-  }, ev.category), /*#__PURE__*/React.createElement("span", {
+  }, ev.category), isSpan(ev) ? /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 500,
+      color: C.inkMute,
+      whiteSpace: "nowrap"
+    }
+  }, spanDateRange(ev)) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: {
       fontSize: 11,
@@ -19740,7 +19781,7 @@ function EventCard({
       color: C.inkMute,
       whiteSpace: "nowrap"
     }
-  }, fmtRange(ev.time, ev.end)))), ev.place && /*#__PURE__*/React.createElement("div", {
+  }, fmtRange(ev.time, ev.end))))), ev.place && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -68053,7 +68094,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v558"))))), diagOpen && (() => {
+  }, "v559"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
