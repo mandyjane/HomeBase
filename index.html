@@ -13627,6 +13627,9 @@ function App({
       title: dayOffTitle(e),
       date: tomorrowYMD,
       sub: span ? [dateRange, dayLabel, e.place, assigneeName(e.assignee, people)].filter(Boolean).join(" · ") : `${e.place ? e.place + " · " : ""}${assigneeName(e.assignee, people)}`,
+      // v557 · subLabel was MISSING from Tomorrow event rows — AgendaRow renders subLabel,
+      // not sub. Without it, no place, no date range, no day count ever showed.
+      subLabel: span ? [dateRange, dayLabel].filter(Boolean).join(" · ") : e.place || "",
       pName: assigneeName(e.assignee, people),
       pColor: assigneeColor(e.assignee, people),
       dotColor: e.publicHoliday ? phColor || "#E5484D" : EVENT_CATS[e.category] && EVENT_CATS[e.category].color || C.accent,
