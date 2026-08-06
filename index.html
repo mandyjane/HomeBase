@@ -19647,7 +19647,53 @@ function EventCard({
       marginBottom: 12,
       whiteSpace: "pre-wrap"
     }
-  }, ev.notes), /*#__PURE__*/React.createElement("div", {
+  }, ev.notes), isSpan(ev) && hasDayNotes(ev) && (() => {
+    const total = spanDaysOf(ev);
+    const notes = [];
+    for (let i = 1; i <= total; i++) {
+      const dn = dayNoteFor(ev, i);
+      if (dn) notes.push({
+        day: i,
+        text: dn
+      });
+    }
+    if (!notes.length) return null;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 12
+      }
+    }, notes.map(({
+      day,
+      text
+    }) => /*#__PURE__*/React.createElement("div", {
+      key: day,
+      className: "sans",
+      style: {
+        display: "flex",
+        gap: 8,
+        padding: "7px 12px",
+        marginBottom: 4,
+        background: C.pageWarm,
+        borderRadius: 10,
+        borderLeft: `2px solid ${C.inkFaint}`
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        fontWeight: 700,
+        color: C.inkMute,
+        flexShrink: 0,
+        minWidth: 38
+      }
+    }, "Day ", day), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11.5,
+        color: C.inkSoft,
+        lineHeight: 1.4,
+        whiteSpace: "pre-wrap"
+      }
+    }, text))));
+  })(), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -67219,7 +67265,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v548"))))), diagOpen && (() => {
+  }, "v549"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
