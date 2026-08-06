@@ -8574,6 +8574,7 @@ function App({
   });
   const [showAdd, setShowAdd] = useState(false);
   const [showChooser, setShowChooser] = useState(false);
+  const [showVoice, setShowVoice] = useState(false);
   const [addSeedDate, setAddSeedDate] = useState(null); // pre-fill date when adding from the calendar
   const [editTask, setEditTask] = useState(null);
   const [cardMgr, setCardMgr] = useState(false); // v280 · card manager sheet
@@ -13830,6 +13831,7 @@ function App({
         @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         @keyframes slideUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
         @keyframes sheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
+        @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.12);opacity:.7}}
         /* v356 · iPhone safe area — extend all bottom sheets behind the home indicator */
         .hb-sa{padding-bottom:env(safe-area-inset-bottom,0px)!important;overflow-x:hidden!important}
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
@@ -17675,7 +17677,9 @@ function App({
       onPick: type => {
         setShowChooser(false);
         const d = addSeedDate;
-        if (type === "plan") {
+        if (type === "voice") {
+          setShowVoice(true);
+        } else if (type === "plan") {
           setPlanHandoff(false);
           setPlanWeekTab("chore");
           setShowPlanWeek(true);
@@ -17709,6 +17713,38 @@ function App({
         setShowChooser(false);
         setAddSeedDate(null);
       }
+    }), showVoice && /*#__PURE__*/React.createElement(VoiceAddOverlay, {
+      people: people,
+      today: today,
+      onResult: r => {
+        setShowVoice(false);
+        if (r.type === "event") {
+          setEditEvent({
+            date: r.date || today,
+            time: r.time || "",
+            place: r.place || "",
+            assignee: r.assignee || "",
+            notes: "",
+            title: r.title || ""
+          });
+          setShowEventModal(true);
+        } else {
+          setEditTask({
+            dueDate: r.date || today,
+            time: r.time || "",
+            place: r.place || "",
+            assignee: r.assignee || "",
+            title: r.title || "",
+            recur: r.recur || "none",
+            recurInterval: r.recurInterval || 0,
+            recurUnit: r.recurUnit || "",
+            recurDays: r.recurDays || [],
+            priority: r.priority || 1
+          });
+          setShowAdd(true);
+        }
+      },
+      onClose: () => setShowVoice(false)
     }), showAdd && /*#__PURE__*/React.createElement(TaskModal, {
       billPayer: billPayer,
       billPriority: billPriority,
@@ -24771,6 +24807,528 @@ function QuickPick({
     onCancel: () => setDelQ(null)
   }));
 }
+
+// ── VOICE ADD *(v552)* ──────────────────────────────────────────────────────
+// Local keyword parser + Claude API fallback for voice-to-task/event.
+
+function parseVoiceLocal(text, people, todayStr) {
+  const t = text.toLowerCase().trim();
+  const result = {
+    type: "task",
+    title: "",
+    date: "",
+    time: "",
+    assignee: "",
+    recur: "none",
+    place: "",
+    recurInterval: 0,
+    recurUnit: "",
+    recurDays: []
+  };
+  let remaining = t;
+
+  // Assignee
+  const herName = (people.her?.name || "Mandy").toLowerCase();
+  const himName = (people.him?.name || "Liam").toLowerCase();
+  const assignPat = new RegExp(`(?:assign(?:ed)?\\s+to|for)\\s+(${herName}|${himName}|me|both|us)`, "i");
+  const am = remaining.match(assignPat);
+  if (am) {
+    const who = am[1].toLowerCase();
+    if (who === himName) result.assignee = "him";else if (who === herName || who === "me") result.assignee = "her";else if (who === "both" || who === "us") result.assignee = "both";
+    remaining = remaining.replace(am[0], "");
+  } else if (new RegExp(`\\b${himName}\\b`, "i").test(remaining)) {
+    result.assignee = "him";
+    remaining = remaining.replace(new RegExp(`\\b${himName}\\b`, "i"), "");
+  } else if (new RegExp(`\\b${herName}\\b`, "i").test(remaining)) {
+    result.assignee = "her";
+    remaining = remaining.replace(new RegExp(`\\b${herName}\\b`, "i"), "");
+  }
+
+  // Recurrence
+  const recurPats = [[/\bevery\s+day\b/i, "daily"], [/\bdaily\b/i, "daily"], [/\bevery\s+week\b/i, "weekly"], [/\bweekly\b/i, "weekly"], [/\bevery\s+fortnight\b/i, "fortnightly"], [/\bfortnightly\b/i, "fortnightly"], [/\bevery\s+month\b/i, "monthly"], [/\bmonthly\b/i, "monthly"], [/\bevery\s+year\b/i, "yearly"], [/\byearly\b/i, "yearly"], [/\bannually\b/i, "yearly"]];
+  for (const [rx, val] of recurPats) {
+    if (rx.test(remaining)) {
+      result.recur = val;
+      remaining = remaining.replace(rx, "");
+      break;
+    }
+  }
+  // Custom: "every 2 days", "every second Saturday", "every 3 weeks"
+  if (result.recur === "none") {
+    const customN = remaining.match(/\bevery\s+(\d+)\s+(day|week|month)s?\b/i);
+    if (customN) {
+      result.recur = "custom";
+      result.recurInterval = parseInt(customN[1]);
+      result.recurUnit = customN[2].toLowerCase() + "s";
+      remaining = remaining.replace(customN[0], "");
+    }
+    const ordinals = {
+      second: 2,
+      other: 2,
+      "2nd": 2,
+      third: 3,
+      "3rd": 3,
+      fourth: 4,
+      "4th": 4
+    };
+    const customOrd = remaining.match(/\bevery\s+(second|other|2nd|third|3rd|fourth|4th)\s+(day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+    if (customOrd) {
+      const n = ordinals[customOrd[1].toLowerCase()] || 2;
+      const unit = customOrd[2].toLowerCase();
+      const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+      const dayIdx = dayNames.indexOf(unit);
+      if (dayIdx >= 0) {
+        result.recur = "custom";
+        result.recurInterval = n;
+        result.recurUnit = "weeks";
+        result.recurDays = [dayIdx];
+      } else {
+        result.recur = "custom";
+        result.recurInterval = n;
+        result.recurUnit = unit + "s";
+      }
+      remaining = remaining.replace(customOrd[0], "");
+    }
+  }
+  // Specific days: "every Monday and Thursday"
+  if (result.recur === "none") {
+    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    const everyDays = remaining.match(/\bevery\s+((?:(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s*(?:and|&|,)\s*)?)+)/i);
+    if (everyDays) {
+      const dayStr = everyDays[1].toLowerCase();
+      const found = [];
+      dayNames.forEach((d, i) => {
+        if (dayStr.includes(d)) found.push(i);
+      });
+      if (found.length) {
+        result.recur = "custom";
+        result.recurDays = found;
+      }
+      remaining = remaining.replace(everyDays[0], "");
+    }
+  }
+
+  // Time: "at 3pm", "at 14:30", "at noon"
+  const timePat = remaining.match(/\bat\s+(\d{1,2}(?::\d{2})?)\s*(am|pm)?\b/i);
+  if (timePat) {
+    let h = parseInt(timePat[1]);
+    const m = timePat[1].includes(":") ? parseInt(timePat[1].split(":")[1]) : 0;
+    const ampm = (timePat[2] || "").toLowerCase();
+    if (ampm === "pm" && h < 12) h += 12;
+    if (ampm === "am" && h === 12) h = 0;
+    result.time = String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+    remaining = remaining.replace(timePat[0], "");
+  }
+  if (!result.time && /\bnoon\b/i.test(remaining)) {
+    result.time = "12:00";
+    remaining = remaining.replace(/\bat\s+noon\b|\bnoon\b/i, "");
+  }
+  if (!result.time && /\bmidnight\b/i.test(remaining)) {
+    result.time = "00:00";
+    remaining = remaining.replace(/\bat\s+midnight\b|\bmidnight\b/i, "");
+  }
+
+  // Location: "at [place]" (after time extracted)
+  const locPat = remaining.match(/\bat\s+([A-Z][a-zA-Z\s']+)/);
+  if (locPat && locPat[1].trim().length > 2) {
+    result.place = locPat[1].trim();
+    remaining = remaining.replace(locPat[0], "");
+  }
+
+  // Date
+  const today = new Date(todayStr + "T00:00:00");
+  const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+  if (/\btoday\b/i.test(remaining)) {
+    result.date = todayStr;
+    remaining = remaining.replace(/\btoday\b/i, "");
+  } else if (/\btomorrow\b/i.test(remaining)) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
+    result.date = toLocalYMD(d);
+    remaining = remaining.replace(/\btomorrow\b/i, "");
+  } else {
+    // "next Wednesday", "this Saturday"
+    const nextDay = remaining.match(/\b(?:next|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+    if (nextDay) {
+      const target = dayNames.indexOf(nextDay[1].toLowerCase());
+      const d = new Date(today);
+      let diff = (target - d.getDay() + 7) % 7;
+      if (diff === 0) diff = 7;
+      if (/next/i.test(nextDay[0])) diff += diff <= 0 ? 7 : 0;
+      d.setDate(d.getDate() + diff);
+      result.date = toLocalYMD(d);
+      remaining = remaining.replace(nextDay[0], "");
+    }
+    // Bare day name: "Saturday"
+    if (!result.date) {
+      const bareDay = remaining.match(new RegExp("\\b(" + dayNames.join("|") + ")\\b", "i"));
+      if (bareDay) {
+        const target = dayNames.indexOf(bareDay[1].toLowerCase());
+        const d = new Date(today);
+        let diff = (target - d.getDay() + 7) % 7;
+        if (diff === 0) diff = 7;
+        d.setDate(d.getDate() + diff);
+        result.date = toLocalYMD(d);
+        remaining = remaining.replace(bareDay[0], "");
+      }
+    }
+    // "August 10", "10th August", "15th"
+    if (!result.date) {
+      const monthDay = remaining.match(new RegExp("\\b(" + monthNames.join("|") + ")\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b", "i"));
+      if (monthDay) {
+        const m = monthNames.indexOf(monthDay[1].toLowerCase());
+        const d = parseInt(monthDay[2]);
+        const yr = m < today.getMonth() || m === today.getMonth() && d < today.getDate() ? today.getFullYear() + 1 : today.getFullYear();
+        result.date = yr + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+        remaining = remaining.replace(monthDay[0], "");
+      }
+      const dayMonth = remaining.match(new RegExp("\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(" + monthNames.join("|") + ")\\b", "i"));
+      if (!result.date && dayMonth) {
+        const d = parseInt(dayMonth[1]);
+        const m = monthNames.indexOf(dayMonth[2].toLowerCase());
+        const yr = m < today.getMonth() || m === today.getMonth() && d < today.getDate() ? today.getFullYear() + 1 : today.getFullYear();
+        result.date = yr + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+        remaining = remaining.replace(dayMonth[0], "");
+      }
+    }
+  }
+  if (!result.date) result.date = todayStr;
+
+  // Priority
+  if (/\burgent\b/i.test(remaining)) {
+    result.priority = 5;
+    remaining = remaining.replace(/\burgent\b/i, "");
+  } else if (/\bhigh\s*priority\b/i.test(remaining)) {
+    result.priority = 4;
+    remaining = remaining.replace(/\bhigh\s*priority\b/i, "");
+  } else if (/\blow\s*priority\b/i.test(remaining)) {
+    result.priority = 2;
+    remaining = remaining.replace(/\blow\s*priority\b/i, "");
+  }
+
+  // Event detection
+  const eventWords = /\bappointment\b|\bmeeting\b|\bparty\b|\bbirthday\b|\bdinner\b|\blunch\b|\btrip\b|\bflight\b|\bconcert\b|\bshow\b|\bgame\b/i;
+  if (eventWords.test(remaining)) result.type = "event";
+
+  // Title: whatever is left, cleaned up
+  result.title = remaining.replace(/\s+/g, " ").replace(/^[\s,.\-·]+|[\s,.\-·]+$/g, "").replace(/^\w/, c => c.toUpperCase()).trim();
+  if (!result.title) result.title = text.replace(/^\w/, c => c.toUpperCase()).trim();
+
+  // Score: how many fields were extracted beyond title
+  result._fields = 0;
+  if (result.assignee) result._fields++;
+  if (result.recur !== "none") result._fields++;
+  if (result.time) result._fields++;
+  if (result.place) result._fields++;
+  if (result.priority) result._fields++;
+  if (result.date !== todayStr) result._fields++;
+  return result;
+}
+async function parseVoiceAI(text, people, todayStr) {
+  try {
+    const herName = people.her?.name || "Mandy";
+    const himName = people.him?.name || "Liam";
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: `Parse this voice input into a task or event. Today is ${todayStr}. The two people are "${herName}" (her) and "${himName}" (him). Return ONLY valid JSON, no markdown, no backticks.\n\nInput: "${text}"\n\nReturn: {"type":"task" or "event","title":"...","date":"YYYY-MM-DD","time":"HH:MM" or "","assignee":"her" or "him" or "both" or "","recur":"none" or "daily" or "weekly" or "fortnightly" or "monthly" or "yearly" or "custom","recurInterval":number or 0,"recurUnit":"days" or "weeks" or "months" or "","recurDays":[] array of day numbers 0=Sun 6=Sat,"place":"" or location,"priority":0}`
+        }]
+      })
+    });
+    const data = await resp.json();
+    const raw = (data.content || []).map(c => c.text || "").join("").replace(/```json|```/g, "").trim();
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error("[voice-ai]", e);
+    return null;
+  }
+}
+function VoiceAddOverlay({
+  people,
+  today,
+  onResult,
+  onClose
+}) {
+  const [state, setState] = useState("listening"); // listening | processing | error
+  const [transcript, setTranscript] = useState("");
+  const [error, setError] = useState("");
+  const recognitionRef = useRef(null);
+  useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      setError("Voice input not supported in this browser");
+      setState("error");
+      return;
+    }
+    const r = new SR();
+    r.lang = "en-AU";
+    r.interimResults = false;
+    r.maxAlternatives = 1;
+    r.onresult = ev => {
+      const txt = ev.results[0][0].transcript;
+      setTranscript(txt);
+      setState("processing");
+      // Parse locally first
+      const local = parseVoiceLocal(txt, people, today);
+      if (local._fields >= 1) {
+        onResult(local);
+      } else {
+        // Fall back to API
+        parseVoiceAI(txt, people, today).then(ai => {
+          if (ai && ai.title) {
+            onResult({
+              ...ai,
+              _source: "ai"
+            });
+          } else {
+            onResult({
+              ...local,
+              _source: "local"
+            });
+          }
+        }).catch(() => onResult({
+          ...local,
+          _source: "local"
+        }));
+      }
+    };
+    r.onerror = ev => {
+      if (ev.error === "not-allowed") setError("Microphone access denied. Check browser permissions.");else if (ev.error === "no-speech") setError("No speech detected. Tap to try again.");else setError("Could not hear you. Tap to try again.");
+      setState("error");
+    };
+    r.onend = () => {
+      if (state === "listening" && !transcript) setState("error");
+    };
+    recognitionRef.current = r;
+    try {
+      r.start();
+    } catch (e) {
+      setError("Could not start microphone");
+      setState("error");
+    }
+    return () => {
+      try {
+        r.abort();
+      } catch (e) {}
+    };
+  }, []);
+  const retry = () => {
+    setState("listening");
+    setTranscript("");
+    setError("");
+    try {
+      recognitionRef.current?.start();
+    } catch (e) {}
+  };
+  const VOICE_COLOR = "#A78BFA";
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.target === e.currentTarget && onClose(),
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(36,31,24,0.85)",
+      backdropFilter: "blur(6px)",
+      zIndex: 250,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      borderRadius: 26,
+      padding: "40px 28px",
+      width: "90%",
+      maxWidth: 360,
+      textAlign: "center"
+    }
+  }, state === "listening" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 80,
+      height: 80,
+      borderRadius: "50%",
+      background: softTint(VOICE_COLOR),
+      border: `2px solid ${VOICE_COLOR}`,
+      margin: "0 auto 20px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      animation: "pulse 1.5s infinite"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "36",
+    height: "36",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: VOICE_COLOR,
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "9",
+    y: "2",
+    width: "6",
+    height: "11",
+    rx: "3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5 10a7 7 0 0 0 14 0"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "12",
+    y1: "19",
+    x2: "12",
+    y2: "22"
+  }))), /*#__PURE__*/React.createElement("p", {
+    className: "serif",
+    style: {
+      fontSize: 20,
+      color: C.ink,
+      marginBottom: 8
+    }
+  }, "Listening..."), /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      color: C.inkMute,
+      lineHeight: 1.5
+    }
+  }, "Try: \"Mow the lawn Saturday, assign to ", people.him?.name || "Liam", "\""), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "sans",
+    style: {
+      marginTop: 24,
+      padding: "10px 28px",
+      borderRadius: 12,
+      border: `1.5px solid ${C.rule}`,
+      background: "transparent",
+      color: C.inkMute,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Cancel")), state === "processing" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 60,
+      height: 60,
+      borderRadius: "50%",
+      background: softTint(VOICE_COLOR),
+      border: `2px solid ${VOICE_COLOR}30`,
+      margin: "0 auto 16px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "24",
+    height: "24",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: VOICE_COLOR,
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "12",
+    r: "10"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 6v6l4 2"
+  }))), /*#__PURE__*/React.createElement("p", {
+    className: "serif",
+    style: {
+      fontSize: 18,
+      color: C.ink,
+      marginBottom: 8
+    }
+  }, "Understanding..."), /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      color: VOICE_COLOR,
+      background: softTint(VOICE_COLOR),
+      borderRadius: 10,
+      padding: "10px 14px",
+      marginTop: 8
+    }
+  }, "\"", transcript, "\"")), state === "error" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 60,
+      height: 60,
+      borderRadius: "50%",
+      background: softTint(C.urgent),
+      border: `2px solid ${C.urgent}30`,
+      margin: "0 auto 16px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "24",
+    height: "24",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.urgent,
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "9",
+    y: "2",
+    width: "6",
+    height: "11",
+    rx: "3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5 10a7 7 0 0 0 14 0"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "4",
+    y1: "4",
+    x2: "20",
+    y2: "20"
+  }))), /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 14,
+      color: C.inkSoft,
+      marginBottom: 16
+    }
+  }, error || "Something went wrong"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: retry,
+    className: "sans",
+    style: {
+      padding: "10px 24px",
+      borderRadius: 12,
+      border: `1.5px solid ${VOICE_COLOR}`,
+      background: softTint(VOICE_COLOR),
+      color: VOICE_COLOR,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Try again"), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "sans",
+    style: {
+      padding: "10px 24px",
+      borderRadius: 12,
+      border: `1.5px solid ${C.rule}`,
+      background: "transparent",
+      color: C.inkMute,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Cancel")))));
+}
 function AddChooser({
   onPick,
   onClose
@@ -24853,6 +25411,90 @@ function AddChooser({
       marginBottom: 16
     }
   }, "Add to Home Base"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onPick("voice"),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 13,
+      width: "100%",
+      textAlign: "left",
+      background: C.card,
+      border: `1.5px solid #A78BFA`,
+      borderRadius: 16,
+      padding: "14px 15px",
+      marginBottom: 12,
+      cursor: "pointer",
+      boxShadow: glowShadow("#A78BFA", 0.28, 14)
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 42,
+      height: 42,
+      borderRadius: 12,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: softTint("#A78BFA"),
+      color: "#A78BFA"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "22",
+    height: "22",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "9",
+    y: "2",
+    width: "6",
+    height: "11",
+    rx: "3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5 10a7 7 0 0 0 14 0"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "12",
+    y1: "19",
+    x2: "12",
+    y2: "22"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "serif",
+    style: {
+      display: "block",
+      fontSize: 17,
+      fontStyle: "italic",
+      color: C.ink
+    }
+  }, "Voice add"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "block",
+      fontSize: 11.5,
+      color: C.inkMute,
+      marginTop: 2
+    }
+  }, "Say what you need — task or event")), /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.inkFaint,
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    style: {
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M9 6l6 6-6 6"
+  }))), /*#__PURE__*/React.createElement("button", {
     onClick: () => onPick("plan"),
     style: {
       display: "flex",
@@ -67288,7 +67930,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v551"))))), diagOpen && (() => {
+  }, "v552"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
