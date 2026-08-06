@@ -8673,6 +8673,8 @@ function App({
   const [editTask, setEditTask] = useState(null);
   const [cardMgr, setCardMgr] = useState(false); // v280 · card manager sheet
   const [showEventModal, setShowEventModal] = useState(false);
+  // v560 · Day note editing from dashboard/tasks tab
+  const [homeDayNoteEdit, setHomeDayNoteEdit] = useState(null);
   const [editEvent, setEditEvent] = useState(null);
   const [showShiftModal, setShowShiftModal] = useState(false); // shifts get their own form (still saved as Shift-category events)
   const [editShift, setEditShift] = useState(null);
@@ -9370,6 +9372,19 @@ function App({
       him: himPts
     });
   }, [syncVersion]);
+  // v560 · Re-read treat requests when app comes to foreground. The Supabase realtime
+  // subscription updates localStorage in the background, but React state stays stale
+  // until the component re-reads. This covers the case where a partner approves/denies
+  // a treat while the app is backgrounded — the UI now refreshes on return.
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === "visible") {
+        setTreatRequests(lsGet("hb_treatRequests", []));
+      }
+    };
+    document.addEventListener("visibilitychange", handler);
+    return () => document.removeEventListener("visibilitychange", handler);
+  }, []);
   // ROLL OVER — AND RECORD WHAT JUST CLOSED.
   //
   // freshPeriods() ZEROES a bucket whose key has changed. That zeroing is the ONLY
@@ -13367,7 +13382,7 @@ function App({
     ref: e,
     title: dayOffTitle(e),
     sub: `${isSpan(e) ? spanDateRange(e) : e.place ? e.place + " · " : ""}${assigneeName(e.assignee, people)}`,
-    subLabel: isSpan(e) ? spanShortRange(e) : e.place || "",
+    subLabel: isSpan(e) ? [e.place, "Day " + spanBandInfo(e, today).n + " of " + spanBandInfo(e, today).total].filter(Boolean).join(" · ") : e.place || "",
     pName: assigneeName(e.assignee, people),
     pColor: assigneeColor(e.assignee, people),
     date: e.date,
@@ -13648,14 +13663,14 @@ function App({
       // v557 · subLabel was MISSING from Tomorrow event rows — AgendaRow renders subLabel,
       // not sub. Without it, no place, no date range, no day count ever showed.
       // v559 · Short date range + day count for dashboard chips (no times, no truncation).
-      subLabel: span ? [spanShortRange(e), dayLabel].filter(Boolean).join(" · ") : e.place || "",
+      subLabel: span ? [e.place, dayLabel].filter(Boolean).join(" · ") : e.place || "",
       pName: assigneeName(e.assignee, people),
       pColor: assigneeColor(e.assignee, people),
       dotColor: e.publicHoliday ? phColor || "#E5484D" : EVENT_CATS[e.category] && EVENT_CATS[e.category].color || C.accent,
       catIcon: e.publicHoliday ? "flag" : EVENT_CATS[e.category] && EVENT_CATS[e.category].icon || EVENT_CATS.Other && EVENT_CATS.Other.icon,
       phIconKey: e.publicHoliday && phSpecialIcons ? e.phIcon : undefined,
       done: false,
-      taskTime: e.time ? fmtTime(e.time) : null,
+      taskTime: span ? spanDateRange(e) : e.time ? fmtTime(e.time) : null,
       _t: e.time || ""
     };
   }), ...tomorrowTasks.map(t => ({
@@ -16683,7 +16698,11 @@ function App({
               dueDate: adv.nextDry
             } : t));
             showToast(`Moved to ${shortDate(adv.nextDry)} — dry`, "success");
-          } : null
+          } : null,
+          onEditDayNote: row.kind === "event" && isSpan(row.ref) ? (ev, n) => setHomeDayNoteEdit({
+            ev,
+            n
+          }) : null
         });
       });
       if (homeAgenda.length === 0) return homeByDate.length === 0 && /*#__PURE__*/React.createElement("p", {
@@ -17915,6 +17934,17 @@ function App({
       },
       onSaveQuick: saveQuickAdd,
       isQuickSaved: isQuickSaved
+    }), homeDayNoteEdit && /*#__PURE__*/React.createElement(DayNoteSheet, {
+      ev: homeDayNoteEdit.ev,
+      n: homeDayNoteEdit.n,
+      total: spanDaysOf(homeDayNoteEdit.ev),
+      dateStr: homeDayNoteEdit.ev.date,
+      color: (EVENT_CATS[homeDayNoteEdit.ev.category] || EVENT_CATS.Other).color,
+      onClose: () => setHomeDayNoteEdit(null),
+      onSave: txt => {
+        saveDayNote(homeDayNoteEdit.ev, homeDayNoteEdit.n, txt);
+        setHomeDayNoteEdit(null);
+      }
     }), showEventModal && /*#__PURE__*/React.createElement(EventModal, {
       event: editEvent,
       people: people,
@@ -26559,7 +26589,8 @@ function AgendaRow({
   compact = false,
   billPayer = true,
   tickInExpansion = false,
-  billQuickPay = false
+  billQuickPay = false,
+  onEditDayNote
 }) {
   const [open, setOpen] = useState(compact); // compact: the parent card IS the expansion
   // Deleting a RECURRING row used to be hard-coded to scope "one" by the caller,
@@ -27354,7 +27385,9 @@ function AgendaRow({
       }
     }, tLabel) : null;
     if (!nameEl && !amtEl && !timeEl) return null;
+    // v560 · Right column also expands the card on tap (date range, name badge).
     return /*#__PURE__*/React.createElement("div", {
+      onClick: () => setOpen(o => !o),
       style: {
         flexShrink: 0,
         display: "flex",
@@ -27362,7 +27395,8 @@ function AgendaRow({
         alignItems: "flex-end",
         gap: 5,
         marginTop: isRewardRow ? 0 : 1,
-        alignSelf: isRewardRow ? "center" : "auto"
+        alignSelf: isRewardRow ? "center" : "auto",
+        cursor: "pointer"
       }
     }, amtEl, timeEl, nameEl);
   })()), open && /*#__PURE__*/React.createElement("div", {
@@ -27402,14 +27436,20 @@ function AgendaRow({
     }) => /*#__PURE__*/React.createElement("div", {
       key: day,
       className: "sans",
+      onClick: e => {
+        e.stopPropagation();
+        if (onEditDayNote) onEditDayNote(t, day);
+      },
       style: {
         display: "flex",
+        alignItems: "center",
         gap: 8,
         padding: "7px 12px",
         marginBottom: 4,
         background: C.pageWarm,
         borderRadius: 10,
-        borderLeft: `2px solid ${C.inkFaint}`
+        borderLeft: `2px solid ${C.inkFaint}`,
+        cursor: onEditDayNote ? "pointer" : "default"
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
@@ -27424,9 +27464,24 @@ function AgendaRow({
         fontSize: 11.5,
         color: C.inkSoft,
         lineHeight: 1.4,
-        whiteSpace: "pre-wrap"
+        whiteSpace: "pre-wrap",
+        flex: 1,
+        minWidth: 0
       }
-    }, text))));
+    }, text), onEditDayNote && /*#__PURE__*/React.createElement("svg", {
+      width: "12",
+      height: "12",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: C.inkFaint,
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      style: {
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"
+    })))));
   })(), isTask && t.place && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -27532,15 +27587,21 @@ function AgendaRow({
         }
       }, t.startDate ? `${shortDate(t.startDate)} – ${shortDate(t.dueDate)}` : `By ${shortDate(t.dueDate)}`));
     } else {
-      const overdueBy = isTask && row.overdue ? daysBetween(t.dueDate, today) : 0;
-      const label = row.overdue ? overdueBy > 0 ? `${shortDate(isTask ? t.dueDate : t.date)} · ${overdueBy}d overdue` : shortDate(isTask ? t.dueDate : t.date) : isTask ? t.dueDate === today ? "Due today" : shortDate(t.dueDate) : shortDate(t.date);
-      parts.push(/*#__PURE__*/React.createElement("span", {
-        key: "d",
-        style: {
-          color: row.overdue ? C.urgent : C.inkMute,
-          fontWeight: row.overdue ? 700 : 400
-        }
-      }, label));
+      // v560 · SKIP the standalone date line for SPAN EVENTS — the date range is
+      // already shown in the subLabel and time column, so "Fri, 7 Aug" is redundant.
+      if (!isTask && isSpan(t)) {
+        // no date line for span events
+      } else {
+        const overdueBy = isTask && row.overdue ? daysBetween(t.dueDate, today) : 0;
+        const label = row.overdue ? overdueBy > 0 ? `${shortDate(isTask ? t.dueDate : t.date)} · ${overdueBy}d overdue` : shortDate(isTask ? t.dueDate : t.date) : isTask ? t.dueDate === today ? "Due today" : shortDate(t.dueDate) : shortDate(t.date);
+        parts.push(/*#__PURE__*/React.createElement("span", {
+          key: "d",
+          style: {
+            color: row.overdue ? C.urgent : C.inkMute,
+            fontWeight: row.overdue ? 700 : 400
+          }
+        }, label));
+      }
     }
     // v272 · NO CATEGORY HERE. This line used to push t.billCat when expanded,
     // guarded on !compact because "the card header already carries the category"
@@ -68094,7 +68155,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v559"))))), diagOpen && (() => {
+  }, "v561"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
