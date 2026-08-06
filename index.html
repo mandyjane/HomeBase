@@ -17926,7 +17926,7 @@ function App({
             recur: src.recur || "none"
           });
           setShowShiftModal(true);
-        } else if (type === "off" || type === "leave" || type === "toil" || type === "rdo") {
+        } else if (type === "off" || type === "leave" || type === "toil" || type === "rdo" || type === "ph") {
           // v258 · THE GRID PRE-ANSWERS THE TYPE. v247 deliberately left `workEx` unset
           // because the sheet emitted only "dayoff" and ExceptionModal owned the picker -
           // seeding it would have pre-answered a question that sheet was about to ask.
@@ -36200,6 +36200,21 @@ function updateTypes() {
     r: "9"
   }), /*#__PURE__*/React.createElement("path", {
     d: "M12 7v5l3 2"
+  }))], ["ph", "Pub Hol", "Paid hours", PH_COLOR, /*#__PURE__*/React.createElement("svg", {
+    width: "20",
+    height: "20",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "4",
+    y1: "22",
+    x2: "4",
+    y2: "15"
   }))], ["rdo", "RDO", "Rostered day off", OFF_COLOR, /*#__PURE__*/React.createElement("svg", {
     width: "20",
     height: "20",
@@ -46568,15 +46583,42 @@ function DayActionsSheet({
     }, /*#__PURE__*/React.createElement("path", {
       d: "M14.63 22.3C18.43 21.31 21.41 18.28 22.37 14.4C22.65 13.29 22.65 10.81 22.38 9.69C20.57 2.27 12.11 -1.03 5.93 3.28L5.25 3.76L4.51 3.03C3.77 2.3 3.34 2.12 3.2 2.49C3.16 2.59 3.13 3.52 3.13 4.55C3.13 6.29 3.15 6.44 3.36 6.55C3.66 6.72 6.98 6.72 7.28 6.55C7.64 6.36 7.55 6.08 6.91 5.43L6.31 4.83L6.95 4.4C9.34 2.82 12.61 2.45 15.21 3.46C16.46 3.95 17.29 4.51 18.4 5.61C19.42 6.62 19.6 6.87 20.14 7.98C20.85 9.46 21.11 10.54 21.11 12.02C21.1 14.85 19.87 17.38 17.65 19.16C14.08 22 8.88 21.72 5.62 18.51C3.73 16.64 2.86 14.44 2.9 11.64C2.93 10.07 2.86 9.87 2.25 9.87C1.53 9.87 1.41 10.15 1.41 11.92C1.42 14.68 2.24 16.95 3.95 18.9C5.77 20.98 7.64 22 10.7 22.57C11.35 22.7 13.74 22.53 14.63 22.3ZM15.72 15.66C15.84 15.54 15.94 15.28 15.94 15.07C15.94 14.76 15.72 14.48 14.39 13.14L12.83 11.58L12.83 9.42C12.83 7.28 12.82 7.25 12.54 6.97C12.18 6.61 11.89 6.6 11.48 6.92L11.17 7.17L11.17 9.78L11.17 12.4L12.86 14.1C13.78 15.04 14.65 15.85 14.78 15.91C15.08 16.03 15.43 15.94 15.72 15.66Z"
     }));
+    if (t === "ph") return /*#__PURE__*/React.createElement("svg", {
+      width: "20",
+      height: "20",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"
+    }), /*#__PURE__*/React.createElement("line", {
+      x1: "4",
+      y1: "22",
+      x2: "4",
+      y2: "15"
+    }));
+    if (t === "_ot") return /*#__PURE__*/React.createElement("svg", {
+      width: "18",
+      height: "18",
+      viewBox: "0 0 24 24",
+      fill: "currentColor"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M13 2 L3 14 h7 l-1 8 L19 10 h-7 z"
+    }));
     // off
     return /*#__PURE__*/React.createElement(DayOffIcon, {
       size: 20
     });
   };
   // v180 · OT_COLOR is module-scope now
-  const TILES = [["sick", "Sick", SICK_COLOR, "from when leave started"], ["leave", "Annual leave", LEAVE_COLOR, "day off, paid"], ["toil", "TOIL", TOIL_COLOR, "time off in lieu"], ["ph", "Pub Hol", PH_COLOR, "paid public holiday"], ["off", "Day off", DAYOFF_GREY, "not working"] // v248 · matches the card
-  ];
+  const TILES = [["sick", "Sick", SICK_COLOR, "from when leave started"], ["leave", "Annual leave", LEAVE_COLOR, "day off, paid"], ["toil", "TOIL", TOIL_COLOR, "time off in lieu"], ["ph", "Pub Hol", PH_COLOR, "paid public holiday"], ["off", "Day off", DAYOFF_GREY, "not working"], ["_ot", "Log overtime", OT_COLOR, "extra hours worked"]];
   const pick = t => {
+    if (t === "_ot") {
+      logOT();
+      return;
+    }
     onPickException && onPickException({
       workEx: t,
       date,
@@ -46890,32 +46932,7 @@ function DayActionsSheet({
         flexShrink: 0
       }
     }, /*#__PURE__*/React.createElement(TrashIcon, null)));
-  })), /*#__PURE__*/React.createElement("button", {
-    onClick: logOT,
-    className: "sans",
-    style: {
-      width: "100%",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-      background: softTint(OT_COLOR),
-      border: `1.5px solid ${mixHex(OT_COLOR, C.card, 0.4)}`,
-      borderRadius: 12,
-      padding: "13px",
-      cursor: "pointer",
-      color: OT_COLOR,
-      fontSize: 13,
-      fontWeight: 700
-    }
-  }, /*#__PURE__*/React.createElement("svg", {
-    width: "16",
-    height: "16",
-    viewBox: "0 0 24 24",
-    fill: "currentColor"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M13 2 L3 14 h7 l-1 8 L19 10 h-7 z"
-  })), dayOT.length > 0 ? "Log more overtime" : "Log overtime"), /*#__PURE__*/React.createElement(ConfirmDelete, {
+  })), /*#__PURE__*/React.createElement(ConfirmDelete, {
     open: !!delOT,
     title: "Remove this overtime?",
     body: delOT ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", {
@@ -67150,7 +67167,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v546"))))), diagOpen && (() => {
+  }, "v547"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
