@@ -9409,19 +9409,7 @@ function App({
     setPointsPeriods(fresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // v524 · One-shot cleanup: remove phantom missed entries created during the
-  // transition period before goals were actively used. Runs AFTER recordClosedPeriods
-  // so the re-created entry is caught. Subsequent mounts won't re-add it because
-  // pointsPeriods keys are now current.
-  useEffect(() => {
-    if (!lsGet("hb_goalLogCleaned3")) {
-      setGoalLog(prev => {
-        const cleaned = prev.filter(e => !(e.met === false && !e.claimed));
-        return cleaned.length < prev.length ? cleaned : prev;
-      });
-      lsSet("hb_goalLogCleaned3", true);
-    }
-  }, []);
+  // v565 · Removed hb_goalLogCleaned3 one-shot migration (v524). Already run on both devices.
   // For each goal, if ITS period's bucket key has rolled, freeze an entry for the
   // period that just ended. Idempotent: entryId dedupes, so a double-mount cannot
   // double-log. Fabricates nothing — a period with no stored bucket is simply skipped,
@@ -68161,7 +68149,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v564"))))), diagOpen && (() => {
+  }, "v565"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
