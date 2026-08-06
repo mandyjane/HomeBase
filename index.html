@@ -13389,7 +13389,7 @@ function App({
     dotColor: e.publicHoliday ? phColor || "#E5484D" : (EVENT_CATS[e.category] || EVENT_CATS.Other).color,
     catIcon: e.publicHoliday ? "flag" : (EVENT_CATS[e.category] || EVENT_CATS.Other).icon,
     phIconKey: e.publicHoliday && phSpecialIcons ? e.phIcon : undefined,
-    time: e.publicHoliday ? "" : isSpan(e) ? spanDateRange(e) : fmtRange(e.time, e.end) + (e.category === SHIFT_CAT && durLabel(e.time, e.end) ? ` · ${durLabel(e.time, e.end)}` : ""),
+    time: e.publicHoliday ? "" : isSpan(e) ? spanShortRange(e) : fmtRange(e.time, e.end) + (e.category === SHIFT_CAT && durLabel(e.time, e.end) ? ` · ${durLabel(e.time, e.end)}` : ""),
     overdue: false,
     sub: e.publicHoliday ? "Public Holiday · All day" : isSpan(e) ? spanDateRange(e) + (e.place ? " · " + e.place : "") + " · " + assigneeName(e.assignee, people) : `${e.place ? e.place + " · " : ""}${assigneeName(e.assignee, people)}`,
     // v182 · a WORKED RDO reflects its state on the dashboard too (matches the Work-tab card):
@@ -13669,8 +13669,10 @@ function App({
       dotColor: e.publicHoliday ? phColor || "#E5484D" : EVENT_CATS[e.category] && EVENT_CATS[e.category].color || C.accent,
       catIcon: e.publicHoliday ? "flag" : EVENT_CATS[e.category] && EVENT_CATS[e.category].icon || EVENT_CATS.Other && EVENT_CATS.Other.icon,
       phIconKey: e.publicHoliday && phSpecialIcons ? e.phIcon : undefined,
+      // v561 · AgendaRow reads row.time for events (not taskTime). Set it for span events.
       done: false,
-      taskTime: span ? spanDateRange(e) : e.time ? fmtTime(e.time) : null,
+      time: span ? spanShortRange(e) : null,
+      taskTime: e.time ? fmtTime(e.time) : null,
       _t: e.time || ""
     };
   }), ...tomorrowTasks.map(t => ({
@@ -68155,7 +68157,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v561"))))), diagOpen && (() => {
+  }, "v562"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
