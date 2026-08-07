@@ -37212,7 +37212,7 @@ function regularOccurrences(patterns, from, to) {
 //     day it stacks on top (regular 8h + OT 2h); on a weekend/RDO it just adds.
 //   • A shift-mode person emits nothing here even if a stray record exists.
 // `deleted` exceptions and the wrong assignee are ignored, matching shiftOccurrences.
-const REGEX_REPLACING = new Set(["off", "rdo", "sick", "leave", "toil"]);
+const REGEX_REPLACING = new Set(["off", "rdo", "sick", "leave", "toil", "ph"]);
 // Build-3 · A multi-day sick/leave/TOIL block is NOT a recurring series — it is a
 // SPAN of N standalone day entries. This walks forward from `startISO` and returns
 // exactly `count` WORKING dates. With skipWeekends on, Sat/Sun do NOT consume a day
@@ -69346,7 +69346,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v590"))))), diagOpen && (() => {
+  }, "v592"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
