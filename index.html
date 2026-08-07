@@ -5598,7 +5598,7 @@ function doneStamp(dueDate, doneAt, task) {
   if (!completedLate(dueDate, doneAt)) {
     // Compare LOCAL calendar days. Slicing the ISO string gives the UTC date, which is a
     // day out for evening completions on a positive-offset device — the exact bug that
-    // made freshly ticked tasks vanish from the dashboard (v5749).
+    // made freshly ticked tasks vanish from the dashboard (v5779).
     const gap = daysBetween(toLocalYMD(d), todayStr());
     if (gap <= 0) return `Done ${clock}`; // today
     if (gap === 1) return `Done ${d.getDate()} ${MON[d.getMonth()]}, ${clock}`; // yesterday
@@ -6617,7 +6617,7 @@ let sbUserId = null;
 // v339 · Per-user appearance keys. Appearance (mood, accent, bg, deadline) is personal
 // preference — Mandy and Liam can each have their own mood without overwriting the other.
 // Falls back to the shared key when not logged in (pre-auth boot).
-const APPEARANCE_KEYS = new Set(["hb_theme", "hb_accentSleek", "hb_accentBold", "hb_bgSleek", "hb_bgBold", "hb_deadlineMode", "hb_deadlineSleek", "hb_deadlineBold", "hb_billQuickPay", "hb_mortPropVal", "hb_countdowns", "hb_showCountdowns", "hb_showForecast", "hb_showQuickAdd"]);
+const APPEARANCE_KEYS = new Set(["hb_theme", "hb_accentSleek", "hb_accentBold", "hb_bgSleek", "hb_bgBold", "hb_deadlineMode", "hb_deadlineSleek", "hb_deadlineBold", "hb_billQuickPay", "hb_mortPropVal", "hb_countdowns", "hb_showCountdowns", "hb_showForecast", "hb_showQuickAdd", "hb_showChatHome"]);
 function userKey(k) {
   return sbUserId && APPEARANCE_KEYS.has(k) ? k + "_" + sbUserId : k;
 }
@@ -8378,6 +8378,19 @@ function App({
   useEffect(() => {
     lsSet(userKey("hb_showQuickAdd"), showQuickAdd);
   }, [showQuickAdd]);
+  // v577 · CHAT — shared pinboard messages
+  const [chatMessages, setChatMessages] = useState(() => lsGet("hb_chatMessages", []));
+  const [showChatHome, setShowChatHome] = useState(() => lsGet(userKey("hb_showChatHome"), true));
+  const [chatLastSeen, setChatLastSeen] = useState(() => lsGet(userKey("hb_chatLastSeen"), null));
+  useEffect(() => {
+    lsSet("hb_chatMessages", chatMessages);
+  }, [chatMessages]);
+  useEffect(() => {
+    lsSet(userKey("hb_showChatHome"), showChatHome);
+  }, [showChatHome]);
+  useEffect(() => {
+    lsSet(userKey("hb_chatLastSeen"), chatLastSeen);
+  }, [chatLastSeen]);
   // v244 · WORK HISTORY. { [seriesId]: [ {t, date, kind, changes:[...] }, ... ] }
   // Newest LAST, so the timeline reads bottom-up like a diary and an append is a push.
   const [workHist, setWorkHist] = useState(() => lsGet(WORK_HIST_KEY, {}));
@@ -14678,7 +14691,143 @@ function App({
         opacity: .9,
         marginTop: 3
       }
-    }, totalToday === 0 ? "Nothing due today." : `${totalToday - doneToday} to go — you've got this.`)))), showQuickAdd && /*#__PURE__*/React.createElement("div", {
+    }, totalToday === 0 ? "Nothing due today." : `${totalToday - doneToday} to go — you've got this.`)))), showChatHome && chatMessages.length > 0 && (() => {
+      const latest = chatMessages.slice(-3).reverse();
+      const unread = chatLastSeen ? chatMessages.filter(m => m.id > chatLastSeen && m.author !== currentUser).length : chatMessages.filter(m => m.author !== currentUser).length;
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginBottom: 14
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "2px 2px 10px",
+          cursor: "pointer"
+        },
+        onClick: () => {
+          setTab("chat");
+          const last = chatMessages[chatMessages.length - 1];
+          if (last) setChatLastSeen(last.id);
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 9,
+          fontWeight: 800,
+          letterSpacing: 1.6,
+          textTransform: "uppercase",
+          color: isSleek ? C.accent : C.inkMute
+        }
+      }, "Chat"), unread > 0 && /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          background: C.her,
+          color: "#fff",
+          fontSize: 8,
+          fontWeight: 800,
+          borderRadius: 20,
+          padding: "1px 5px",
+          minWidth: 14,
+          textAlign: "center"
+        }
+      }, unread), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1,
+          height: 1,
+          background: C.rule
+        }
+      }), /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 11,
+          fontWeight: 700,
+          color: C.accent
+        }
+      }, "See all")), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          gap: 6
+        }
+      }, latest.map(m => {
+        const isMe = m.author === currentUser;
+        const col = personColor(people[m.author]?.color || C.inkMute);
+        const name = people[m.author]?.name || m.author;
+        const ago = (() => {
+          const d = Math.round((Date.now() - m.id) / 1000);
+          if (d < 60) return "Just now";
+          if (d < 3600) return Math.floor(d / 60) + "m ago";
+          if (d < 86400) return Math.floor(d / 3600) + "h ago";
+          return Math.floor(d / 86400) + "d ago";
+        })();
+        return /*#__PURE__*/React.createElement("div", {
+          key: m.id,
+          style: {
+            display: "flex",
+            gap: 8,
+            alignItems: "flex-start",
+            maxWidth: "85%",
+            ...(isMe ? {
+              alignSelf: "flex-end",
+              flexDirection: "row-reverse"
+            } : {})
+          }
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            background: softTint(col),
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            marginTop: 2
+          }
+        }, /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            fontSize: 9,
+            fontWeight: 800,
+            color: col
+          }
+        }, name.charAt(0).toUpperCase())), /*#__PURE__*/React.createElement("div", {
+          style: {
+            textAlign: isMe ? "right" : "left"
+          }
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            background: rgbaFromHex(col, 0.12),
+            border: `1px solid ${rgbaFromHex(col, 0.2)}`,
+            borderRadius: isMe ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
+            padding: "8px 11px",
+            textAlign: "left"
+          }
+        }, /*#__PURE__*/React.createElement("p", {
+          className: "sans",
+          style: {
+            fontSize: 13,
+            color: C.ink,
+            lineHeight: 1.3
+          }
+        }, m.text)), /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            fontSize: 8,
+            color: C.inkFaint,
+            ...(isMe ? {
+              marginRight: 4
+            } : {
+              marginLeft: 4
+            }),
+            marginTop: 2,
+            display: "block"
+          }
+        }, ago)));
+      })));
+    })(), showQuickAdd && /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         justifyContent: "space-around",
@@ -14925,36 +15074,51 @@ function App({
         textTransform: "uppercase",
         color: isSleek ? C.accent : C.inkMute
       }
-    }, "Levels"), !lvlOpen && /*#__PURE__*/React.createElement("span", {
-      className: "sans",
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        fontSize: 10,
-        fontWeight: 600,
-        letterSpacing: .4,
-        textTransform: "uppercase",
-        color: C.inkMute
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        width: 7,
-        height: 7,
-        borderRadius: "50%",
-        flexShrink: 0,
-        background: personColor(people.her.color)
-      }
-    }), people.her.name, " Lv ", herLevel.level, /*#__PURE__*/React.createElement("span", {
-      style: {
-        width: 7,
-        height: 7,
-        borderRadius: "50%",
-        flexShrink: 0,
-        marginLeft: 4,
-        background: personColor(people.him.color)
-      }
-    }), people.him.name, " Lv ", himLevel.level), /*#__PURE__*/React.createElement("span", {
+    }, "Levels"), !lvlOpen && (() => {
+      // v577 · Compute earned from ground truth (same as expanded card)
+      const earnedPts = {};
+      ["her", "him"].forEach(k => {
+        const g = rewards[k] || DEFAULT_REWARDS[k];
+        const p = migratePeriod(g.period);
+        const bk = periodBucket(p, fp);
+        const _pStart = bk ? bk.key : null;
+        const _acts = collectCompletedTasks(visTasks, k, _pStart, null, effectiveResetAt);
+        const _bActs = collectBonusActivity(bonusLog, k, _pStart, null, effectiveResetAt);
+        earnedPts[k] = [..._acts, ..._bActs].reduce((s, t) => s + (t.points || 0), 0);
+      });
+      return /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          fontSize: 10,
+          fontWeight: 600,
+          letterSpacing: .4,
+          textTransform: "uppercase",
+          color: C.inkMute
+        }
+      }, [["her", herLevel], ["him", himLevel]].map(([key, lv], i) => /*#__PURE__*/React.createElement(React.Fragment, {
+        key: key
+      }, i > 0 && /*#__PURE__*/React.createElement("span", {
+        style: {
+          width: 1
+        }
+      }), /*#__PURE__*/React.createElement("span", {
+        style: {
+          width: 7,
+          height: 7,
+          borderRadius: "50%",
+          flexShrink: 0,
+          background: personColor(people[key].color)
+        }
+      }), people[key].name, " Lv ", lv.level, " ", /*#__PURE__*/React.createElement("span", {
+        style: {
+          color: personColor(people[key].color),
+          fontWeight: 700
+        }
+      }, "\u00b7 ", earnedPts[key]))));
+    })(), /*#__PURE__*/React.createElement("span", {
       style: {
         flex: 1,
         height: 1,
@@ -15153,7 +15317,7 @@ function App({
           transition: "width 0.6s ease"
         }
       })));
-    })())))))) : tab === "settings" ? null :
+    })())))))) : tab === "settings" ? null : tab === "chat" ? null :
     /*#__PURE__*/
     /* Tab heading for non-home tabs */
     React.createElement("div", {
@@ -15295,7 +15459,7 @@ function App({
           color: on ? C.onAccent : C.inkMute
         }
       }, lbl);
-    })), tab !== "stats" && tab !== "calendar" && (() => {
+    })), tab !== "stats" && tab !== "calendar" && tab !== "chat" && (() => {
       const isWork = tab === "work";
       const isBillsTab = tab === "bills";
       const addLabel = tab === "tasks" ? listType === "events" ? "Event" : "Task" : tab === "events" ? "Event" : isBillsTab ? "Bill" : "Add";
@@ -17769,6 +17933,55 @@ function App({
       onToggle: toggleDone,
       onEndRepeatAt: endRepeatAt,
       onShowCompleted: who => setCompletedTasksSheet(who)
+    }), tab === "chat" && /*#__PURE__*/React.createElement(ChatTab, {
+      messages: chatMessages,
+      currentUser: currentUser,
+      people: people,
+      onSend: text => {
+        if (!text.trim() || !currentUser) return;
+        const msg = {
+          id: Date.now(),
+          text: text.trim(),
+          author: currentUser,
+          t: new Date().toISOString()
+        };
+        setChatMessages(m => [...m, msg]);
+        setChatLastSeen(msg.id);
+        // v577 · Push notification to partner
+        if (sbClient && sbHouseholdId) {
+          const senderName = people[currentUser]?.name || "Someone";
+          sbClient.from("alert_schedule").insert([{
+            id: "chat-" + msg.id,
+            fire_at: new Date().toISOString(),
+            title: senderName,
+            body: msg.text,
+            household_id: sbHouseholdId,
+            exclude_user_id: _sbUserId || null,
+            sent: false
+          }]).then(({
+            error
+          }) => {
+            if (error) console.warn("[chat push]", error.message);
+          });
+        }
+      },
+      onDelete: id => setChatMessages(m => m.filter(x => x.id !== id)),
+      onEdit: (id, newText) => setChatMessages(m => m.map(x => x.id === id ? {
+        ...x,
+        text: newText,
+        edited: true
+      } : x)),
+      onReact: (id, emoji) => setChatMessages(m => m.map(x => {
+        if (x.id !== id) return x;
+        const r = {
+          ...(x.reactions || {})
+        };
+        if (r[emoji]) delete r[emoji];else r[emoji] = currentUser;
+        return {
+          ...x,
+          reactions: r
+        };
+      }))
     }), tab === "settings" && /*#__PURE__*/React.createElement(SettingsPage, {
       tasks: tasks,
       events: events,
@@ -17876,6 +18089,8 @@ function App({
       setShowForecast: setShowForecast,
       showQuickAdd: showQuickAdd,
       setShowQuickAdd: setShowQuickAdd,
+      showChatHome: showChatHome,
+      setShowChatHome: setShowChatHome,
       recycleBinCount: recycleBin.length,
       onOpenRecycleBin: () => setRecycleBinOpen(true),
       onChangePin: () => setChangePinSheet(true)
@@ -17902,14 +18117,7 @@ function App({
     // OWE. It was also the vaguest shape in the nav — a rectangle with a stripe reads
     // as a generic box at 20px, next to Tasks (a box), Calendar (a box) and Home (a
     // box). The circle is identifiable by outline alone.
-    ["bills", "Bills", "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M14.8 8.6a3 3 0 0 0-2.8-1.6c-1.7 0-2.8.9-2.8 2.2 0 3 5.9 1.6 5.9 4.7 0 1.4-1.2 2.4-3.1 2.4a3.2 3.2 0 0 1-3-1.7 M12 5.4v13.2"],
-    // A MAP PIN, not a calendar. Events and Calendar were drawing the SAME icon — both a
-    // box with a header rule and two tabs, differing only in rounded vs square corners,
-    // which is invisible at 20px. Calendar keeps the grid (it IS a grid of dates); Events
-    // gets the pin, because an event is something you GO TO — they're the only records in
-    // the app that carry a `place`. It also covers a dentist appointment as honestly as a
-    // birthday, which a party popper or a wine glass would not.
-    ["events", "Events", "M12 22s7-5.5 7-12a7 7 0 1 0-14 0c0 6.5 7 12 7 12z M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"], ["work", "Work", "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 8v4l3 1.5"], ["calendar", "Calendar", "M3 4h18v18H3z M3 10h18 M8 2v4 M16 2v4"]
+    ["events", "Events", "M12 22s7-5.5 7-12a7 7 0 1 0-14 0c0 6.5 7 12 7 12z M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"], ["bills", "Bills", "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M14.8 8.6a3 3 0 0 0-2.8-1.6c-1.7 0-2.8.9-2.8 2.2 0 3 5.9 1.6 5.9 4.7 0 1.4-1.2 2.4-3.1 2.4a3.2 3.2 0 0 1-3-1.7 M12 5.4v13.2"], ["work", "Work", "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 8v4l3 1.5"], ["calendar", "Cal", "M3 4h18v18H3z M3 10h18 M8 2v4 M16 2v4"], ["chat", "Chat", "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"]
     // Stats is NOT here — it moved to a header icon on the Tasks tab. The nav was
     // at 8 items and tight on an iPhone 14 Pro; this brings it back to 7. The
     // `stats` TAB still exists and still works, it just isn't navigated to here.
@@ -17921,6 +18129,10 @@ function App({
           setTab(t);
           if (t === "tasks") setListType("tasks");
           if (t === "events") setListType("events");
+          if (t === "chat") {
+            const last = chatMessages[chatMessages.length - 1];
+            if (last) setChatLastSeen(last.id);
+          }
         },
         style: {
           flex: 1,
@@ -17952,7 +18164,21 @@ function App({
           textAlign: "center",
           lineHeight: 1.5
         }
-      }, overdueBills.length), /*#__PURE__*/React.createElement("svg", {
+      }, overdueBills.length), t === "chat" && (() => {
+        const unread = chatLastSeen ? chatMessages.filter(m => m.id > chatLastSeen && m.author !== currentUser).length : chatMessages.filter(m => m.author !== currentUser).length;
+        return unread > 0 ? /*#__PURE__*/React.createElement("span", {
+          style: {
+            position: "absolute",
+            top: 2,
+            right: "50%",
+            marginRight: -14,
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            background: C.her
+          }
+        }) : null;
+      })(), /*#__PURE__*/React.createElement("svg", {
         width: "22",
         height: "22",
         viewBox: "0 0 24 24",
@@ -65988,6 +66214,530 @@ function RecycleBinSheet({
     })))));
   })));
 }
+
+// ─── CHAT TAB ─────────────────────────────────────────────────────────────────
+const RECENT_EMOJI = ["❤️", "😂", "👍", "🔥", "😍", "😢", "🙏", "💯"];
+const ALL_EMOJI = ["❤️", "😂", "👍", "🔥", "😍", "😢", "🙏", "💯", "😊", "🥰", "😘", "🤔", "😅", "🎉", "✨", "💕", "🤣", "😭", "🥺", "💀", "👀", "🫶", "😤", "🙄", "💪", "👏", "🤞", "🫡", "😳", "🤗", "😎", "🤩", "💔", "😮", "🤝", "🥳", "😬", "🫣", "🤭", "😈"];
+function ChatTab({
+  messages,
+  currentUser,
+  people,
+  onSend,
+  onDelete,
+  onEdit,
+  onReact
+}) {
+  const [text, setText] = useState("");
+  const [editId, setEditId] = useState(null);
+  const [emojiFor, setEmojiFor] = useState(null);
+  const [showAllEmoji, setShowAllEmoji] = useState(false);
+  const [actionMenu, setActionMenu] = useState(null);
+  const scrollRef = useRef(null);
+  const longRef = useRef(null);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages.length]);
+  function send() {
+    if (!text.trim()) return;
+    if (editId) {
+      onEdit(editId, text.trim());
+      setEditId(null);
+    } else onSend(text);
+    setText("");
+  }
+  function startEdit(m) {
+    setEditId(m.id);
+    setText(m.text);
+    setActionMenu(null);
+  }
+  function handleDoubleTap(m) {
+    onReact(m.id, "❤️");
+  }
+
+  // Group messages by day
+  const grouped = [];
+  let lastDay = "";
+  messages.forEach(m => {
+    const d = new Date(m.t || m.id);
+    const day = d.toLocaleDateString("en-AU", {
+      weekday: "long",
+      day: "numeric",
+      month: "short"
+    });
+    const todayStr = new Date().toLocaleDateString("en-AU", {
+      weekday: "long",
+      day: "numeric",
+      month: "short"
+    });
+    const label = day === todayStr ? "Today" : day;
+    if (label !== lastDay) {
+      grouped.push({
+        type: "day",
+        label
+      });
+      lastDay = label;
+    }
+    grouped.push({
+      type: "msg",
+      msg: m
+    });
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 480,
+      margin: "0 auto",
+      padding: "calc(env(safe-area-inset-top) + 31px) 0 0",
+      display: "flex",
+      flexDirection: "column",
+      height: "calc(100vh - 62px - env(safe-area-inset-bottom))"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "0 18px",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 9,
+      fontWeight: 800,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      color: C.inkMute
+    }
+  }, new Date().toLocaleDateString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long"
+  })), /*#__PURE__*/React.createElement("h1", {
+    className: "serif",
+    style: {
+      fontSize: 23,
+      fontStyle: "italic",
+      color: C.ink,
+      marginTop: 2
+    }
+  }, "Chat")), /*#__PURE__*/React.createElement("div", {
+    ref: scrollRef,
+    onClick: () => {
+      setActionMenu(null);
+      setEmojiFor(null);
+      setShowAllEmoji(false);
+    },
+    style: {
+      flex: 1,
+      overflowY: "auto",
+      WebkitOverflowScrolling: "touch",
+      padding: "0 18px 12px",
+      position: "relative"
+    }
+  }, (actionMenu || emojiFor) && /*#__PURE__*/React.createElement("div", {
+    onClick: () => {
+      setActionMenu(null);
+      setEmojiFor(null);
+      setShowAllEmoji(false);
+    },
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.5)",
+      zIndex: 8
+    }
+  }), messages.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "60px 20px"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "40",
+    height: "40",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.inkFaint,
+    strokeWidth: "1.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+  })), /*#__PURE__*/React.createElement("p", {
+    className: "serif",
+    style: {
+      fontSize: 16,
+      fontStyle: "italic",
+      color: C.inkMute,
+      marginTop: 12
+    }
+  }, "No messages yet"), /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      color: C.inkFaint,
+      marginTop: 4
+    }
+  }, "Leave a note for ", people.her?.name, " or ", people.him?.name)) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8
+    }
+  }, grouped.map((g, i) => {
+    if (g.type === "day") return /*#__PURE__*/React.createElement("div", {
+      key: "d" + i,
+      style: {
+        textAlign: "center",
+        margin: "8px 0 4px",
+        ...(actionMenu || emojiFor ? {
+          opacity: 0.3
+        } : {})
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 9,
+        fontWeight: 700,
+        color: C.inkFaint,
+        textTransform: "uppercase",
+        letterSpacing: 0.5
+      }
+    }, g.label));
+    const m = g.msg;
+    const isMe = m.author === currentUser;
+    const col = personColor(people[m.author]?.color || C.inkMute);
+    const name = people[m.author]?.name || m.author;
+    const ago = (() => {
+      const d = Math.round((Date.now() - m.id) / 1000);
+      if (d < 60) return "Just now";
+      if (d < 3600) return Math.floor(d / 60) + "m ago";
+      if (d < 86400) return Math.floor(d / 3600) + "h ago";
+      return Math.floor(d / 86400) + "d ago";
+    })();
+    const reactions = m.reactions || {};
+    const reactionList = Object.entries(reactions);
+    const isActive = actionMenu === m.id || emojiFor === m.id;
+    const isDimmed = (actionMenu || emojiFor) && !isActive;
+    return /*#__PURE__*/React.createElement("div", {
+      key: m.id,
+      style: {
+        display: "flex",
+        gap: 8,
+        alignItems: "flex-start",
+        maxWidth: "82%",
+        position: "relative",
+        ...(isMe ? {
+          alignSelf: "flex-end",
+          flexDirection: "row-reverse"
+        } : {}),
+        ...(isActive ? {
+          zIndex: 10
+        } : {}),
+        ...(isDimmed ? {
+          opacity: 0.3
+        } : {})
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 26,
+        height: 26,
+        borderRadius: "50%",
+        background: softTint(col),
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        marginTop: 2
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 10,
+        fontWeight: 800,
+        color: col
+      }
+    }, name.charAt(0).toUpperCase())), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: isMe ? "right" : "left",
+        position: "relative"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onDoubleClick: e => {
+        e.stopPropagation();
+        if (!isMe) handleDoubleTap(m);
+      },
+      onTouchStart: e => {
+        longRef.current = setTimeout(() => {
+          if (isMe) {
+            setActionMenu(m.id);
+            setEmojiFor(null);
+          } else {
+            setEmojiFor(m.id);
+            setShowAllEmoji(false);
+            setActionMenu(null);
+          }
+        }, 500);
+      },
+      onTouchEnd: () => {
+        clearTimeout(longRef.current);
+      },
+      onTouchMove: () => {
+        clearTimeout(longRef.current);
+      },
+      style: {
+        background: rgbaFromHex(col, 0.12),
+        border: `1px solid ${rgbaFromHex(col, isActive ? 0.4 : 0.2)}`,
+        borderRadius: isMe ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+        padding: "9px 13px",
+        textAlign: "left",
+        cursor: "pointer",
+        userSelect: "none",
+        WebkitUserSelect: "none"
+      }
+    }, /*#__PURE__*/React.createElement("p", {
+      className: "sans",
+      style: {
+        fontSize: 13.5,
+        color: C.ink,
+        lineHeight: 1.35
+      }
+    }, m.text), m.edited && /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 8,
+        color: C.inkFaint,
+        fontStyle: "italic"
+      }
+    }, " edited")), reactionList.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 2,
+        marginTop: 2,
+        ...(isMe ? {
+          justifyContent: "flex-end"
+        } : {})
+      }
+    }, reactionList.map(([emoji, who]) => /*#__PURE__*/React.createElement("span", {
+      key: emoji,
+      style: {
+        fontSize: 14,
+        background: C.card,
+        border: `1px solid ${C.rule}`,
+        borderRadius: 12,
+        padding: "1px 4px",
+        cursor: "pointer"
+      },
+      onClick: e => {
+        e.stopPropagation();
+        onReact(m.id, emoji);
+      }
+    }, emoji))), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 8,
+        color: C.inkFaint,
+        ...(isMe ? {
+          marginRight: 4
+        } : {
+          marginLeft: 4
+        }),
+        marginTop: 2,
+        display: "block"
+      }
+    }, ago), isMe && actionMenu === m.id && /*#__PURE__*/React.createElement("div", {
+      onClick: e => e.stopPropagation(),
+      style: {
+        position: "absolute",
+        top: "100%",
+        right: 0,
+        marginTop: 6,
+        background: C.card,
+        border: `1px solid ${C.rule}`,
+        borderRadius: 12,
+        boxShadow: C.shadowLg,
+        overflow: "hidden",
+        minWidth: 140,
+        textAlign: "left",
+        animation: "fade 0.15s ease",
+        zIndex: 11
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => startEdit(m),
+      className: "sans",
+      style: {
+        display: "block",
+        width: "100%",
+        padding: "12px 18px",
+        background: "none",
+        border: "none",
+        borderBottom: `1px solid ${C.rule}`,
+        color: C.ink,
+        fontSize: 14,
+        fontWeight: 600,
+        cursor: "pointer",
+        textAlign: "left"
+      }
+    }, "Edit"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        onDelete(m.id);
+        setActionMenu(null);
+      },
+      className: "sans",
+      style: {
+        display: "block",
+        width: "100%",
+        padding: "12px 18px",
+        background: "none",
+        border: "none",
+        color: C.urgent,
+        fontSize: 14,
+        fontWeight: 600,
+        cursor: "pointer",
+        textAlign: "left"
+      }
+    }, "Unsend")), !isMe && emojiFor === m.id && /*#__PURE__*/React.createElement("div", {
+      onClick: e => e.stopPropagation(),
+      style: {
+        position: "absolute",
+        bottom: "100%",
+        left: 0,
+        marginBottom: 4,
+        background: C.card,
+        border: `1px solid ${C.rule}`,
+        borderRadius: 14,
+        boxShadow: C.shadowLg,
+        padding: 8,
+        zIndex: 10,
+        animation: "fade 0.15s ease",
+        minWidth: showAllEmoji ? 240 : undefined
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 4
+      }
+    }, (showAllEmoji ? ALL_EMOJI : RECENT_EMOJI).map(emoji => /*#__PURE__*/React.createElement("button", {
+      key: emoji,
+      onClick: () => {
+        onReact(m.id, emoji);
+        setEmojiFor(null);
+        setShowAllEmoji(false);
+      },
+      style: {
+        fontSize: 22,
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: "4px 5px",
+        borderRadius: 8
+      },
+      onMouseOver: e => e.currentTarget.style.background = C.ruleSoft,
+      onMouseOut: e => e.currentTarget.style.background = "none"
+    }, emoji)), !showAllEmoji && /*#__PURE__*/React.createElement("button", {
+      onClick: () => setShowAllEmoji(true),
+      className: "sans",
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: C.inkMute,
+        background: C.ruleSoft,
+        border: "none",
+        cursor: "pointer",
+        padding: "4px 8px",
+        borderRadius: 8,
+        display: "flex",
+        alignItems: "center"
+      }
+    }, "+")))));
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "8px 16px",
+      borderTop: `1px solid ${C.rule}`,
+      background: C.page,
+      paddingBottom: "calc(8px + env(safe-area-inset-bottom))"
+    }
+  }, editId && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "4px 4px 8px",
+      fontSize: 11,
+      color: C.accent
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Editing message"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setEditId(null);
+      setText("");
+    },
+    style: {
+      background: "none",
+      border: "none",
+      color: C.inkMute,
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Roboto Condensed',sans-serif"
+    }
+  }, "Cancel")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: text,
+    onChange: e => setText(e.target.value),
+    onKeyDown: e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    },
+    placeholder: editId ? "Edit message..." : "Write a note...",
+    className: "sans",
+    style: {
+      flex: 1,
+      background: C.card,
+      border: `1px solid ${editId ? C.accent : C.rule}`,
+      borderRadius: 20,
+      padding: "10px 16px",
+      fontSize: 13,
+      color: C.ink,
+      outline: "none"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: send,
+    disabled: !text.trim(),
+    style: {
+      width: 38,
+      height: 38,
+      borderRadius: "50%",
+      background: text.trim() ? `linear-gradient(135deg,${C.heroTop},${C.heroBot})` : C.rule,
+      border: "none",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: text.trim() ? "pointer" : "default",
+      flexShrink: 0,
+      opacity: text.trim() ? 1 : 0.5
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.onAccent,
+    strokeWidth: "2.5",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: "22",
+    y1: "2",
+    x2: "11",
+    y2: "13"
+  }), /*#__PURE__*/React.createElement("polygon", {
+    points: "22 2 15 22 11 13 2 9 22 2"
+  }))))));
+}
 function SettingsPage({
   tasks,
   events = [],
@@ -66088,6 +66838,8 @@ function SettingsPage({
   setShowForecast,
   showQuickAdd,
   setShowQuickAdd,
+  showChatHome,
+  setShowChatHome,
   recycleBinCount = 0,
   onOpenRecycleBin
 }) {
@@ -67036,6 +67788,43 @@ function SettingsPage({
     }
   }, "Show task/event/bill shortcuts on dashboard")), /*#__PURE__*/React.createElement(Toggle, {
     on: showQuickAdd
+  }))), /*#__PURE__*/React.createElement(SRow, {
+    hb: "chat home dashboard messages toggle"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowChatHome(!showChatHome),
+    style: {
+      ...rowBase
+    }
+  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Chat on Home"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, "Show latest messages on dashboard")), /*#__PURE__*/React.createElement(Toggle, {
+    on: showChatHome
   }))), /*#__PURE__*/React.createElement(SRow, {
     hb: "show completed tasks keep done items visible"
   }, /*#__PURE__*/React.createElement("button", {
@@ -68450,7 +69239,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v566"))))), diagOpen && (() => {
+  }, "v577"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
