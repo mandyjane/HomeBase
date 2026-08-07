@@ -6645,6 +6645,45 @@ const sbPending = {};
 // The general sbPush 500ms debounce is fine for tasks/events but too fragile for chat
 // (app can background, useEffect chain can be interrupted). This mirrors how alert_schedule
 // inserts are direct. Called from onSend/onDelete/onEdit/onReact with the full new array.
+// v597 · Push notification for new tasks/events. Sent to the assignee(s),
+// excluding the person who created it. "both" notifies both people.
+function notifyNewItem(kind, title, assignee, itemId) {
+  if (!sbClient || !sbReady || !sbHouseholdId || !sbUserId) return;
+  const prefix = kind === "task" ? "New task" : "New event";
+  const body = `${prefix} — ${title || "Untitled"}`;
+  // Determine who to notify: exclude the creator
+  const targets = [];
+  if (assignee === "both" || assignee === "her" || assignee === "him") {
+    // "both" means notify both, but skip the creator
+    const people = assignee === "both" ? ["her", "him"] : [assignee];
+    people.forEach(p => {
+      // Look up the Supabase user ID for this person from localStorage
+      const uid = localStorage.getItem("hb_userId_" + p);
+      if (uid && uid !== '"' + sbUserId + '"' && uid !== sbUserId) {
+        targets.push({
+          excludeNot: uid,
+          person: p
+        });
+      }
+    });
+  }
+  if (!targets.length) return;
+  // Use exclude_user_id to send only to the target (exclude everyone ELSE)
+  // Since we only have 2 users, exclude_user_id = creator's ID sends to the partner
+  sbClient.from("alert_schedule").insert([{
+    id: "item-" + itemId + "-" + Date.now(),
+    fire_at: new Date().toISOString(),
+    title: "HomeBase",
+    body,
+    household_id: sbHouseholdId,
+    exclude_user_id: sbUserId,
+    sent: false
+  }]).then(({
+    error
+  }) => {
+    if (error) console.warn("[item notif]", error.message);
+  });
+}
 function sbChatPush(key, val) {
   if (!sbClient || !sbReady || !sbHouseholdId) return;
   sbLastLocalWrite = Date.now();
@@ -8411,6 +8450,53 @@ function App({
   const [showCountdowns, setShowCountdowns] = useState(() => lsGet(userKey("hb_showCountdowns"), false));
   const [showForecast, setShowForecast] = useState(() => lsGet(userKey("hb_showForecast"), true));
   const [showQuickAdd, setShowQuickAdd] = useState(() => lsGet(userKey("hb_showQuickAdd"), true));
+  // v596 · Household goal placement: "home" | "tasks" | "both"
+  const [goalPlace, setGoalPlace] = useState(() => lsGet("hb_goalPlace", "home"));
+  // v597 · Highlight a newly-added task/event card (pulses 3×) when partner adds one.
+  // Set by notification tap or after addTask/addEvent push. Cleared after animation.
+  const [highlightId, setHighlightId] = useState(null);
+  useEffect(() => {
+    if (!highlightId) return;
+    const timer = setTimeout(() => setHighlightId(null), 2400); // 3 pulses × 0.7s + buffer
+    return () => clearTimeout(timer);
+  }, [highlightId]);
+  // v597 · When syncVersion bumps (new data from partner), check for new tasks/events
+  // and auto-highlight + switch tab. Uses a ref to track known IDs.
+  const knownTaskIds = useRef(new Set());
+  const knownEventIds = useRef(new Set());
+  useEffect(() => {
+    if (syncVersion < 1) {
+      // Initial mount: seed known IDs
+      tasks.forEach(t => knownTaskIds.current.add(t.id));
+      events.forEach(e => knownEventIds.current.add(e.id));
+      return;
+    }
+    // Check for new tasks
+    for (const t of tasks) {
+      if (!knownTaskIds.current.has(t.id) && !isBill(t) && !t.private) {
+        knownTaskIds.current.add(t.id);
+        if (t.assignee === currentUser || t.assignee === "both") {
+          setHighlightId(t.id);
+          setTab("tasks");
+          setListType("tasks");
+        }
+      }
+    }
+    // Check for new events
+    for (const e of events) {
+      if (!knownEventIds.current.has(e.id) && e.category !== SHIFT_CAT && !e.publicHoliday && !e.private) {
+        knownEventIds.current.add(e.id);
+        if (e.assignee === currentUser || e.assignee === "both") {
+          setHighlightId(e.id);
+          setTab("tasks");
+          setListType("events");
+        }
+      }
+    }
+    // Keep refs in sync
+    tasks.forEach(t => knownTaskIds.current.add(t.id));
+    events.forEach(e => knownEventIds.current.add(e.id));
+  }, [syncVersion]);
   const [countdownSheet, setCountdownSheet] = useState(false);
   useEffect(() => {
     lsSet(userKey("hb_countdowns"), countdowns);
@@ -8424,6 +8510,9 @@ function App({
   useEffect(() => {
     lsSet(userKey("hb_showQuickAdd"), showQuickAdd);
   }, [showQuickAdd]);
+  useEffect(() => {
+    lsSet("hb_goalPlace", goalPlace);
+  }, [goalPlace]);
   // v588 · CHAT — shared pinboard messages
   const [chatMessages, setChatMessages] = useState(() => lsGet("hb_chatMessages", []));
   const [showChatHome, setShowChatHome] = useState(() => lsGet(userKey("hb_showChatHome"), true));
@@ -11515,6 +11604,8 @@ function App({
         }
       }
       setTasks(ts => [...ts, fresh]);
+      // v597 · Notify assignee(s) about the new task (not bills — they don't need alerts)
+      if (!isBill(fresh) && !fresh.private) notifyNewItem("task", fresh.title, fresh.assignee, fresh.id);
       // v276 · SAY WHAT WAS ACTUALLY ADDED. This said "Task added" for every bill that
       // wasn't marked paid — Mandy hit it adding a credit card. A bill is a task under the
       // hood, and the toast was reporting the PLUMBING rather than the thing she made.
@@ -11913,11 +12004,14 @@ function App({
         }, orig && orig.title);
       }
     } else {
+      const newEvId = euid();
       setEvents(es => [...es, {
         ...ev,
-        id: euid(),
+        id: newEvId,
         exceptions: {}
       }]);
+      // v597 · Notify assignee(s) about the new event (skip shift-category and public holidays)
+      if (ev.category !== SHIFT_CAT && !ev.publicHoliday && !ev.private) notifyNewItem("event", ev.title, ev.assignee, newEvId);
       showToast("Event added", "success");
     }
     setShowEventModal(false);
@@ -14064,6 +14158,8 @@ function App({
         @media (max-width:379px){ .doneWord{display:none} }
         @keyframes slideDown{from{transform:translateY(-110%)}to{transform:translateY(0)}}
         @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes hb-pulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 14px ${C.accent}44,inset 0 0 8px ${C.accent}22}}
+        ${highlightId ? `[data-hb-id="${highlightId}"]{animation:hb-pulse 0.7s ease-in-out 3;border-color:${C.accent} !important}` : ""}
         @keyframes slideUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
         @keyframes sheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
         @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.12);opacity:.7}}
@@ -16481,7 +16577,7 @@ function App({
           boxShadow: "0 1px 0 rgba(255,243,176,.5) inset,0 2px 6px rgba(0,0,0,.3)"
         }
       }, "Claim"));
-    })(), showPoints &&
+    })(), showPoints && goalPlace !== "tasks" &&
     /*#__PURE__*/
     /* v245 · 6 -> 20. This is the seam between the POINTS block above and the
        AGENDA below - two different kinds of thing, previously separated by less
@@ -17486,7 +17582,96 @@ function App({
       });
     })))), (tab === "tasks" || tab === "events") && /*#__PURE__*/React.createElement("div", {
       className: "fade"
-    }, /*#__PURE__*/React.createElement(CombinedList, {
+    }, showPoints && tab === "tasks" && listType === "tasks" && goalPlace !== "home" && /*#__PURE__*/React.createElement("div", {
+      onClick: () => setPersonSheet("shared"),
+      className: "card-tap",
+      style: {
+        background: C.card,
+        border: isSleek ? `1px solid ${C.rule}` : "none",
+        borderRadius: 18,
+        padding: 15,
+        boxShadow: isSleek ? "none" : C.shadowSm,
+        marginBottom: 14,
+        cursor: "pointer"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: cardTitleClass(),
+      style: {
+        fontSize: 16,
+        fontStyle: cardTitleClass() === "serif" ? "italic" : "normal",
+        color: C.ink
+      }
+    }, "Household reward goal", sharedGoal.period && sharedGoal.period !== "lifetime" ? ` · ${periodLabel[sharedGoal.period]}` : ""), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 800,
+        color: C.accent
+      }
+    }, sharedCurrent, " / ", sharedGoal.target)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: 14,
+        borderRadius: 20,
+        background: isSleek ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
+        overflow: "hidden"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: 14,
+        borderRadius: 20,
+        width: `${sharedPct * 100}%`,
+        background: `linear-gradient(90deg,${C.heroTop},${C.heroBot})`,
+        boxShadow: isSleek ? C.glow : "none",
+        transition: "width 0.6s ease"
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        marginTop: 10
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: C.accent,
+        flexShrink: 0,
+        display: "flex"
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "15",
+      height: "15",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "1.8",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("path", {
+      d: "M20 12v9H4v-9"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M2 7h20v5H2z"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M12 22V7"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"
+    }), /*#__PURE__*/React.createElement("path", {
+      d: "M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"
+    }))), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        flex: 1,
+        fontSize: 12,
+        fontWeight: 500,
+        color: C.inkSoft
+      }
+    }, sharedToGo > 0 ? `${sharedToGo} points to ${sharedGoal.treat}` : `Goal reached — enjoy ${sharedGoal.treat}!`))), /*#__PURE__*/React.createElement(CombinedList, {
       billPayer: billPayer,
       q: tabQ,
       groups: groups,
@@ -17594,7 +17779,9 @@ function App({
       onSaveQuick: saveQuickAdd,
       isQuickSaved: isQuickSaved,
       onClearCompleted: clearCompleted,
-      onChangeCompletedBy: changeCompletedBy
+      onChangeCompletedBy: changeCompletedBy,
+      highlightId: highlightId,
+      clearHighlight: () => setHighlightId(null)
     })), tab === "work" && /*#__PURE__*/React.createElement(WorkTab, {
       q: tabQ,
       events: events,
@@ -18066,6 +18253,8 @@ function App({
       setShowForecast: setShowForecast,
       showQuickAdd: showQuickAdd,
       setShowQuickAdd: setShowQuickAdd,
+      goalPlace: goalPlace,
+      setGoalPlace: setGoalPlace,
       recycleBinCount: recycleBin.length,
       onOpenRecycleBin: () => setRecycleBinOpen(true),
       onChangePin: () => setChangePinSheet(true)
@@ -19706,6 +19895,7 @@ function EventCard({
     const BTN_BRD = C.rule;
     const BTN_BG = C.card;
     return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      "data-hb-id": ev.id || ev._seriesId,
       className: "card-tap",
       style: {
         borderRadius: 12,
@@ -24384,7 +24574,9 @@ function CombinedList({
   isQuickSaved,
   onClearCompleted,
   billPayer = true,
-  onChangeCompletedBy
+  onChangeCompletedBy,
+  highlightId,
+  clearHighlight
 }) {
   const showTasks = listType !== "events";
   const showEvents = listType !== "tasks";
@@ -28558,6 +28750,7 @@ function TaskCard({
     // context or a clip. Its only job is to host the card AND the sheets as siblings, so
     // a dimmed/clipped/animating card can never drag a full-screen overlay down with it.
     React.createElement("div", {
+      "data-hb-id": task.id,
       style: {
         marginBottom: 8,
         position: "relative"
@@ -67003,6 +67196,8 @@ function SettingsPage({
   setShowForecast,
   showQuickAdd,
   setShowQuickAdd,
+  goalPlace = "home",
+  setGoalPlace,
   recycleBinCount = 0,
   onOpenRecycleBin
 }) {
@@ -67633,6 +67828,47 @@ function SettingsPage({
       color: C.inkMute
     }
   }, "Period, targets & household goal")), /*#__PURE__*/React.createElement(Chev, null)))), showPoints && /*#__PURE__*/React.createElement(SRow, {
+    hb: "household goal placement home tasks both"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      ...rowBase,
+      flexWrap: "wrap",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Goal card placement"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 0,
+      background: C.card,
+      borderRadius: 8,
+      border: `1px solid ${C.rule}`,
+      overflow: "hidden"
+    }
+  }, [["home", "Home"], ["tasks", "Tasks"], ["both", "Both"]].map(([val, lbl]) => {
+    const on = goalPlace === val;
+    return /*#__PURE__*/React.createElement("button", {
+      key: val,
+      onClick: () => setGoalPlace(val),
+      className: "sans",
+      style: {
+        padding: "7px 14px",
+        border: "none",
+        cursor: "pointer",
+        fontSize: 11,
+        fontWeight: 700,
+        background: on ? C.accent : "transparent",
+        color: on ? C.mood === "sleek" ? "#0F1117" : "#fff" : C.inkMute
+      }
+    }, lbl);
+  })))), showPoints && /*#__PURE__*/React.createElement(SRow, {
     hb: "levels points per level"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onLevels,
@@ -69365,7 +69601,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v595"))))), diagOpen && (() => {
+  }, "v597"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
