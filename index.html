@@ -66233,9 +66233,11 @@ function ChatTab({
   const [actionMenu, setActionMenu] = useState(null);
   const scrollRef = useRef(null);
   const longRef = useRef(null);
+  // v593 · Scroll to bottom on new messages AND on reactions (content change, not just length)
+  const msgSig = useMemo(() => messages.map(m => m.id + ":" + (m.reactions ? Object.keys(m.reactions).join("") : "")).join("|"), [messages]);
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages.length]);
+  }, [msgSig]);
   function send() {
     if (!text.trim()) return;
     if (editId) {
@@ -66345,7 +66347,7 @@ function ChatTab({
       flex: 1,
       overflowY: "auto",
       WebkitOverflowScrolling: "touch",
-      padding: "0 18px 70px",
+      padding: "0 18px 110px",
       position: "relative"
     }
   }, (actionMenu || emojiFor) && /*#__PURE__*/React.createElement("div", {
@@ -69346,7 +69348,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v592"))))), diagOpen && (() => {
+  }, "v593"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
