@@ -66423,6 +66423,9 @@ function ChatTab({
       }
     }, g.label));
     const m = g.msg;
+    // v595 · Flip menus above bubble when near the bottom so they aren't clipped by the fixed input bar
+    const msgsAfter = grouped.slice(i + 1).filter(x => x.type === "msg").length;
+    const flipMenu = msgsAfter < 2;
     const isMe = m.author === currentUser;
     const col = personColor(people[m.author]?.color || C.inkMute);
     const name = people[m.author]?.name || m.author;
@@ -66589,9 +66592,14 @@ function ChatTab({
       onClick: e => e.stopPropagation(),
       style: {
         position: "absolute",
-        top: "100%",
+        ...(flipMenu ? {
+          bottom: "100%",
+          marginBottom: 6
+        } : {
+          top: "100%",
+          marginTop: 6
+        }),
         right: 0,
-        marginTop: 6,
         background: C.card,
         border: `1px solid ${C.rule}`,
         borderRadius: 12,
@@ -66640,9 +66648,14 @@ function ChatTab({
       onClick: e => e.stopPropagation(),
       style: {
         position: "absolute",
-        top: "100%",
+        ...(flipMenu ? {
+          bottom: "100%",
+          marginBottom: 6
+        } : {
+          top: "100%",
+          marginTop: 6
+        }),
         left: 0,
-        marginTop: 6,
         background: C.card,
         border: `1px solid ${C.rule}`,
         borderRadius: 20,
@@ -69352,7 +69365,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v594"))))), diagOpen && (() => {
+  }, "v595"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
