@@ -5598,7 +5598,7 @@ function doneStamp(dueDate, doneAt, task) {
   if (!completedLate(dueDate, doneAt)) {
     // Compare LOCAL calendar days. Slicing the ISO string gives the UTC date, which is a
     // day out for evening completions on a positive-offset device — the exact bug that
-    // made freshly ticked tasks vanish from the dashboard (v5779).
+    // made freshly ticked tasks vanish from the dashboard (v5799).
     const gap = daysBetween(toLocalYMD(d), todayStr());
     if (gap <= 0) return `Done ${clock}`; // today
     if (gap === 1) return `Done ${d.getDate()} ${MON[d.getMonth()]}, ${clock}`; // yesterday
@@ -8378,7 +8378,7 @@ function App({
   useEffect(() => {
     lsSet(userKey("hb_showQuickAdd"), showQuickAdd);
   }, [showQuickAdd]);
-  // v577 · CHAT — shared pinboard messages
+  // v579 · CHAT — shared pinboard messages
   const [chatMessages, setChatMessages] = useState(() => lsGet("hb_chatMessages", []));
   const [showChatHome, setShowChatHome] = useState(() => lsGet(userKey("hb_showChatHome"), true));
   const [chatLastSeen, setChatLastSeen] = useState(() => lsGet(userKey("hb_chatLastSeen"), null));
@@ -14691,143 +14691,7 @@ function App({
         opacity: .9,
         marginTop: 3
       }
-    }, totalToday === 0 ? "Nothing due today." : `${totalToday - doneToday} to go — you've got this.`)))), showChatHome && chatMessages.length > 0 && (() => {
-      const latest = chatMessages.slice(-3).reverse();
-      const unread = chatLastSeen ? chatMessages.filter(m => m.id > chatLastSeen && m.author !== currentUser).length : chatMessages.filter(m => m.author !== currentUser).length;
-      return /*#__PURE__*/React.createElement("div", {
-        style: {
-          marginBottom: 14
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "2px 2px 10px",
-          cursor: "pointer"
-        },
-        onClick: () => {
-          setTab("chat");
-          const last = chatMessages[chatMessages.length - 1];
-          if (last) setChatLastSeen(last.id);
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        className: "sans",
-        style: {
-          fontSize: 9,
-          fontWeight: 800,
-          letterSpacing: 1.6,
-          textTransform: "uppercase",
-          color: isSleek ? C.accent : C.inkMute
-        }
-      }, "Chat"), unread > 0 && /*#__PURE__*/React.createElement("span", {
-        className: "sans",
-        style: {
-          background: C.her,
-          color: "#fff",
-          fontSize: 8,
-          fontWeight: 800,
-          borderRadius: 20,
-          padding: "1px 5px",
-          minWidth: 14,
-          textAlign: "center"
-        }
-      }, unread), /*#__PURE__*/React.createElement("span", {
-        style: {
-          flex: 1,
-          height: 1,
-          background: C.rule
-        }
-      }), /*#__PURE__*/React.createElement("span", {
-        className: "sans",
-        style: {
-          fontSize: 11,
-          fontWeight: 700,
-          color: C.accent
-        }
-      }, "See all")), /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          flexDirection: "column",
-          gap: 6
-        }
-      }, latest.map(m => {
-        const isMe = m.author === currentUser;
-        const col = personColor(people[m.author]?.color || C.inkMute);
-        const name = people[m.author]?.name || m.author;
-        const ago = (() => {
-          const d = Math.round((Date.now() - m.id) / 1000);
-          if (d < 60) return "Just now";
-          if (d < 3600) return Math.floor(d / 60) + "m ago";
-          if (d < 86400) return Math.floor(d / 3600) + "h ago";
-          return Math.floor(d / 86400) + "d ago";
-        })();
-        return /*#__PURE__*/React.createElement("div", {
-          key: m.id,
-          style: {
-            display: "flex",
-            gap: 8,
-            alignItems: "flex-start",
-            maxWidth: "85%",
-            ...(isMe ? {
-              alignSelf: "flex-end",
-              flexDirection: "row-reverse"
-            } : {})
-          }
-        }, /*#__PURE__*/React.createElement("div", {
-          style: {
-            width: 22,
-            height: 22,
-            borderRadius: "50%",
-            background: softTint(col),
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            marginTop: 2
-          }
-        }, /*#__PURE__*/React.createElement("span", {
-          className: "sans",
-          style: {
-            fontSize: 9,
-            fontWeight: 800,
-            color: col
-          }
-        }, name.charAt(0).toUpperCase())), /*#__PURE__*/React.createElement("div", {
-          style: {
-            textAlign: isMe ? "right" : "left"
-          }
-        }, /*#__PURE__*/React.createElement("div", {
-          style: {
-            background: rgbaFromHex(col, 0.12),
-            border: `1px solid ${rgbaFromHex(col, 0.2)}`,
-            borderRadius: isMe ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
-            padding: "8px 11px",
-            textAlign: "left"
-          }
-        }, /*#__PURE__*/React.createElement("p", {
-          className: "sans",
-          style: {
-            fontSize: 13,
-            color: C.ink,
-            lineHeight: 1.3
-          }
-        }, m.text)), /*#__PURE__*/React.createElement("span", {
-          className: "sans",
-          style: {
-            fontSize: 8,
-            color: C.inkFaint,
-            ...(isMe ? {
-              marginRight: 4
-            } : {
-              marginLeft: 4
-            }),
-            marginTop: 2,
-            display: "block"
-          }
-        }, ago)));
-      })));
-    })(), showQuickAdd && /*#__PURE__*/React.createElement("div", {
+    }, totalToday === 0 ? "Nothing due today." : `${totalToday - doneToday} to go — you've got this.`)))), showQuickAdd && /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         justifyContent: "space-around",
@@ -15075,7 +14939,7 @@ function App({
         color: isSleek ? C.accent : C.inkMute
       }
     }, "Levels"), !lvlOpen && (() => {
-      // v577 · Compute earned from ground truth (same as expanded card)
+      // v579 · Compute earned from ground truth (same as expanded card)
       const earnedPts = {};
       ["her", "him"].forEach(k => {
         const g = rewards[k] || DEFAULT_REWARDS[k];
@@ -17947,7 +17811,7 @@ function App({
         };
         setChatMessages(m => [...m, msg]);
         setChatLastSeen(msg.id);
-        // v577 · Push notification to partner
+        // v579 · Push notification to partner
         if (sbClient && sbHouseholdId) {
           const senderName = people[currentUser]?.name || "Someone";
           sbClient.from("alert_schedule").insert([{
@@ -18089,8 +17953,6 @@ function App({
       setShowForecast: setShowForecast,
       showQuickAdd: showQuickAdd,
       setShowQuickAdd: setShowQuickAdd,
-      showChatHome: showChatHome,
-      setShowChatHome: setShowChatHome,
       recycleBinCount: recycleBin.length,
       onOpenRecycleBin: () => setRecycleBinOpen(true),
       onChangePin: () => setChangePinSheet(true)
@@ -66299,8 +66161,8 @@ function ChatTab({
   }, /*#__PURE__*/React.createElement("p", {
     className: "sans",
     style: {
-      fontSize: 9,
-      fontWeight: 800,
+      fontSize: 10,
+      fontWeight: 600,
       letterSpacing: 1.5,
       textTransform: "uppercase",
       color: C.inkMute
@@ -66312,10 +66174,12 @@ function ChatTab({
   })), /*#__PURE__*/React.createElement("h1", {
     className: "serif",
     style: {
-      fontSize: 23,
+      fontSize: 26,
+      fontWeight: 400,
       fontStyle: "italic",
       color: C.ink,
-      marginTop: 2
+      marginTop: 2,
+      lineHeight: 1.1
     }
   }, "Chat")), /*#__PURE__*/React.createElement("div", {
     ref: scrollRef,
@@ -66328,7 +66192,7 @@ function ChatTab({
       flex: 1,
       overflowY: "auto",
       WebkitOverflowScrolling: "touch",
-      padding: "0 18px 12px",
+      padding: "0 18px 70px",
       position: "relative"
     }
   }, (actionMenu || emojiFor) && /*#__PURE__*/React.createElement("div", {
@@ -66648,10 +66512,14 @@ function ChatTab({
     }, "+")))));
   }))), /*#__PURE__*/React.createElement("div", {
     style: {
+      position: "fixed",
+      bottom: "calc(62px + env(safe-area-inset-bottom))",
+      left: 0,
+      right: 0,
       padding: "8px 16px",
       borderTop: `1px solid ${C.rule}`,
       background: C.page,
-      paddingBottom: "calc(8px + env(safe-area-inset-bottom))"
+      zIndex: 100
     }
   }, editId && /*#__PURE__*/React.createElement("div", {
     className: "sans",
@@ -66661,7 +66529,9 @@ function ChatTab({
       alignItems: "center",
       padding: "4px 4px 8px",
       fontSize: 11,
-      color: C.accent
+      color: C.accent,
+      maxWidth: 480,
+      margin: "0 auto"
     }
   }, /*#__PURE__*/React.createElement("span", null, "Editing message"), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -66681,7 +66551,9 @@ function ChatTab({
     style: {
       display: "flex",
       gap: 8,
-      alignItems: "center"
+      alignItems: "center",
+      maxWidth: 480,
+      margin: "0 auto"
     }
   }, /*#__PURE__*/React.createElement("input", {
     value: text,
@@ -66838,8 +66710,6 @@ function SettingsPage({
   setShowForecast,
   showQuickAdd,
   setShowQuickAdd,
-  showChatHome,
-  setShowChatHome,
   recycleBinCount = 0,
   onOpenRecycleBin
 }) {
@@ -67788,43 +67658,6 @@ function SettingsPage({
     }
   }, "Show task/event/bill shortcuts on dashboard")), /*#__PURE__*/React.createElement(Toggle, {
     on: showQuickAdd
-  }))), /*#__PURE__*/React.createElement(SRow, {
-    hb: "chat home dashboard messages toggle"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowChatHome(!showChatHome),
-    style: {
-      ...rowBase
-    }
-  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
-    width: "18",
-    height: "18",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-  }))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "block",
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Chat on Home"), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 11.5,
-      color: C.inkMute
-    }
-  }, "Show latest messages on dashboard")), /*#__PURE__*/React.createElement(Toggle, {
-    on: showChatHome
   }))), /*#__PURE__*/React.createElement(SRow, {
     hb: "show completed tasks keep done items visible"
   }, /*#__PURE__*/React.createElement("button", {
@@ -69239,7 +69072,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v577"))))), diagOpen && (() => {
+  }, "v579"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
