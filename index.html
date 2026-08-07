@@ -9473,7 +9473,6 @@ function App({
           prev.forEach(m => byId.set(m.id, m));
           incoming.forEach(m => byId.set(m.id, m));
           const merged = [...byId.values()].sort((a, b) => a.id - b.id);
-          // v589 · _lsSetOrig: persist merge locally but don't sbPush (data came from sync)
           if (merged.length !== prev.length) _lsSetOrig("hb_chatMessages", merged);
           return merged;
         });
@@ -9481,6 +9480,11 @@ function App({
           her: null,
           him: null
         }));
+        // v594 · Pull fresh data from Supabase when app comes to foreground.
+        // The push notification arrives faster than the realtime subscription,
+        // so tapping a notification often shows stale data. sbPullAll writes to
+        // localStorage, then the syncVersion bump re-reads into React state.
+        sbPullAll();
       }
     };
     document.addEventListener("visibilitychange", handler);
@@ -69348,7 +69352,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v593"))))), diagOpen && (() => {
+  }, "v594"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
