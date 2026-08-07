@@ -5598,7 +5598,7 @@ function doneStamp(dueDate, doneAt, task) {
   if (!completedLate(dueDate, doneAt)) {
     // Compare LOCAL calendar days. Slicing the ISO string gives the UTC date, which is a
     // day out for evening completions on a positive-offset device — the exact bug that
-    // made freshly ticked tasks vanish from the dashboard (v5799).
+    // made freshly ticked tasks vanish from the dashboard (v5869).
     const gap = daysBetween(toLocalYMD(d), todayStr());
     if (gap <= 0) return `Done ${clock}`; // today
     if (gap === 1) return `Done ${d.getDate()} ${MON[d.getMonth()]}, ${clock}`; // yesterday
@@ -6617,7 +6617,7 @@ let sbUserId = null;
 // v339 · Per-user appearance keys. Appearance (mood, accent, bg, deadline) is personal
 // preference — Mandy and Liam can each have their own mood without overwriting the other.
 // Falls back to the shared key when not logged in (pre-auth boot).
-const APPEARANCE_KEYS = new Set(["hb_theme", "hb_accentSleek", "hb_accentBold", "hb_bgSleek", "hb_bgBold", "hb_deadlineMode", "hb_deadlineSleek", "hb_deadlineBold", "hb_billQuickPay", "hb_mortPropVal", "hb_countdowns", "hb_showCountdowns", "hb_showForecast", "hb_showQuickAdd", "hb_showChatHome"]);
+const APPEARANCE_KEYS = new Set(["hb_theme", "hb_accentSleek", "hb_accentBold", "hb_bgSleek", "hb_bgBold", "hb_deadlineMode", "hb_deadlineSleek", "hb_deadlineBold", "hb_billQuickPay", "hb_mortPropVal", "hb_countdowns", "hb_showCountdowns", "hb_showForecast", "hb_showQuickAdd"]);
 function userKey(k) {
   return sbUserId && APPEARANCE_KEYS.has(k) ? k + "_" + sbUserId : k;
 }
@@ -8378,10 +8378,13 @@ function App({
   useEffect(() => {
     lsSet(userKey("hb_showQuickAdd"), showQuickAdd);
   }, [showQuickAdd]);
-  // v579 · CHAT — shared pinboard messages
+  // v586 · CHAT — shared pinboard messages
   const [chatMessages, setChatMessages] = useState(() => lsGet("hb_chatMessages", []));
   const [showChatHome, setShowChatHome] = useState(() => lsGet(userKey("hb_showChatHome"), true));
-  const [chatLastSeen, setChatLastSeen] = useState(() => lsGet(userKey("hb_chatLastSeen"), null));
+  const [chatSeen, setChatSeen] = useState(() => lsGet("hb_chatSeen", {
+    her: null,
+    him: null
+  }));
   useEffect(() => {
     lsSet("hb_chatMessages", chatMessages);
   }, [chatMessages]);
@@ -8389,8 +8392,8 @@ function App({
     lsSet(userKey("hb_showChatHome"), showChatHome);
   }, [showChatHome]);
   useEffect(() => {
-    lsSet(userKey("hb_chatLastSeen"), chatLastSeen);
-  }, [chatLastSeen]);
+    lsSet("hb_chatSeen", chatSeen);
+  }, [chatSeen]);
   // v244 · WORK HISTORY. { [seriesId]: [ {t, date, kind, changes:[...] }, ... ] }
   // Newest LAST, so the timeline reads bottom-up like a diary and an append is a push.
   const [workHist, setWorkHist] = useState(() => lsGet(WORK_HIST_KEY, {}));
@@ -9374,6 +9377,20 @@ function App({
     setBonusLog(syncedBonusLog);
     setManualOT(lsGet("hb_manualOT", []));
     setTreatRequests(lsGet("hb_treatRequests", []));
+    // v586 · Chat: merge by id to prevent last-write-wins from losing messages
+    setChatMessages(prev => {
+      const incoming = lsGet("hb_chatMessages", []);
+      const byId = new Map();
+      prev.forEach(m => byId.set(m.id, m));
+      incoming.forEach(m => byId.set(m.id, m));
+      const merged = [...byId.values()].sort((a, b) => a.id - b.id);
+      lsSet("hb_chatMessages", merged);
+      return merged;
+    });
+    setChatSeen(lsGet("hb_chatSeen", {
+      her: null,
+      him: null
+    }));
     setRewards(lsGet("hb_rewards", DEFAULT_REWARDS));
     setTreatApproval(lsGet("hb_treatApproval", false));
     setPointsResetAt(lsGet("hb_pointsResetAt", null));
@@ -9400,6 +9417,19 @@ function App({
     const handler = () => {
       if (document.visibilityState === "visible") {
         setTreatRequests(lsGet("hb_treatRequests", []));
+        setChatMessages(prev => {
+          const incoming = lsGet("hb_chatMessages", []);
+          const byId = new Map();
+          prev.forEach(m => byId.set(m.id, m));
+          incoming.forEach(m => byId.set(m.id, m));
+          const merged = [...byId.values()].sort((a, b) => a.id - b.id);
+          if (merged.length !== prev.length) lsSet("hb_chatMessages", merged);
+          return merged;
+        });
+        setChatSeen(lsGet("hb_chatSeen", {
+          her: null,
+          him: null
+        }));
       }
     };
     document.addEventListener("visibilitychange", handler);
@@ -14939,7 +14969,7 @@ function App({
         color: isSleek ? C.accent : C.inkMute
       }
     }, "Levels"), !lvlOpen && (() => {
-      // v579 · Compute earned from ground truth (same as expanded card)
+      // v586 · Compute earned from ground truth (same as expanded card)
       const earnedPts = {};
       ["her", "him"].forEach(k => {
         const g = rewards[k] || DEFAULT_REWARDS[k];
@@ -17801,6 +17831,7 @@ function App({
       messages: chatMessages,
       currentUser: currentUser,
       people: people,
+      chatSeen: chatSeen,
       onSend: text => {
         if (!text.trim() || !currentUser) return;
         const msg = {
@@ -17810,8 +17841,11 @@ function App({
           t: new Date().toISOString()
         };
         setChatMessages(m => [...m, msg]);
-        setChatLastSeen(msg.id);
-        // v579 · Push notification to partner
+        setChatSeen(s => ({
+          ...s,
+          [currentUser]: msg.id
+        }));
+        // v586 · Push notification to partner
         if (sbClient && sbHouseholdId) {
           const senderName = people[currentUser]?.name || "Someone";
           sbClient.from("alert_schedule").insert([{
@@ -17992,8 +18026,23 @@ function App({
           if (t === "tasks") setListType("tasks");
           if (t === "events") setListType("events");
           if (t === "chat") {
-            const last = chatMessages[chatMessages.length - 1];
-            if (last) setChatLastSeen(last.id);
+            setChatMessages(prev => {
+              const incoming = lsGet("hb_chatMessages", []);
+              const byId = new Map();
+              prev.forEach(m => byId.set(m.id, m));
+              incoming.forEach(m => byId.set(m.id, m));
+              const merged = [...byId.values()].sort((a, b) => a.id - b.id);
+              if (merged.length !== prev.length) lsSet("hb_chatMessages", merged);
+              return merged;
+            });
+            setTimeout(() => {
+              const msgs = lsGet("hb_chatMessages", []);
+              const last = msgs[msgs.length - 1];
+              if (last && currentUser) setChatSeen(s => ({
+                ...s,
+                [currentUser]: last.id
+              }));
+            }, 50);
           }
         },
         style: {
@@ -18027,19 +18076,26 @@ function App({
           lineHeight: 1.5
         }
       }, overdueBills.length), t === "chat" && (() => {
-        const unread = chatLastSeen ? chatMessages.filter(m => m.id > chatLastSeen && m.author !== currentUser).length : chatMessages.filter(m => m.author !== currentUser).length;
+        const myLastSeen = currentUser ? chatSeen[currentUser] : null;
+        const unread = myLastSeen ? chatMessages.filter(m => m.id > myLastSeen && m.author !== currentUser).length : chatMessages.filter(m => m.author !== currentUser).length;
         return unread > 0 ? /*#__PURE__*/React.createElement("span", {
+          className: "sans",
           style: {
             position: "absolute",
             top: 2,
             right: "50%",
-            marginRight: -14,
-            width: 7,
-            height: 7,
-            borderRadius: "50%",
-            background: C.her
+            marginRight: -18,
+            background: C.her,
+            color: "#fff",
+            fontSize: 8,
+            fontWeight: 800,
+            borderRadius: 20,
+            padding: "1px 4px",
+            minWidth: 14,
+            textAlign: "center",
+            lineHeight: 1.5
           }
-        }) : null;
+        }, unread) : null;
       })(), /*#__PURE__*/React.createElement("svg", {
         width: "22",
         height: "22",
@@ -66079,7 +66135,7 @@ function RecycleBinSheet({
 
 // ─── CHAT TAB ─────────────────────────────────────────────────────────────────
 const RECENT_EMOJI = ["❤️", "😂", "👍", "🔥", "😍", "😢", "🙏", "💯"];
-const ALL_EMOJI = ["❤️", "😂", "👍", "🔥", "😍", "😢", "🙏", "💯", "😊", "🥰", "😘", "🤔", "😅", "🎉", "✨", "💕", "🤣", "😭", "🥺", "💀", "👀", "🫶", "😤", "🙄", "💪", "👏", "🤞", "🫡", "😳", "🤗", "😎", "🤩", "💔", "😮", "🤝", "🥳", "😬", "🫣", "🤭", "😈"];
+const EMOJI_CATS = [["😊", "Smileys", ["😊", "😂", "🤣", "😅", "😆", "😁", "😄", "😃", "🥰", "😍", "😘", "😗", "😙", "😚", "🤗", "🤔", "🤭", "🫣", "😳", "😬", "🙄", "😤", "😮", "😯", "😲", "🥺", "😢", "😭", "😱", "😈", "🤩", "😎", "🥳", "😴", "🤤", "🤑", "🤮", "🤧", "🤕", "😷"]], ["❤️", "Hearts", ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💔", "❣️", "♥️", "🫶"]], ["👍", "Hands", ["👍", "👎", "👏", "🙌", "🤝", "🤞", "✌️", "🤟", "🤘", "👌", "🤌", "👋", "✋", "🖐️", "🖖", "💪", "🙏", "☝️", "👆", "👇", "👈", "👉", "🫡", "🫰"]], ["🎉", "Objects", ["🎉", "✨", "🔥", "💯", "⭐", "🌟", "💫", "🏆", "🎁", "🎂", "🎈", "🎊", "🎵", "🎶", "💰", "💸", "📱", "💻", "🏡", "🚗", "✈️", "🌈", "☀️", "🌙", "⚡", "❄️"]], ["🍕", "Food", ["🍕", "🍔", "🍟", "🌮", "🍣", "🍜", "🍝", "🍰", "🎂", "🍩", "🍪", "☕", "🍺", "🍷", "🥂", "🧋", "🍦", "🍫", "🥑", "🍳"]], ["😺", "Animals", ["😺", "😸", "😹", "😻", "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐸", "🐵", "🐔", "🐧", "🦆", "🦋", "🐝"]]];
 function ChatTab({
   messages,
   currentUser,
@@ -66087,12 +66143,14 @@ function ChatTab({
   onSend,
   onDelete,
   onEdit,
-  onReact
+  onReact,
+  chatSeen
 }) {
   const [text, setText] = useState("");
   const [editId, setEditId] = useState(null);
   const [emojiFor, setEmojiFor] = useState(null);
   const [showAllEmoji, setShowAllEmoji] = useState(false);
+  const [emojiCat, setEmojiCat] = useState(0);
   const [actionMenu, setActionMenu] = useState(null);
   const scrollRef = useRef(null);
   const longRef = useRef(null);
@@ -66115,6 +66173,19 @@ function ChatTab({
   function handleDoubleTap(m) {
     onReact(m.id, "❤️");
   }
+
+  // Find the last own message that the partner has seen
+  const partner = currentUser === "her" ? "him" : "her";
+  const partnerLastSeen = chatSeen?.[partner] || null;
+  // Find the last message by me that has id <= partnerLastSeen
+  const lastSeenOwnId = (() => {
+    if (!partnerLastSeen) return null;
+    let found = null;
+    for (const m of messages) {
+      if (m.author === currentUser && m.id <= partnerLastSeen) found = m.id;
+    }
+    return found;
+  })();
 
   // Group messages by day
   const grouped = [];
@@ -66151,12 +66222,15 @@ function ChatTab({
       padding: "calc(env(safe-area-inset-top) + 31px) 0 0",
       display: "flex",
       flexDirection: "column",
-      height: "calc(100vh - 62px - env(safe-area-inset-bottom))"
+      height: "calc(100vh - 62px - env(safe-area-inset-bottom))",
+      overflow: "hidden"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      padding: "0 18px",
-      marginBottom: 12
+      padding: "0 18px 12px",
+      flexShrink: 0,
+      background: C.page,
+      zIndex: 5
     }
   }, /*#__PURE__*/React.createElement("p", {
     className: "sans",
@@ -66391,7 +66465,29 @@ function ChatTab({
         e.stopPropagation();
         onReact(m.id, emoji);
       }
-    }, emoji))), /*#__PURE__*/React.createElement("span", {
+    }, emoji))), isMe && m.id === lastSeenOwnId ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: 3,
+        marginTop: 2,
+        marginRight: 4
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 8,
+        color: C.inkFaint
+      }
+    }, ago), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 8,
+        color: C.accent,
+        fontWeight: 600
+      }
+    }, "Seen")) : /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
         fontSize: 8,
@@ -66455,62 +66551,161 @@ function ChatTab({
         cursor: "pointer",
         textAlign: "left"
       }
-    }, "Unsend")), !isMe && emojiFor === m.id && /*#__PURE__*/React.createElement("div", {
+    }, "Unsend")), !isMe && emojiFor === m.id && !showAllEmoji && /*#__PURE__*/React.createElement("div", {
       onClick: e => e.stopPropagation(),
       style: {
         position: "absolute",
-        bottom: "100%",
+        top: "100%",
         left: 0,
-        marginBottom: 4,
+        marginTop: 6,
         background: C.card,
         border: `1px solid ${C.rule}`,
-        borderRadius: 14,
+        borderRadius: 20,
         boxShadow: C.shadowLg,
-        padding: 8,
-        zIndex: 10,
-        animation: "fade 0.15s ease",
-        minWidth: showAllEmoji ? 240 : undefined
+        padding: "5px 6px",
+        zIndex: 11,
+        animation: "fade 0.15s ease"
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        flexWrap: "wrap",
-        gap: 4
+        alignItems: "center",
+        gap: 1
       }
-    }, (showAllEmoji ? ALL_EMOJI : RECENT_EMOJI).map(emoji => /*#__PURE__*/React.createElement("button", {
+    }, RECENT_EMOJI.slice(0, 6).map(emoji => /*#__PURE__*/React.createElement("button", {
       key: emoji,
       onClick: () => {
         onReact(m.id, emoji);
         setEmojiFor(null);
-        setShowAllEmoji(false);
       },
       style: {
-        fontSize: 22,
+        fontSize: 20,
         background: "none",
         border: "none",
         cursor: "pointer",
-        padding: "4px 5px",
-        borderRadius: 8
-      },
-      onMouseOver: e => e.currentTarget.style.background = C.ruleSoft,
-      onMouseOut: e => e.currentTarget.style.background = "none"
-    }, emoji)), !showAllEmoji && /*#__PURE__*/React.createElement("button", {
+        padding: "3px 4px",
+        borderRadius: 8,
+        flexShrink: 0
+      }
+    }, emoji)), /*#__PURE__*/React.createElement("button", {
       onClick: () => setShowAllEmoji(true),
       className: "sans",
       style: {
-        fontSize: 12,
+        fontSize: 13,
         fontWeight: 700,
         color: C.inkMute,
         background: C.ruleSoft,
         border: "none",
         cursor: "pointer",
-        padding: "4px 8px",
-        borderRadius: 8,
+        width: 28,
+        height: 28,
+        borderRadius: "50%",
+        flexShrink: 0,
         display: "flex",
-        alignItems: "center"
+        alignItems: "center",
+        justifyContent: "center"
       }
     }, "+")))));
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), showAllEmoji && emojiFor && /*#__PURE__*/React.createElement("div", {
+    onClick: () => {
+      setShowAllEmoji(false);
+      setEmojiFor(null);
+    },
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.5)",
+      zIndex: 200,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      background: C.page,
+      borderRadius: "22px 22px 0 0",
+      width: "100%",
+      maxWidth: 480,
+      maxHeight: "55vh",
+      display: "flex",
+      flexDirection: "column",
+      animation: "sheet 0.28s cubic-bezier(0.22,1,0.36,1)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 40,
+      height: 4,
+      background: C.rule,
+      borderRadius: 20,
+      margin: "12px auto 10px"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 2,
+      padding: "0 12px 8px",
+      borderBottom: `1px solid ${C.rule}`
+    }
+  }, EMOJI_CATS.map(([icon, label], ci) => /*#__PURE__*/React.createElement("button", {
+    key: ci,
+    onClick: () => setEmojiCat(ci),
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: "6px 0",
+      borderRadius: 10,
+      border: "none",
+      cursor: "pointer",
+      fontSize: 18,
+      background: emojiCat === ci ? C.accentSoft : "transparent",
+      opacity: emojiCat === ci ? 1 : 0.5
+    }
+  }, icon))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      overflowY: "auto",
+      WebkitOverflowScrolling: "touch",
+      padding: "10px 12px 28px"
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: C.inkMute,
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.5
+    }
+  }, EMOJI_CATS[emojiCat][1]), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(8, 1fr)",
+      gap: 2,
+      justifyItems: "center"
+    }
+  }, EMOJI_CATS[emojiCat][2].map(emoji => /*#__PURE__*/React.createElement("button", {
+    key: emoji,
+    onClick: () => {
+      onReact(emojiFor, emoji);
+      setEmojiFor(null);
+      setShowAllEmoji(false);
+      setEmojiCat(0);
+    },
+    style: {
+      fontSize: 26,
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: "6px 0",
+      borderRadius: 10,
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, emoji)))))), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
       bottom: "calc(62px + env(safe-area-inset-bottom))",
@@ -69072,7 +69267,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v579"))))), diagOpen && (() => {
+  }, "v586"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
