@@ -6641,6 +6641,25 @@ function sbInit() {
 // Push a single key to Supabase (debounced)
 // v553 · Track pending pushes so we can flush on app close/background
 const sbPending = {};
+// v590 · Direct push for chat — bypasses debounce so messages reach Supabase immediately.
+// The general sbPush 500ms debounce is fine for tasks/events but too fragile for chat
+// (app can background, useEffect chain can be interrupted). This mirrors how alert_schedule
+// inserts are direct. Called from onSend/onDelete/onEdit/onReact with the full new array.
+function sbChatPush(key, val) {
+  if (!sbClient || !sbReady || !sbHouseholdId) return;
+  sbLastLocalWrite = Date.now();
+  sbClient.from("sync_store").upsert({
+    household_id: sbHouseholdId,
+    key,
+    value: val
+  }, {
+    onConflict: "household_id,key"
+  }).then(({
+    error
+  }) => {
+    if (error) console.warn("[sb] chat push error:", key, error.message);
+  });
+}
 function sbPush(key, val) {
   if (!sbReady || !sbHouseholdId) return;
   sbPending[key] = val;
@@ -8412,21 +8431,18 @@ function App({
     her: null,
     him: null
   }));
-  // v589 · Guard: only push chat to Supabase when the change is LOCAL (user sent/edited/
-  // deleted). If the value already matches localStorage (written by the realtime handler
-  // or sbPullAll), skip — otherwise the push echoes back and creates an infinite loop.
+  // v590 · Chat messages are pushed directly in onSend/onDelete/onEdit/onReact via
+  // sbChatPush (immediate, no debounce). This useEffect only persists to localStorage
+  // as a backup — it does NOT push to Supabase, preventing echo loops.
   useEffect(() => {
-    const cur = localStorage.getItem("hb_chatMessages");
-    const next = JSON.stringify(chatMessages);
-    if (cur === next) return; // already in LS from sync — don't re-push
-    lsSet("hb_chatMessages", chatMessages);
+    _lsSetOrig("hb_chatMessages", chatMessages);
   }, [chatMessages]);
+  useEffect(() => {
+    _lsSetOrig("hb_chatSeen", chatSeen);
+  }, [chatSeen]);
   useEffect(() => {
     lsSet(userKey("hb_showChatHome"), showChatHome);
   }, [showChatHome]);
-  useEffect(() => {
-    lsSet("hb_chatSeen", chatSeen);
-  }, [chatSeen]);
   // v244 · WORK HISTORY. { [seriesId]: [ {t, date, kind, changes:[...] }, ... ] }
   // Newest LAST, so the timeline reads bottom-up like a diary and an append is a push.
   const [workHist, setWorkHist] = useState(() => lsGet(WORK_HIST_KEY, {}));
@@ -17875,11 +17891,20 @@ function App({
           author: currentUser,
           t: new Date().toISOString()
         };
-        setChatMessages(m => [...m, msg]);
-        setChatSeen(s => ({
-          ...s,
-          [currentUser]: msg.id
-        }));
+        setChatMessages(m => {
+          const next = [...m, msg];
+          sbChatPush("hb_chatMessages", next);
+          _lsSetOrig("hb_chatMessages", next);
+          return next;
+        });
+        setChatSeen(s => {
+          const next = {
+            ...s,
+            [currentUser]: msg.id
+          };
+          sbChatPush("hb_chatSeen", next);
+          return next;
+        });
         // v588 · Push notification to partner
         if (sbClient && sbHouseholdId) {
           const senderName = people[currentUser]?.name || "Someone";
@@ -17898,23 +17923,38 @@ function App({
           });
         }
       },
-      onDelete: id => setChatMessages(m => m.filter(x => x.id !== id)),
-      onEdit: (id, newText) => setChatMessages(m => m.map(x => x.id === id ? {
-        ...x,
-        text: newText,
-        edited: true
-      } : x)),
-      onReact: (id, emoji) => setChatMessages(m => m.map(x => {
-        if (x.id !== id) return x;
-        const r = {
-          ...(x.reactions || {})
-        };
-        if (r[emoji]) delete r[emoji];else r[emoji] = currentUser;
-        return {
+      onDelete: id => setChatMessages(m => {
+        const next = m.filter(x => x.id !== id);
+        sbChatPush("hb_chatMessages", next);
+        _lsSetOrig("hb_chatMessages", next);
+        return next;
+      }),
+      onEdit: (id, newText) => setChatMessages(m => {
+        const next = m.map(x => x.id === id ? {
           ...x,
-          reactions: r
-        };
-      }))
+          text: newText,
+          edited: true
+        } : x);
+        sbChatPush("hb_chatMessages", next);
+        _lsSetOrig("hb_chatMessages", next);
+        return next;
+      }),
+      onReact: (id, emoji) => setChatMessages(m => {
+        const next = m.map(x => {
+          if (x.id !== id) return x;
+          const r = {
+            ...(x.reactions || {})
+          };
+          if (r[emoji]) delete r[emoji];else r[emoji] = currentUser;
+          return {
+            ...x,
+            reactions: r
+          };
+        });
+        sbChatPush("hb_chatMessages", next);
+        _lsSetOrig("hb_chatMessages", next);
+        return next;
+      })
     }), tab === "settings" && /*#__PURE__*/React.createElement(SettingsPage, {
       tasks: tasks,
       events: events,
@@ -18073,10 +18113,14 @@ function App({
             setTimeout(() => {
               const msgs = lsGet("hb_chatMessages", []);
               const last = msgs[msgs.length - 1];
-              if (last && currentUser) setChatSeen(s => ({
-                ...s,
-                [currentUser]: last.id
-              }));
+              if (last && currentUser) setChatSeen(s => {
+                const next = {
+                  ...s,
+                  [currentUser]: last.id
+                };
+                sbChatPush("hb_chatSeen", next);
+                return next;
+              });
             }, 50);
           }
         },
@@ -69302,7 +69346,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v589"))))), diagOpen && (() => {
+  }, "v590"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
