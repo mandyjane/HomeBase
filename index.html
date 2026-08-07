@@ -5598,7 +5598,7 @@ function doneStamp(dueDate, doneAt, task) {
   if (!completedLate(dueDate, doneAt)) {
     // Compare LOCAL calendar days. Slicing the ISO string gives the UTC date, which is a
     // day out for evening completions on a positive-offset device — the exact bug that
-    // made freshly ticked tasks vanish from the dashboard (v5869).
+    // made freshly ticked tasks vanish from the dashboard (v5889).
     const gap = daysBetween(toLocalYMD(d), todayStr());
     if (gap <= 0) return `Done ${clock}`; // today
     if (gap === 1) return `Done ${d.getDate()} ${MON[d.getMonth()]}, ${clock}`; // yesterday
@@ -6720,7 +6720,20 @@ async function sbPullAll() {
     try {
       const local = localStorage.getItem(row.key);
       const remote = JSON.stringify(row.value);
-      if (local !== remote) {
+      // v588 · Chat messages: merge by id instead of overwriting
+      if (row.key === "hb_chatMessages") {
+        const localArr = local ? JSON.parse(local) : [];
+        const remoteArr = row.value || [];
+        const byId = new Map();
+        localArr.forEach(m => byId.set(m.id, m));
+        remoteArr.forEach(m => byId.set(m.id, m));
+        const merged = [...byId.values()].sort((a, b) => a.id - b.id);
+        const mergedStr = JSON.stringify(merged);
+        if (local !== mergedStr) {
+          localStorage.setItem(row.key, mergedStr);
+          changed = true;
+        }
+      } else if (local !== remote) {
         localStorage.setItem(row.key, remote);
         changed = true;
       }
@@ -6765,14 +6778,28 @@ function sbSubscribe(onUpdate) {
   }, payload => {
     const row = payload.new;
     if (!row || !row.key) return;
-    // Ignore echoes from our own writes
-    if (Date.now() - sbLastLocalWrite < 3000) return;
+    // v588 · Chat keys skip echo suppression — merge handles duplicates
+    const isChat = row.key === "hb_chatMessages" || row.key === "hb_chatSeen";
+    // Ignore echoes from our own writes (but not for chat)
+    if (!isChat && Date.now() - sbLastLocalWrite < 1500) return;
     try {
-      const remote = JSON.stringify(row.value);
-      const local = localStorage.getItem(row.key);
-      if (local !== remote) {
-        localStorage.setItem(row.key, remote);
+      // v588 · Chat messages: merge by id
+      if (row.key === "hb_chatMessages") {
+        const localArr = JSON.parse(localStorage.getItem(row.key) || "[]");
+        const remoteArr = row.value || [];
+        const byId = new Map();
+        localArr.forEach(m => byId.set(m.id, m));
+        remoteArr.forEach(m => byId.set(m.id, m));
+        const merged = [...byId.values()].sort((a, b) => a.id - b.id);
+        localStorage.setItem(row.key, JSON.stringify(merged));
         if (onUpdate) onUpdate(row.key);
+      } else {
+        const remote = JSON.stringify(row.value);
+        const local = localStorage.getItem(row.key);
+        if (local !== remote) {
+          localStorage.setItem(row.key, remote);
+          if (onUpdate) onUpdate(row.key);
+        }
       }
     } catch {}
   }).subscribe();
@@ -8378,14 +8405,20 @@ function App({
   useEffect(() => {
     lsSet(userKey("hb_showQuickAdd"), showQuickAdd);
   }, [showQuickAdd]);
-  // v586 · CHAT — shared pinboard messages
+  // v588 · CHAT — shared pinboard messages
   const [chatMessages, setChatMessages] = useState(() => lsGet("hb_chatMessages", []));
   const [showChatHome, setShowChatHome] = useState(() => lsGet(userKey("hb_showChatHome"), true));
   const [chatSeen, setChatSeen] = useState(() => lsGet("hb_chatSeen", {
     her: null,
     him: null
   }));
+  // v589 · Guard: only push chat to Supabase when the change is LOCAL (user sent/edited/
+  // deleted). If the value already matches localStorage (written by the realtime handler
+  // or sbPullAll), skip — otherwise the push echoes back and creates an infinite loop.
   useEffect(() => {
+    const cur = localStorage.getItem("hb_chatMessages");
+    const next = JSON.stringify(chatMessages);
+    if (cur === next) return; // already in LS from sync — don't re-push
     lsSet("hb_chatMessages", chatMessages);
   }, [chatMessages]);
   useEffect(() => {
@@ -9377,14 +9410,15 @@ function App({
     setBonusLog(syncedBonusLog);
     setManualOT(lsGet("hb_manualOT", []));
     setTreatRequests(lsGet("hb_treatRequests", []));
-    // v586 · Chat: merge by id to prevent last-write-wins from losing messages
+    // v589 · Chat: merge by id. Do NOT call lsSet here — the realtime handler already
+    // wrote the merged data to localStorage. Calling lsSet would trigger sbPush, echoing
+    // the data back to Supabase and creating an infinite loop.
     setChatMessages(prev => {
       const incoming = lsGet("hb_chatMessages", []);
       const byId = new Map();
       prev.forEach(m => byId.set(m.id, m));
       incoming.forEach(m => byId.set(m.id, m));
       const merged = [...byId.values()].sort((a, b) => a.id - b.id);
-      lsSet("hb_chatMessages", merged);
       return merged;
     });
     setChatSeen(lsGet("hb_chatSeen", {
@@ -9423,7 +9457,8 @@ function App({
           prev.forEach(m => byId.set(m.id, m));
           incoming.forEach(m => byId.set(m.id, m));
           const merged = [...byId.values()].sort((a, b) => a.id - b.id);
-          if (merged.length !== prev.length) lsSet("hb_chatMessages", merged);
+          // v589 · _lsSetOrig: persist merge locally but don't sbPush (data came from sync)
+          if (merged.length !== prev.length) _lsSetOrig("hb_chatMessages", merged);
           return merged;
         });
         setChatSeen(lsGet("hb_chatSeen", {
@@ -14969,7 +15004,7 @@ function App({
         color: isSleek ? C.accent : C.inkMute
       }
     }, "Levels"), !lvlOpen && (() => {
-      // v586 · Compute earned from ground truth (same as expanded card)
+      // v588 · Compute earned from ground truth (same as expanded card)
       const earnedPts = {};
       ["her", "him"].forEach(k => {
         const g = rewards[k] || DEFAULT_REWARDS[k];
@@ -17845,7 +17880,7 @@ function App({
           ...s,
           [currentUser]: msg.id
         }));
-        // v586 · Push notification to partner
+        // v588 · Push notification to partner
         if (sbClient && sbHouseholdId) {
           const senderName = people[currentUser]?.name || "Someone";
           sbClient.from("alert_schedule").insert([{
@@ -18032,7 +18067,7 @@ function App({
               prev.forEach(m => byId.set(m.id, m));
               incoming.forEach(m => byId.set(m.id, m));
               const merged = [...byId.values()].sort((a, b) => a.id - b.id);
-              if (merged.length !== prev.length) lsSet("hb_chatMessages", merged);
+              if (merged.length !== prev.length) _lsSetOrig("hb_chatMessages", merged);
               return merged;
             });
             setTimeout(() => {
@@ -69267,7 +69302,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v586"))))), diagOpen && (() => {
+  }, "v589"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
