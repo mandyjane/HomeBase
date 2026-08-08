@@ -45638,7 +45638,20 @@ function MortgageView({
       overflow: "hidden",
       textOverflow: "ellipsis"
     }
-  }, t.desc || "—"), /*#__PURE__*/React.createElement("div", {
+  }, t.desc || "—", t._billRef ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-block",
+      background: "rgba(160,165,180,0.18)",
+      color: "#a0a5b4",
+      fontSize: 8.5,
+      fontWeight: 700,
+      letterSpacing: .3,
+      borderRadius: 5,
+      padding: "1px 5px",
+      verticalAlign: "middle",
+      marginLeft: 5
+    }
+  }, "SYNCED") : null), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10.5,
       color: C.inkFaint,
