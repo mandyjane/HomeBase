@@ -18386,7 +18386,7 @@ function App({
     // OWE. It was also the vaguest shape in the nav — a rectangle with a stripe reads
     // as a generic box at 20px, next to Tasks (a box), Calendar (a box) and Home (a
     // box). The circle is identifiable by outline alone.
-    ["events", "Events", "M12 22s7-5.5 7-12a7 7 0 1 0-14 0c0 6.5 7 12 7 12z M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"], ["bills", "Bills", "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M14.8 8.6a3 3 0 0 0-2.8-1.6c-1.7 0-2.8.9-2.8 2.2 0 3 5.9 1.6 5.9 4.7 0 1.4-1.2 2.4-3.1 2.4a3.2 3.2 0 0 1-3-1.7 M12 5.4v13.2"], ["work", "Work", "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 8v4l3 1.5"], ["calendar", "Cal", "M3 4h18v18H3z M3 10h18 M8 2v4 M16 2v4"], ["chat", "Binky chat", "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"]
+    ["events", "Events", "M12 22s7-5.5 7-12a7 7 0 1 0-14 0c0 6.5 7 12 7 12z M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"], ["bills", "Bills", "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M14.8 8.6a3 3 0 0 0-2.8-1.6c-1.7 0-2.8.9-2.8 2.2 0 3 5.9 1.6 5.9 4.7 0 1.4-1.2 2.4-3.1 2.4a3.2 3.2 0 0 1-3-1.7 M12 5.4v13.2"], ["work", "Work", "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 8v4l3 1.5"], ["calendar", "Cal", "M3 4h18v18H3z M3 10h18 M8 2v4 M16 2v4"], ["chat", "Chat", "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"]
     // Stats is NOT here — it moved to a header icon on the Tasks tab. The nav was
     // at 8 items and tight on an iPhone 14 Pro; this brings it back to 7. The
     // `stats` TAB still exists and still works, it just isn't navigated to here.
@@ -66651,7 +66651,7 @@ function ChatTab({
       marginTop: 2,
       lineHeight: 1.1
     }
-  }, "Chat")), /*#__PURE__*/React.createElement("div", {
+  }, "Binky chat")), /*#__PURE__*/React.createElement("div", {
     ref: scrollRef,
     onClick: () => {
       setActionMenu(null);
@@ -69749,7 +69749,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v600"))))), diagOpen && (() => {
+  }, "v601"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
