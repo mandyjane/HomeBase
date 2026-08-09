@@ -6778,6 +6778,10 @@ async function sbPullAll() {
   let changed = false;
   data.forEach(row => {
     try {
+      // v619 · Skip appearance keys — they are per-user, local-only preferences.
+      // Stale entries in sync_store (pushed before the key was in APPEARANCE_KEYS)
+      // must not overwrite the local user-keyed value on every pull.
+      if (APPEARANCE_KEYS.has(row.key.replace(/_[0-9a-f-]+$/, ""))) return;
       const local = localStorage.getItem(row.key);
       const remote = JSON.stringify(row.value);
       // v588 · Chat messages: merge by id instead of overwriting
