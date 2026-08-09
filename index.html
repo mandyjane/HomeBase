@@ -14192,21 +14192,50 @@ function App({
   };
 
   // Today's completion for the ring: all task occurrences due today (done + not),
-  // plus today's events. Events whose end time has passed count as done. v611
+  // plus today's events. Events whose end time has passed count as done. v611/v612
   const todaysTasks = visListTasks.filter(t => t.dueDate === today);
   const _now = nowClock();
-  const todaysEvents = homeAgenda.filter(r => r.kind === "event" && (r.date || r.ref?.date) === today && !r.ref?.dayOff && r.ref?.category !== SHIFT_CAT && !r.ref?.publicHoliday);
-  const todaysEvDone = todaysEvents.filter(ev => {
-    const e = ev.ref;
+  // Events visible on today's agenda (exclude work: shifts, day off, RDO, leave, sick, TOIL, PH, OT)
+  const todaysEvents = homeAgenda.filter(r => {
+    if (r.kind !== "event") return false;
+    const e = r.ref;
     if (!e) return false;
-    if (!e.end) return false; // no end time — can't auto-complete
-    if (e.end <= e.time) return false; // overnight — not done today
+    if (e.dayOff) return false; // day off, RDO, leave, sick, TOIL
+    if (e.category === SHIFT_CAT) return false; // shifts
+    if (e.publicHoliday) return false; // public holidays
+    if (r.title === "Overtime") return false; // OT cards
+    // Must be on today (start date = today, or span covering today)
+    if (e.date === today) return true;
+    if (isSpan(e) && e.date < today && spanEndFor(e, e.date) >= today) return true;
+    return false;
+  });
+  const todaysEvDone = todaysEvents.filter(r => {
+    const e = r.ref;
+    if (!e || !e.end) return false;
+    // For span events, end time only applies on the LAST day
+    if (isSpan(e)) {
+      const lastDay = spanEndFor(e, e.date);
+      if (today !== lastDay) return false; // middle day — no end time to check
+    }
+    if (e.end <= (e.time || "00:00")) return false; // overnight — not done today
     return _now >= e.end;
   });
   const doneToday = todaysTasks.filter(t => t.done).length + todaysEvDone.length;
   const totalToday = todaysTasks.length + todaysEvents.length;
   const ringPct = totalToday > 0 ? doneToday / totalToday : 0;
   const ringPctLabel = Math.round(ringPct * 100);
+  // v614 · Debug: list what the ring counts (tap ring to show)
+  const _ringItems = [...todaysTasks.map(t => ({
+    name: t.title,
+    done: !!t.done,
+    type: isBill(t) ? "bill" : "task",
+    who: t.assignee || "?"
+  })), ...todaysEvents.map(r => ({
+    name: r.title || r.ref?.title || "?",
+    done: todaysEvDone.includes(r),
+    type: "event",
+    who: r.ref?.assignee || "?"
+  }))];
 
   // Per-person level info (each levels on their own points).
   const herLevel = levelInfo(points.her);
@@ -14968,7 +14997,53 @@ function App({
         color: C.inkSoft,
         marginTop: 8
       }
-    }, totalToday === 0 ? "A clear day." : doneToday === totalToday ? "All done — nice work." : `${totalToday - doneToday} to go — you've got this.`)) :
+    }, totalToday === 0 ? "A clear day." : doneToday === totalToday ? "All done — nice work." : `${totalToday - doneToday} to go — you've got this.`), /*#__PURE__*/React.createElement("details", {
+      style: {
+        marginTop: 8
+      }
+    }, /*#__PURE__*/React.createElement("summary", {
+      className: "sans",
+      style: {
+        fontSize: 9,
+        color: C.inkFaint,
+        cursor: "pointer",
+        textAlign: "center"
+      }
+    }, "What's in the count?"), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        color: C.inkMute,
+        marginTop: 6,
+        lineHeight: 1.8
+      }
+    }, _ringItems.map((it, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        display: "flex",
+        gap: 6,
+        alignItems: "center"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: it.done ? C.accent : C.inkFaint
+      }
+    }, it.done ? "\u2713" : "\u25CB"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        color: it.done ? C.inkMute : C.ink
+      }
+    }, it.name), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 9,
+        color: C.inkFaint
+      }
+    }, it.type), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 9,
+        color: C.inkFaint
+      }
+    }, it.who)))))) :
     /*#__PURE__*/
     /* Bold: vivid gradient card with side ring */
     React.createElement("div", {
@@ -70007,7 +70082,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v612"))))), diagOpen && (() => {
+  }, "v614"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
