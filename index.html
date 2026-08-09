@@ -59864,7 +59864,8 @@ function GoalCard({
   onSubmitTreat,
   onCancelRequest,
   onDismissResult,
-  showPeriodTarget = true
+  showPeriodTarget = true,
+  currentUser = null
 }) {
   const L = ({
     children
@@ -60246,7 +60247,24 @@ function GoalCard({
       marginLeft: 4,
       letterSpacing: .5
     }
-  }, "EDITABLE")), treatApproval ? /*#__PURE__*/React.createElement("div", {
+  }, "EDITABLE")), treatApproval && currentUser && who !== "shared" && currentUser !== who ? /*#__PURE__*/React.createElement("div", {
+    className: "serif",
+    style: {
+      fontSize: 15,
+      fontStyle: "italic",
+      color: C.inkMute,
+      padding: "11px 14px",
+      background: C.card,
+      border: "1px solid " + C.rule,
+      borderRadius: 12,
+      marginBottom: 12,
+      minHeight: 42
+    }
+  }, g.treat || /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: C.inkFaint
+    }
+  }, "No treat set")) : treatApproval ? /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 12
     }
@@ -61135,6 +61153,7 @@ function PersonSheet({
     onCancelRequest: onCancelRequest,
     onDismissResult: onDismissResult,
     showPeriodTarget: false,
+    currentUser: currentUser,
     onSet: (w, k, v) => onSaveGoal(w, k, v),
     onClaim: () => onClaim(who, g)
   })) : tab === "record" ? /*#__PURE__*/React.createElement("div", {
@@ -69795,7 +69814,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v604"))))), diagOpen && (() => {
+  }, "v605"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
