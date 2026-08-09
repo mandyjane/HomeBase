@@ -16106,6 +16106,17 @@ function App({
       }), /*#__PURE__*/React.createElement("path", {
         d: "M15.5 14.5a4.6 4.6 0 0 1 5 4.5"
       }));
+      // v610 · Compute earned points from ground truth (same as Home level cards)
+      const taskTabPts = {};
+      ["her", "him"].forEach(k => {
+        const g = rewards[k] || DEFAULT_REWARDS[k];
+        const p = migratePeriod(g.period);
+        const bk = periodBucket(p, fp);
+        const _pStart = bk ? bk.key : null;
+        const _acts = collectCompletedTasks(visTasks, k, _pStart, null, effectiveResetAt);
+        const _bActs = collectBonusActivity(bonusLog, k, _pStart, null, effectiveResetAt);
+        taskTabPts[k] = [..._acts, ..._bActs].reduce((s, t) => s + (t.points || 0), 0);
+      });
       return /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
@@ -16151,7 +16162,7 @@ function App({
           color: C.ink,
           marginLeft: 1
         }
-      }, points[key]))), /*#__PURE__*/React.createElement("div", {
+      }, taskTabPts[key]))), /*#__PURE__*/React.createElement("div", {
         style: {
           flex: 1
         }
@@ -69986,7 +69997,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v610"))))), diagOpen && (() => {
+  }, "v611"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
