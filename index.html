@@ -13348,12 +13348,33 @@ function App({
       return n <= ALL_MAX_PER_SERIES;
     });
   }
+  // v604 · Expand span events into continuation entries for each day they cover.
+  // A 3-day trip starting yesterday appears under Today as "Day 2 of 3" and under
+  // tomorrow as "Day 3 of 3". Only the events tab uses these; the calendar has its
+  // own span bar rendering.
+  const expandedEvPool = [];
+  evPool.forEach(e => {
+    expandedEvPool.push(e);
+    if (!isSpan(e)) return;
+    const total = spanDaysOf(e);
+    for (let i = 1; i < total; i++) {
+      const contDate = addDays(e.date, i);
+      if (contDate < today && range !== "done") continue; // skip past continuation days unless viewing past
+      expandedEvPool.push({
+        ...e,
+        date: contDate,
+        _spanCont: true,
+        _spanDayN: i + 1,
+        _spanTotal: total
+      });
+    }
+  });
   const evGroups = {
     Today: [],
     Upcoming: [],
     Past: []
   };
-  evPool.forEach(e => {
+  expandedEvPool.forEach(e => {
     // Events have no tick — "done" for an event just means it has been and gone.
     // So the Done range IS the past-events view, and it's the only place they show.
     if (range === "done") {
@@ -20486,7 +20507,7 @@ function EventCard({
       whiteSpace: "nowrap",
       flexShrink: 0
     }
-  }, spanDaysOf(ev), " days")), /*#__PURE__*/React.createElement("div", {
+  }, ev._spanCont ? `Day ${ev._spanDayN} of ${ev._spanTotal}` : spanDaysOf(ev) + " days")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -20514,7 +20535,7 @@ function EventCard({
       color: C.inkMute,
       whiteSpace: "nowrap"
     }
-  }, spanDateRange(ev)) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+  }, ev._spanCont ? relLabel(ev.date, today) : spanDateRange(ev)) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: {
       fontSize: 11,
@@ -30673,11 +30694,14 @@ function taskRow(t, people, today) {
 function eventRow(e, people, phOpts) {
   const ph = e.publicHoliday;
   const ec = ph ? null : EVENT_CATS[e.category] || EVENT_CATS.Other;
+  // v604 · Span continuation entries carry _spanCont; show "Day X of Y" in subLabel
+  const spanLabel = e._spanCont ? "Day " + e._spanDayN + " of " + e._spanTotal : isSpan(e) ? "Day 1 of " + spanDaysOf(e) : "";
+  const sub_l = [spanLabel, e.place].filter(Boolean).join(" · ");
   return {
     kind: "event",
     ref: e,
     title: dayOffTitle(e),
-    subLabel: e.place || "",
+    subLabel: sub_l,
     pName: assigneeName(e.assignee, people),
     pColor: assigneeColor(e.assignee, people),
     date: e.date,
@@ -69771,7 +69795,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v603"))))), diagOpen && (() => {
+  }, "v604"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
