@@ -14191,10 +14191,20 @@ function App({
     nag: C.her
   };
 
-  // Today's completion for the ring: all task occurrences due today (done + not).
+  // Today's completion for the ring: all task occurrences due today (done + not),
+  // plus today's events. Events whose end time has passed count as done. v611
   const todaysTasks = visListTasks.filter(t => t.dueDate === today);
-  const doneToday = todaysTasks.filter(t => t.done).length;
-  const totalToday = todaysTasks.length;
+  const _now = nowClock();
+  const todaysEvents = homeAgenda.filter(r => r.kind === "event" && (r.date || r.ref?.date) === today && !r.ref?.dayOff && r.ref?.category !== SHIFT_CAT && !r.ref?.publicHoliday);
+  const todaysEvDone = todaysEvents.filter(ev => {
+    const e = ev.ref;
+    if (!e) return false;
+    if (!e.end) return false; // no end time — can't auto-complete
+    if (e.end <= e.time) return false; // overnight — not done today
+    return _now >= e.end;
+  });
+  const doneToday = todaysTasks.filter(t => t.done).length + todaysEvDone.length;
+  const totalToday = todaysTasks.length + todaysEvents.length;
   const ringPct = totalToday > 0 ? doneToday / totalToday : 0;
   const ringPctLabel = Math.round(ringPct * 100);
 
@@ -69997,7 +70007,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v611"))))), diagOpen && (() => {
+  }, "v612"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
