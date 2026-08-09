@@ -6840,8 +6840,11 @@ function sbSubscribe(onUpdate) {
     if (!row || !row.key) return;
     // v588 · Chat keys skip echo suppression — merge handles duplicates
     const isChat = row.key === "hb_chatMessages" || row.key === "hb_chatSeen";
-    // Ignore echoes from our own writes (but not for chat)
-    if (!isChat && Date.now() - sbLastLocalWrite < 1500) return;
+    // v606 · treatRequests must also bypass echo suppression — approval cards
+    // won't appear if the incoming request is silently dropped as an echo.
+    const bypassEcho = isChat || row.key === "hb_treatRequests";
+    // Ignore echoes from our own writes (but not for chat or treatRequests)
+    if (!bypassEcho && Date.now() - sbLastLocalWrite < 1500) return;
     try {
       // v588 · Chat messages: merge by id
       if (row.key === "hb_chatMessages") {
@@ -69831,7 +69834,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v606"))))), diagOpen && (() => {
+  }, "v607"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
