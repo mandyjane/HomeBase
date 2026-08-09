@@ -19234,6 +19234,8 @@ function App({
       onSubmitTreat: submitTreatRequest,
       onCancelRequest: cancelTreatRequest,
       onDismissResult: dismissTreatResult,
+      onApproveTreat: approveTreatRequest,
+      onDenyTreat: denyTreatRequest,
       onSaveGoal: (w, k, v) => setRewards(r => ({
         ...r,
         [w]: {
@@ -60954,7 +60956,9 @@ function PersonSheet({
   onSubmitTreat,
   onCancelRequest,
   onDismissResult,
-  currentUser = null
+  currentUser = null,
+  onApproveTreat,
+  onDenyTreat
 }) {
   const label = who === "shared" ? "Household" : people[who] && people[who].name || who;
   const color = who === "shared" ? C.accent : personColor(people[who].color);
@@ -61138,7 +61142,13 @@ function PersonSheet({
     style: {
       padding: "16px 16px 22px"
     }
-  }, /*#__PURE__*/React.createElement(GoalCard, {
+  }, treatApproval && currentUser && who !== "shared" && currentUser !== who && treatRequests.filter(r => r.status === "pending" && r.who === who).map(req => /*#__PURE__*/React.createElement(TreatApprovalCard, {
+    key: req.id,
+    req: req,
+    people: people,
+    onApprove: onApproveTreat,
+    onDeny: onDenyTreat
+  })), /*#__PURE__*/React.createElement(GoalCard, {
     who: who,
     label: label,
     color: color,
@@ -69814,7 +69824,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v605"))))), diagOpen && (() => {
+  }, "v606"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
