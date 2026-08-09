@@ -9574,8 +9574,15 @@ function App({
         // v594 · Pull fresh data from Supabase when app comes to foreground.
         // The push notification arrives faster than the realtime subscription,
         // so tapping a notification often shows stale data. sbPullAll writes to
-        // localStorage, then the syncVersion bump re-reads into React state.
-        sbPullAll();
+        // localStorage, then we re-read affected state.
+        // v606 · Explicitly re-read treatRequests after pull so approval cards appear
+        sbPullAll().then(changed => {
+          if (!changed) return;
+          setTreatRequests(lsGet("hb_treatRequests", []));
+          setTasks(lsGet("hb_tasks", SAMPLE) || []);
+          setEvents(lsGet("hb_events", SAMPLE_EVENTS));
+          setRewards(lsGet("hb_rewards", DEFAULT_REWARDS));
+        });
       }
     };
     document.addEventListener("visibilitychange", handler);
