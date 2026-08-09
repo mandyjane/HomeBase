@@ -18989,7 +18989,8 @@ function App({
             recurInterval: r.recurInterval || 0,
             recurUnit: r.recurUnit || "",
             recurDays: r.recurDays || [],
-            priority: r.priority || 1
+            priority: r.priority || 1,
+            private: !!r.private
           });
           setShowAdd(true);
         }
@@ -26105,29 +26106,96 @@ function parseVoiceLocal(text, people, todayStr) {
     type: "task",
     title: "",
     date: "",
+    endDate: "",
     time: "",
     assignee: "",
     recur: "none",
     place: "",
     recurInterval: 0,
     recurUnit: "",
-    recurDays: []
+    recurDays: [],
+    priority: 0,
+    amount: 0,
+    category: "",
+    message: "",
+    reason: "",
+    private: false
   };
   let remaining = t;
 
-  // v552 fix · Strip instruction phrases first
-  remaining = remaining.replace(/\b(?:add|create|set|make|put)\b/i, "");
-  remaining = remaining.replace(/\b(?:to (?:the )?(?:calendar|task list|tasks|events|my calendar))\b/i, "");
-  remaining = remaining.replace(/\b(?:remind me to|reminder for|reminder to|set a reminder)\b/i, "");
-
-  // Assignee — skip names with possessive ('s) as they're part of the title
+  // v620 · Clean speech-to-text artifacts: doubled words ("to to" → "to")
+  remaining = remaining.replace(/\b(\w+)\s+\1\b/gi, "$1");
   const herName = (people.her?.name || "Mandy").toLowerCase();
   const himName = (people.him?.name || "Liam").toLowerCase();
-  const assignPat = new RegExp(`(?:assign(?:ed)?\\s+to|for)\\s+(${herName}|${himName}|me|both|us)\\b`, "i");
+
+  // v620 · NEW TYPE DETECTION — check before stripping
+  // Chat: "tell Liam ...", "message Liam ...", "say to Liam ..."
+  const chatPat = new RegExp(`(?:tell|message|text|say\\s+to)\\s+(?:${herName}|${himName})\\s+(.+)$`, "i");
+  const chatM = remaining.match(chatPat);
+  if (chatM) {
+    result.type = "chat";
+    result.message = chatM[1].replace(/^that\s+/i, "").replace(/^\w/, c => c.toUpperCase()).trim();
+    result.title = result.message;
+    result.date = todayStr;
+    return result;
+  }
+  // Work absence: "day off", "leave", "sick day", "toil"
+  if (/\b(?:day\s*off|rdo)\b/i.test(remaining)) {
+    result.type = "dayoff";
+  } else if (/\b(?:annual\s+)?leave\b/i.test(remaining) && !/\bleave\s+(?:it|the|that)\b/i.test(remaining)) {
+    result.type = "leave";
+  } else if (/\bsick\s*(?:day|leave)?\b/i.test(remaining) && /\bsick\b/i.test(remaining)) {
+    result.type = "sick";
+  } else if (/\btoil\b/i.test(remaining)) {
+    result.type = "toil";
+  }
+  // Bill: contains "$" or "X dollars" or "bill" with an amount
+  const billAmt = remaining.match(/\$\s*([\d,.]+)/) || remaining.match(/\b([\d,.]+)\s*dollars?\b/i) || remaining.match(/\bdollars?\s*([\d,.]+)\b/i);
+  if (billAmt) {
+    result.type = "bill";
+    result.amount = parseFloat(billAmt[1].replace(/,/g, ""));
+    remaining = remaining.replace(billAmt[0], "");
+  } else if (/\bbill\b/i.test(remaining)) {
+    result.type = "bill";
+  }
+  // Bonus: "give X points", "award X points", "bonus"
+  const bonusPat = new RegExp(`(?:give|award|bonus)\\s+(?:${herName}|${himName}|me)\\s+(\\d+)\\s*(?:points?|pts?)(?:\\s+(?:for)\\s+(.+))?`, "i");
+  const bonusM = remaining.match(bonusPat);
+  if (bonusM) {
+    result.type = "bonus";
+    result.amount = parseInt(bonusM[1]);
+    result.reason = bonusM[2] || "";
+    const whoB = remaining.match(new RegExp(`(?:give|award)\\s+(${herName}|${himName}|me)`, "i"));
+    if (whoB) {
+      const w = whoB[1].toLowerCase();
+      result.assignee = w === himName ? "him" : w === herName ? "her" : w === "me" ? "her" : "";
+    }
+    result.date = todayStr;
+    return result;
+  }
+
+  // v620 · Private detection
+  if (/\bprivate\b|\bjust\s+(?:for\s+)?me\b|\bhide\b|\bonly\s+me\b|\bhidden\b/i.test(remaining)) {
+    result.private = true;
+    remaining = remaining.replace(/\bprivate\b|\bjust\s+(?:for\s+)?me\b|\bhide\b|\bonly\s+me\b|\bhidden\b/gi, "");
+  }
+
+  // Strip instruction phrases
+  remaining = remaining.replace(/\b(?:add|create|set|make|put|new)\s*(?:a|an)?\b/gi, "");
+  remaining = remaining.replace(/\b(?:to\s+)?(?:the\s+)?(?:calendar|task\s*list|tasks|events|my\s+calendar|home\s*base)\b/gi, "");
+  remaining = remaining.replace(/\b(?:remind\s+me\s+to|reminder\s+(?:for|to)|set\s+a\s+reminder|can\s+you)\b/gi, "");
+  remaining = remaining.replace(/\b(?:please|could\s+you|i\s+need\s+to|i\s+want\s+to|i\s+need\s+a)\b/gi, "");
+  // Strip work-type keywords from remaining (already captured in type)
+  if (result.type === "dayoff" || result.type === "leave" || result.type === "sick" || result.type === "toil") {
+    remaining = remaining.replace(/\b(?:day\s*off|rdo|annual\s+leave|leave|sick\s*day|sick\s*leave|sick|toil)\b/gi, "");
+  }
+
+  // Assignee — skip names with possessive ('s) as they're part of the title
+  const assignPat = new RegExp(`(?:assign(?:ed)?\\s+to|allocat(?:e|ed)\\s+to|for)\\s+(${herName}|${himName}|me|myself|both|us)\\b`, "i");
   const am = remaining.match(assignPat);
   if (am) {
     const who = am[1].toLowerCase();
-    if (who === himName) result.assignee = "him";else if (who === herName || who === "me") result.assignee = "her";else if (who === "both" || who === "us") result.assignee = "both";
+    if (who === himName) result.assignee = "him";else if (who === herName || who === "me" || who === "myself") result.assignee = "her";else if (who === "both" || who === "us") result.assignee = "both";
     remaining = remaining.replace(am[0], "");
   } else if (new RegExp(`\\b${himName}(?!')\\b(?!\\s*'s)`, "i").test(remaining) && !new RegExp(`\\b${himName}'s\\b`, "i").test(remaining)) {
     result.assignee = "him";
@@ -26136,6 +26204,8 @@ function parseVoiceLocal(text, people, todayStr) {
     result.assignee = "her";
     remaining = remaining.replace(new RegExp(`\\b${herName}\\b`, "i"), "");
   }
+  // v620 · Strip orphaned assignment phrases left after assignee extraction
+  remaining = remaining.replace(/\b(?:assign(?:ed)?\s+to|allocat(?:e|ed)\s+to)\b/gi, "");
 
   // Recurrence
   const recurPats = [[/\bevery\s+day\b/i, "daily"], [/\bdaily\b/i, "daily"], [/\bevery\s+week\b/i, "weekly"], [/\bweekly\b/i, "weekly"], [/\bevery\s+fortnight\b/i, "fortnightly"], [/\bfortnightly\b/i, "fortnightly"], [/\bevery\s+month\b/i, "monthly"], [/\bmonthly\b/i, "monthly"], [/\bevery\s+year\b/i, "yearly"], [/\byearly\b/i, "yearly"], [/\bannually\b/i, "yearly"]];
@@ -26146,7 +26216,6 @@ function parseVoiceLocal(text, people, todayStr) {
       break;
     }
   }
-  // Custom: "every 2 days", "every second Saturday", "every 3 weeks"
   if (result.recur === "none") {
     const customN = remaining.match(/\bevery\s+(\d+)\s+(day|week|month)s?\b/i);
     if (customN) {
@@ -26168,8 +26237,8 @@ function parseVoiceLocal(text, people, todayStr) {
     if (customOrd) {
       const n = ordinals[customOrd[1].toLowerCase()] || 2;
       const unit = customOrd[2].toLowerCase();
-      const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-      const dayIdx = dayNames.indexOf(unit);
+      const dayNamesF = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+      const dayIdx = dayNamesF.indexOf(unit);
       if (dayIdx >= 0) {
         result.recur = "custom";
         result.recurInterval = n;
@@ -26183,14 +26252,13 @@ function parseVoiceLocal(text, people, todayStr) {
       remaining = remaining.replace(customOrd[0], "");
     }
   }
-  // Specific days: "every Monday and Thursday"
   if (result.recur === "none") {
-    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    const dayNamesF = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
     const everyDays = remaining.match(/\bevery\s+((?:(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s*(?:and|&|,)\s*)?)+)/i);
     if (everyDays) {
       const dayStr = everyDays[1].toLowerCase();
       const found = [];
-      dayNames.forEach((d, i) => {
+      dayNamesF.forEach((d, i) => {
         if (dayStr.includes(d)) found.push(i);
       });
       if (found.length) {
@@ -26201,14 +26269,15 @@ function parseVoiceLocal(text, people, todayStr) {
     }
   }
 
-  // Time: "at 3pm", "at 14:30", "at noon"
-  const timePat = remaining.match(/\bat\s+(\d{1,2}(?::\d{2})?)\s*(am|pm)?\b/i);
+  // Time: "at 3pm", "at 14:30", "at noon", "6pm", "3:30 pm"
+  const timePat = remaining.match(/\bat\s+(\d{1,2}(?::\d{2})?)\s*(am|pm)?\b/i) || remaining.match(/\b(\d{1,2}(?::\d{2})?)\s*(am|pm)\b/i);
   if (timePat) {
     let h = parseInt(timePat[1]);
     const m = timePat[1].includes(":") ? parseInt(timePat[1].split(":")[1]) : 0;
     const ampm = (timePat[2] || "").toLowerCase();
     if (ampm === "pm" && h < 12) h += 12;
     if (ampm === "am" && h === 12) h = 0;
+    if (!ampm && h >= 1 && h <= 6) h += 12; // bare "at 3" → 3pm not 3am
     result.time = String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
     remaining = remaining.replace(timePat[0], "");
   }
@@ -26220,6 +26289,24 @@ function parseVoiceLocal(text, people, todayStr) {
     result.time = "00:00";
     remaining = remaining.replace(/\bat\s+midnight\b|\bmidnight\b/i, "");
   }
+  // v620 · Time phrases: "tonight", "this evening", "this morning", "this afternoon"
+  if (!result.time && /\btonight\b|\bthis\s+evening\b/i.test(remaining)) {
+    result.time = "19:00";
+    remaining = remaining.replace(/\btonight\b|\bthis\s+evening\b/gi, "");
+  }
+  if (!result.time && /\bthis\s+morning\b/i.test(remaining)) {
+    result.time = "09:00";
+    remaining = remaining.replace(/\bthis\s+morning\b/gi, "");
+  }
+  if (!result.time && /\bthis\s+afternoon\b/i.test(remaining)) {
+    result.time = "14:00";
+    remaining = remaining.replace(/\bthis\s+afternoon\b/gi, "");
+  }
+  // v620 · "night" after a day name = 19:00 (e.g. "Tuesday night")
+  if (!result.time && /\bnight\b/i.test(remaining)) {
+    result.time = "19:00";
+    remaining = remaining.replace(/\bnight\b/gi, "");
+  }
 
   // Location: "at [place]" (after time extracted)
   const locPat = remaining.match(/\bat\s+([A-Z][a-zA-Z\s']+)/);
@@ -26228,10 +26315,22 @@ function parseVoiceLocal(text, people, todayStr) {
     remaining = remaining.replace(locPat[0], "");
   }
 
-  // Date
+  // Date — v620: supports abbreviated day names (sat, sun, mon, tue, wed, thu, fri)
   const today = new Date(todayStr + "T00:00:00");
   const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const dayAbbr = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+  // Map abbreviated to full for matching
+  function matchDay(word) {
+    const w = word.toLowerCase();
+    let idx = dayNames.indexOf(w);
+    if (idx >= 0) return idx;
+    idx = dayAbbr.indexOf(w);
+    if (idx >= 0) return (idx + 1) % 7; // dayAbbr: sun=0→0, mon=1→1, ..., sat=6→6
+    // Fuzzy: "satur"→saturday, "thurs"→thursday, etc.
+    const fuzzy = dayNames.findIndex(d => d.startsWith(w) && w.length >= 3);
+    return fuzzy;
+  }
   if (/\btoday\b/i.test(remaining)) {
     result.date = todayStr;
     remaining = remaining.replace(/\btoday\b/i, "");
@@ -26241,29 +26340,34 @@ function parseVoiceLocal(text, people, todayStr) {
     result.date = toLocalYMD(d);
     remaining = remaining.replace(/\btomorrow\b/i, "");
   } else {
-    // "next Wednesday", "this Saturday"
-    const nextDay = remaining.match(/\b(?:next|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+    // "next Wednesday", "this Saturday", "next sat"
+    const nextDay = remaining.match(/\b(?:next|this)\s+(\w+)\b/i);
     if (nextDay) {
-      const target = dayNames.indexOf(nextDay[1].toLowerCase());
-      const d = new Date(today);
-      let diff = (target - d.getDay() + 7) % 7;
-      if (diff === 0) diff = 7;
-      if (/next/i.test(nextDay[0])) diff += diff <= 0 ? 7 : 0;
-      d.setDate(d.getDate() + diff);
-      result.date = toLocalYMD(d);
-      remaining = remaining.replace(nextDay[0], "");
-    }
-    // Bare day name: "Saturday"
-    if (!result.date) {
-      const bareDay = remaining.match(new RegExp("\\b(" + dayNames.join("|") + ")\\b", "i"));
-      if (bareDay) {
-        const target = dayNames.indexOf(bareDay[1].toLowerCase());
+      const target = matchDay(nextDay[1]);
+      if (target >= 0) {
         const d = new Date(today);
         let diff = (target - d.getDay() + 7) % 7;
         if (diff === 0) diff = 7;
+        if (/next/i.test(nextDay[0]) && diff <= 0) diff += 7;
         d.setDate(d.getDate() + diff);
         result.date = toLocalYMD(d);
-        remaining = remaining.replace(bareDay[0], "");
+        remaining = remaining.replace(nextDay[0], "");
+      }
+    }
+    // Bare day name: "Saturday", "sat", "fri"
+    if (!result.date) {
+      const allDayPat = dayNames.concat(dayAbbr).join("|");
+      const bareDay = remaining.match(new RegExp("\\b(" + allDayPat + ")\\b", "i"));
+      if (bareDay) {
+        const target = matchDay(bareDay[1]);
+        if (target >= 0) {
+          const d = new Date(today);
+          let diff = (target - d.getDay() + 7) % 7;
+          if (diff === 0) diff = 7;
+          d.setDate(d.getDate() + diff);
+          result.date = toLocalYMD(d);
+          remaining = remaining.replace(bareDay[0], "");
+        }
       }
     }
     // "August 10", "10th August", "15th"
@@ -26284,7 +26388,6 @@ function parseVoiceLocal(text, people, todayStr) {
         result.date = yr + "-" + String(m + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
         remaining = remaining.replace(dayMonth[0], "");
       }
-      // v552 fix · "on the 6th of October", "for the 15th of March"
       if (!result.date) {
         const onTheDay = remaining.match(new RegExp("(?:on|for)\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(" + monthNames.join("|") + ")\\b", "i"));
         if (onTheDay) {
@@ -26312,16 +26415,47 @@ function parseVoiceLocal(text, people, todayStr) {
   }
 
   // Event detection
-  const eventWords = /\bappointment\b|\bmeeting\b|\bparty\b|\bbirthday\b|\bdinner\b|\blunch\b|\btrip\b|\bflight\b|\bconcert\b|\bshow\b|\bgame\b/i;
-  if (eventWords.test(remaining)) result.type = "event";
+  const eventWords = /\bappointment\b|\bmeeting\b|\bparty\b|\bbirthday\b|\bdinner\b|\blunch\b|\bbreakfast\b|\bbrunch\b|\btrip\b|\bflight\b|\bconcert\b|\bshow\b|\bgame\b|\bbaby\s+shower\b|\bwedding\b|\bbbq\b|\bbarbie\b/i;
+  if (result.type === "task" && eventWords.test(remaining)) result.type = "event";
 
-  // Title: whatever is left, cleaned up
-  // Clean filler words from title
-  remaining = remaining.replace(/\b(?:on|for|the|to|in|at)\s*$/i, ""); // trailing prepositions
-  remaining = remaining.replace(/^\s*(?:on|for|the|to|in|at)\s+/i, ""); // leading prepositions
-  remaining = remaining.replace(/\s+(?:on|for)\s+$/i, ""); // trailing "on"/"for"
+  // v620 · Bill category extraction
+  if (result.type === "bill") {
+    const catPats = [[/\belectricity\b/i, "Electricity"], [/\bgas\b/i, "Gas"], [/\bwater\b/i, "Water"], [/\binternet\b/i, "Internet"], [/\bphone\b/i, "Phone"], [/\brent\b/i, "Rent"], [/\binsurance\b/i, "Insurance"], [/\bmortgage\b/i, "Mortgage"], [/\brego\b/i, "Car"]];
+    for (const [rx, cat] of catPats) {
+      if (rx.test(remaining)) {
+        result.category = cat;
+        break;
+      }
+    }
+  }
+
+  // Title: whatever is left, aggressively cleaned
+  // Strip trailing/leading prepositions and filler
+  remaining = remaining.replace(/\b(?:both\s+of\s+us|of\s+us|of\s+both)\b/gi, "");
+  remaining = remaining.replace(/\b(?:bill)\b/gi, ""); // strip "bill" from title for bill type
+  remaining = remaining.replace(/\b(?:dollars?)\b/gi, ""); // strip "dollars"
+  remaining = remaining.replace(/\b(?:due)\b/gi, ""); // strip "due"
+  remaining = remaining.replace(/\b(?:on|for|the|to|in|at|and|a|an|it|is|with|by|from|of|do|due)\s*$/gi, "");
+  remaining = remaining.replace(/^\s*(?:on|for|the|to|in|at|and|a|an|it|is|with|by|from|of|do)\s+/gi, "");
+  // Strip any remaining orphan prepositions between cleaned segments
+  remaining = remaining.replace(/\s{2,}/g, " ").trim();
+  remaining = remaining.replace(/^(?:on|for|the|to|a|an)\s+/i, "");
+  remaining = remaining.replace(/\s+(?:on|for|to)\s*$/i, "");
+  // v620 · Remove doubled words again after all stripping
+  remaining = remaining.replace(/\b(\w+)\s+\1\b/gi, "$1");
   result.title = remaining.replace(/\s+/g, " ").replace(/^[\s,.\-·]+|[\s,.\-·]+$/g, "").replace(/^\w/, c => c.toUpperCase()).trim();
-  if (!result.title) result.title = text.replace(/^\w/, c => c.toUpperCase()).trim();
+  if (!result.title && result.type !== "chat" && result.type !== "bonus") result.title = text.replace(/^\w/, c => c.toUpperCase()).trim();
+
+  // For dayoff/leave/sick/toil, set a sensible title if blank
+  if (!result.title && (result.type === "dayoff" || result.type === "leave" || result.type === "sick" || result.type === "toil")) {
+    const labels = {
+      dayoff: "Day off",
+      leave: "Leave",
+      sick: "Sick day",
+      toil: "TOIL"
+    };
+    result.title = labels[result.type] || result.type;
+  }
 
   // Score: how many fields were extracted beyond title
   result._fields = 0;
@@ -26331,6 +26465,8 @@ function parseVoiceLocal(text, people, todayStr) {
   if (result.place) result._fields++;
   if (result.priority) result._fields++;
   if (result.date !== todayStr) result._fields++;
+  if (result.private) result._fields++;
+  if (result.amount) result._fields++;
   return result;
 }
 async function parseVoiceAI(text, people, todayStr, currentUser) {
@@ -26338,6 +26474,7 @@ async function parseVoiceAI(text, people, todayStr, currentUser) {
     const herName = people.her?.name || "Mandy";
     const himName = people.him?.name || "Liam";
     const speaker = currentUser === "her" ? herName : currentUser === "him" ? himName : "unknown";
+    const speakerKey = currentUser || "her";
     const dayOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][new Date(todayStr + "T00:00:00").getDay()];
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -26346,14 +26483,42 @@ async function parseVoiceAI(text, people, todayStr, currentUser) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 1000,
+        max_tokens: 500,
+        system: `You parse voice commands for a household task app. Return ONLY valid JSON — no markdown, no backticks, no explanation.
+
+CONTEXT: Two people: "${herName}" (her) and "${himName}" (him). Today is ${dayOfWeek} ${todayStr}. Speaker is "${speaker}" ("${speakerKey}").
+
+CRITICAL RULES:
+1. "title" = ONLY the activity/thing name. Strip ALL metadata (dates, times, people, "for", "on", "allocate to", "assign to", "private", "set a", "add a", "create a", "remind me to"). Examples:
+   - Input "mow the lawn Saturday for Liam" → title: "Mow the lawn"
+   - Input "remind me to sunbake on Sunday" → title: "Sunbake"
+   - Input "dinner at mum's next Saturday 6pm for both of us" → title: "Dinner at Mum's"
+   - Input "electricity bill $180 due Friday" → title: "Electricity"
+   - Input "tell ${himName} I'll be late tonight" → type: "chat", message: "I'll be late tonight"
+   - Input "day off next Friday for ${himName}" → type: "dayoff", title: "Day off"
+2. "me"/"I"/"my" = "${speakerKey}". Names map: "${herName}"→"her", "${himName}"→"him". "both"/"us"/"we"→"both". Unmentioned → "".
+3. "private" / "just me" / "hide" → set "private": true
+4. Calculate dates: "next Saturday" / "this Friday" → actual YYYY-MM-DD from today (${todayStr}, ${dayOfWeek}). "tomorrow" → next day. "tonight" → today. Default to "${todayStr}" if no date mentioned.
+5. Capitalise the first letter of the title.
+
+TYPES: "task" (chores/to-dos/reminders), "event" (social/dinners/appointments), "bill" (payments with $), "chat" (messages to partner), "bonus" (award points), "dayoff"/"leave"/"sick"/"toil" (work absence).
+
+JSON SCHEMA: {"type":"...","title":"...","date":"YYYY-MM-DD","endDate":"","time":"HH:MM" or "","assignee":"her"|"him"|"both"|"","recur":"none"|"daily"|"weekly"|"fortnightly"|"monthly"|"yearly","recurInterval":0,"recurUnit":"","recurDays":[],"place":"","priority":0,"amount":0,"category":"","message":"","reason":"","private":false}`,
         messages: [{
           role: "user",
-          content: `Parse this voice command for a household app. Today is ${dayOfWeek} ${todayStr}. Two people: "${herName}" (her) and "${himName}" (him). The speaker is "${speaker}". "me" or "I" means the speaker. Return ONLY valid JSON, no markdown.\n\nDetermine the type:\n- "task" — chores, to-dos, reminders\n- "event" — appointments, dinners, outings, birthdays, social plans\n- "bill" — bills or payments with a dollar amount\n- "chat" — message to send to partner (e.g. "tell ${himName} I'll be late")\n- "bonus" — award or deduct household points (e.g. "give ${herName} 10 points for cooking")\n- "dayoff" — day off work\n- "leave" — annual or personal leave from work\n- "sick" — sick day off work\n- "toil" — time off in lieu\n\nInput: "${text.replace(/"/g, '\\"')}"\n\nReturn: {"type":"...","title":"..." (clean short title for task/event/bill),"date":"YYYY-MM-DD" (default today),"endDate":"" (for multi-day leave/events),"time":"HH:MM" or "","assignee":"her" or "him" or "both" or "","recur":"none"|"daily"|"weekly"|"fortnightly"|"monthly"|"yearly"|"custom","recurInterval":0,"recurUnit":"","recurDays":[],"place":"","priority":0,"amount":0 (for bill $ or bonus points),"category":"" (bill category e.g. "Electricity"),"message":"" (for chat — the actual message text),"reason":"" (for bonus — why)}`
+          content: text
         }]
       })
     });
+    if (!resp.ok) {
+      console.warn("[voice-ai] HTTP", resp.status);
+      return null;
+    }
     const data = await resp.json();
+    if (data.error) {
+      console.warn("[voice-ai] API error", data.error);
+      return null;
+    }
     const raw = (data.content || []).map(c => c.text || "").join("").replace(/```json|```/g, "").trim();
     return JSON.parse(raw);
   } catch (e) {
@@ -70386,7 +70551,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v619"))))), diagOpen && (() => {
+  }, "v620"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
