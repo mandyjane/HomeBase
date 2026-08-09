@@ -66741,11 +66741,12 @@ function ChatTab({
     const col = personColor(people[m.author]?.color || C.inkMute);
     const name = people[m.author]?.name || m.author;
     const ago = (() => {
-      const d = Math.round((Date.now() - m.id) / 1000);
-      if (d < 60) return "Just now";
-      if (d < 3600) return Math.floor(d / 60) + "m ago";
-      if (d < 86400) return Math.floor(d / 3600) + "h ago";
-      return Math.floor(d / 86400) + "d ago";
+      const dt = new Date(m.id);
+      let h = dt.getHours(),
+        mi = dt.getMinutes(),
+        ap = h >= 12 ? "PM" : "AM";
+      h = h % 12 || 12;
+      return h + ":" + (mi < 10 ? "0" : "") + mi + " " + ap;
     })();
     const reactions = m.reactions || {};
     const reactionList = Object.entries(reactions);
@@ -69749,7 +69750,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v601"))))), diagOpen && (() => {
+  }, "v602"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
