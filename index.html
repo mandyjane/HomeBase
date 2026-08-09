@@ -14225,17 +14225,23 @@ function App({
   const ringPct = totalToday > 0 ? doneToday / totalToday : 0;
   const ringPctLabel = Math.round(ringPct * 100);
   // v614 · Debug: list what the ring counts (tap ring to show)
-  const _ringItems = [...todaysTasks.map(t => ({
-    name: t.title,
-    done: !!t.done,
-    type: isBill(t) ? "bill" : "task",
-    who: t.assignee || "?"
-  })), ...todaysEvents.map(r => ({
-    name: r.title || r.ref?.title || "?",
-    done: todaysEvDone.includes(r),
-    type: "event",
-    who: r.ref?.assignee || "?"
-  }))];
+  const _ringItems = [...todaysTasks.map(t => {
+    const a = t.done ? completedByKey(t) : t.assignee;
+    return {
+      name: t.title,
+      done: !!t.done,
+      type: isBill(t) ? "Bill" : "Task",
+      col: a === "her" ? personColor(people.her.color) : a === "him" ? personColor(people.him.color) : C.accent
+    };
+  }), ...todaysEvents.map(r => {
+    const a = r.ref?.assignee;
+    return {
+      name: r.title || r.ref?.title || "?",
+      done: todaysEvDone.includes(r),
+      type: "Event",
+      col: a === "her" ? personColor(people.her.color) : a === "him" ? personColor(people.him.color) : C.accent
+    };
+  })];
 
   // Per-person level info (each levels on their own points).
   const herLevel = levelInfo(points.her);
@@ -14999,7 +15005,7 @@ function App({
       }
     }, totalToday === 0 ? "A clear day." : doneToday === totalToday ? "All done — nice work." : `${totalToday - doneToday} to go — you've got this.`), /*#__PURE__*/React.createElement("details", {
       style: {
-        marginTop: 8
+        marginTop: 4
       }
     }, /*#__PURE__*/React.createElement("summary", {
       className: "sans",
@@ -15007,43 +15013,58 @@ function App({
         fontSize: 9,
         color: C.inkFaint,
         cursor: "pointer",
-        textAlign: "center"
+        textAlign: "center",
+        listStyle: "none",
+        WebkitAppearance: "none"
       }
-    }, "What's in the count?"), /*#__PURE__*/React.createElement("div", {
-      className: "sans",
+    }, "\u25BC", " What's in the count?"), /*#__PURE__*/React.createElement("div", {
       style: {
-        fontSize: 11,
-        color: C.inkMute,
-        marginTop: 6,
-        lineHeight: 1.8
+        marginTop: 8,
+        background: C.card,
+        borderRadius: 12,
+        padding: "8px 12px",
+        border: `1px solid ${C.rule}`
       }
     }, _ringItems.map((it, i) => /*#__PURE__*/React.createElement("div", {
       key: i,
       style: {
         display: "flex",
-        gap: 6,
-        alignItems: "center"
+        alignItems: "center",
+        gap: 8,
+        padding: "5px 0",
+        ...(i < _ringItems.length - 1 ? {
+          borderBottom: `1px solid ${C.ruleSoft}`
+        } : {})
       }
     }, /*#__PURE__*/React.createElement("span", {
       style: {
-        color: it.done ? C.accent : C.inkFaint
+        color: it.done ? it.col : C.inkFaint,
+        fontSize: 13,
+        flexShrink: 0
       }
     }, it.done ? "\u2713" : "\u25CB"), /*#__PURE__*/React.createElement("span", {
       style: {
         flex: 1,
-        color: it.done ? C.inkMute : C.ink
+        fontSize: 12,
+        color: it.done ? C.inkMute : C.ink,
+        ...(it.done ? {} : {
+          fontWeight: 600
+        })
       }
     }, it.name), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
       style: {
         fontSize: 9,
-        color: C.inkFaint
+        fontWeight: 600,
+        letterSpacing: .5,
+        textTransform: "uppercase",
+        color: C.inkFaint,
+        background: isSleek ? "rgba(138,147,168,0.1)" : "rgba(0,0,0,0.06)",
+        padding: "1px 6px",
+        borderRadius: 4,
+        flexShrink: 0
       }
-    }, it.type), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 9,
-        color: C.inkFaint
-      }
-    }, it.who)))))) :
+    }, it.type)))))) :
     /*#__PURE__*/
     /* Bold: vivid gradient card with side ring */
     React.createElement("div", {
@@ -70082,7 +70103,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v614"))))), diagOpen && (() => {
+  }, "v615"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
