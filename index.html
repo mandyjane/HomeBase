@@ -9682,6 +9682,27 @@ function App({
       const fresh = add.filter(e => !seen.has(e.id));
       return fresh.length ? [...fresh, ...(prev || [])] : prev;
     });
+    // v607 · Clear treats on period rollover so the old treat doesn't linger.
+    // Each new period starts with an empty treat; the "Set your reward" prompt
+    // asks them to choose a new one.
+    const treatClears = {};
+    add.forEach(e => {
+      if (e.who !== "shared") treatClears[e.who] = true;
+    });
+    if (Object.keys(treatClears).length) {
+      setRewards(rv => {
+        const next = {
+          ...rv
+        };
+        Object.keys(treatClears).forEach(w => {
+          next[w] = {
+            ...(next[w] || DEFAULT_REWARDS[w]),
+            treat: ""
+          };
+        });
+        return next;
+      });
+    }
   }
   useEffect(() => {
     lsSet("hb_people", people);
@@ -69857,7 +69878,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v607"))))), diagOpen && (() => {
+  }, "v608"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
