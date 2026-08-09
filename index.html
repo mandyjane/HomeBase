@@ -30503,17 +30503,32 @@ function CalDayCell({
       // readableInk derives a darker or lighter version OF THE SAME HUE, so a pale sage
       // still reads as sage — the range becomes usable, not merely reachable.
       color: isSel ? C.onAccent : readableInk(it.color),
-      opacity: it.done ? 0.6 : 1
+      // v603 · position:relative on done chips so the top-right tick can be absolute-positioned
+      ...(it.done ? {
+        position: "relative"
+      } : {}),
+      opacity: it.done ? 0.7 : 1
     }
   }, wrapChips ?
   /*#__PURE__*/
   // INLINE markers — they flow with the text, so the wrap uses the full width.
-  React.createElement(React.Fragment, null, (it.done || it.bill) && /*#__PURE__*/React.createElement("span", {
+  React.createElement(React.Fragment, null, it.done && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      top: -1,
+      right: 1,
+      fontSize: 6,
+      fontWeight: 800,
+      color: "#5EE7B4",
+      letterSpacing: 0,
+      opacity: 1 / 0.7
+    }
+  }, "\u2713"), !it.done && it.bill && /*#__PURE__*/React.createElement("span", {
     style: {
       fontWeight: 800,
       letterSpacing: 0
     }
-  }, it.done ? "\u2713" : "", it.bill ? "$" : "", " "), it.allDay && /*#__PURE__*/React.createElement("span", {
+  }, "$", " "), it.allDay && /*#__PURE__*/React.createElement("span", {
     style: {
       display: "inline-block",
       width: 5,
@@ -30557,10 +30572,16 @@ function CalDayCell({
   // FLEX markers — pinned outside the truncating span so an ellipsis can't eat them.
   React.createElement(React.Fragment, null, it.done && /*#__PURE__*/React.createElement("span", {
     style: {
-      flexShrink: 0,
-      fontWeight: 800
+      position: "absolute",
+      top: -1,
+      right: 1,
+      fontSize: 6,
+      fontWeight: 800,
+      color: "#5EE7B4",
+      letterSpacing: 0,
+      opacity: 1 / 0.7
     }
-  }, "✓"), it.bill && /*#__PURE__*/React.createElement("span", {
+  }, "\u2713"), !it.done && it.bill && /*#__PURE__*/React.createElement("span", {
     style: {
       flexShrink: 0,
       fontWeight: 800,
@@ -69750,7 +69771,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v602"))))), diagOpen && (() => {
+  }, "v603"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
