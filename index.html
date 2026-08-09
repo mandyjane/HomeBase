@@ -14081,7 +14081,8 @@ function App({
     _t: t.time || ""
   }))].sort((a, b) => (a._t ? 0 : 1) - (b._t ? 0 : 1) || a._t.localeCompare(b._t));
   const tomorrowWorkRows = tomorrowRows.filter(isWorkRow);
-  const tomorrowOtherRows = tomorrowRows.filter(r => !isWorkRow(r));
+  const tomorrowBillRows = tomorrowRows.filter(r => !isWorkRow(r) && r.kind === "task" && isBill(r.ref));
+  const tomorrowOtherRows = tomorrowRows.filter(r => !isWorkRow(r) && !(r.kind === "task" && isBill(r.ref)));
   // v187 · non-work EVENTS get their own "Events · Today" section (reward-claimed events
   // included). Tasks (non-bill) stay under "Tasks · Today". Bills keep their own section.
   const isEventRow = r => r.kind === "event" && !isWorkRow(r);
@@ -17736,7 +17737,7 @@ function App({
         style: {
           marginBottom: 4
         }
-      }, renderRows(homeEventRows)), renderRows(homeOtherRows), (tomorrowWorkRows.length > 0 || tomorrowOtherRows.length > 0) &&
+      }, renderRows(homeEventRows)), renderRows(homeOtherRows), (tomorrowWorkRows.length > 0 || tomorrowBillRows.length > 0 || tomorrowOtherRows.length > 0) &&
       /*#__PURE__*/
       /* v240 · marginTop:18. Today's last row butted straight into the
          Tomorrow rule, so the two days read as one continuous list and the
@@ -17785,7 +17786,22 @@ function App({
           borderRadius: 10,
           padding: 2
         }
-      }, tomorrowWorkRows.map(workRow), tomorrowOtherRows.map((row, i) => /*#__PURE__*/React.createElement(AgendaRow, {
+      }, tomorrowWorkRows.map(workRow), tomorrowBillRows.map((row, i) => /*#__PURE__*/React.createElement(AgendaRow, {
+        billPayer: billPayer,
+        billQuickPay: billQuickPay,
+        key: "tmb" + row.kind + (row.ref._seriesId || row.ref.id) + "@" + row.date + "#" + i,
+        n: i + 1,
+        row: row,
+        people: people,
+        today: today,
+        showTimes: showTimes,
+        onToggle: (pointsTo, amt, pdate, pphoto) => toggleDone(row.ref, pointsTo, amt, pdate, pphoto),
+        tickInExpansion: true,
+        onEdit: () => {
+          setEditTask(row.ref);
+          setShowAdd(true);
+        }
+      })), tomorrowOtherRows.map((row, i) => /*#__PURE__*/React.createElement(AgendaRow, {
         billPayer: billPayer,
         billQuickPay: billQuickPay,
         key: "tm" + row.kind + (row.ref._seriesId || row.ref.id) + "@" + row.date + "#" + i,
@@ -32312,7 +32328,12 @@ function DaySheet({
     if (starting) counts.push(`${starting} starting`);
     if (ongoing) counts.push(`${ongoing} ongoing`);
   }
-  if (tasks.length) counts.push(`${tasks.length} task${tasks.length > 1 ? "s" : ""}`);
+  if (tasks.length) {
+    const billCount = tasks.filter(t => isBill(t)).length;
+    const taskCount = tasks.length - billCount;
+    if (billCount) counts.push(`${billCount} bill${billCount > 1 ? "s" : ""}`);
+    if (taskCount) counts.push(`${taskCount} task${taskCount > 1 ? "s" : ""}`);
+  }
   const evRow = e => /*#__PURE__*/React.createElement(AgendaRow, {
     billPayer: billPayer,
     key: "e" + e._seriesId + e._occDate,
@@ -32580,7 +32601,37 @@ function DaySheet({
       padding: "2px 14px",
       boxShadow: C.shadowSm
     }
-  }, plainEvents.slice().sort(bySort).map(evRow))), tasks.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, plainEvents.slice().sort(bySort).map(evRow))), tasks.filter(t => isBill(t)).length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "lbl",
+    style: {
+      marginBottom: 8
+    }
+  }, "Bills"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      borderRadius: 16,
+      padding: "2px 14px",
+      boxShadow: C.shadowSm
+    }
+  }, tasks.filter(t => isBill(t)).slice().sort(bySort).map(t => /*#__PURE__*/React.createElement(AgendaRow, {
+    billPayer: billPayer,
+    billQuickPay: billQuickPay,
+    key: "b" + t._seriesId + t._occDate,
+    row: taskRow(t, people, today),
+    people: people,
+    today: today,
+    showTimes: showTimes,
+    onToggle: (pointsTo, amt, pdate, pphoto) => onToggle(t, pointsTo, amt, pdate, pphoto),
+    onToggleSub: onToggleSub ? sid => onToggleSub(t, sid) : null,
+    onNag: null,
+    onEdit: () => onEdit(t),
+    onDelete: scope => onDeleteTask && onDeleteTask(t, scope),
+    onEndRepeatAt: onEndRepeatAt
+  })))), tasks.filter(t => !isBill(t)).length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 14
     }
@@ -32596,7 +32647,7 @@ function DaySheet({
       padding: "2px 14px",
       boxShadow: C.shadowSm
     }
-  }, tasks.slice().sort(bySort).map(t => /*#__PURE__*/React.createElement(AgendaRow, {
+  }, tasks.filter(t => !isBill(t)).slice().sort(bySort).map(t => /*#__PURE__*/React.createElement(AgendaRow, {
     billPayer: billPayer,
     billQuickPay: billQuickPay,
     key: "t" + t._seriesId + t._occDate,
@@ -70331,7 +70382,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v618"))))), diagOpen && (() => {
+  }, "v619"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
