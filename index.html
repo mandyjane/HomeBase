@@ -6793,6 +6793,19 @@ async function sbPullAll() {
           localStorage.setItem(row.key, mergedStr);
           changed = true;
         }
+        // v607 · Treat requests: merge by id — both devices add/update items
+      } else if (row.key === "hb_treatRequests") {
+        const localArr = local ? JSON.parse(local) : [];
+        const remoteArr = row.value || [];
+        const byId = new Map();
+        localArr.forEach(r => byId.set(r.id, r));
+        remoteArr.forEach(r => byId.set(r.id, r));
+        const merged = [...byId.values()].sort((a, b) => a.id - b.id);
+        const mergedStr = JSON.stringify(merged);
+        if (local !== mergedStr) {
+          localStorage.setItem(row.key, mergedStr);
+          changed = true;
+        }
       } else if (local !== remote) {
         localStorage.setItem(row.key, remote);
         changed = true;
@@ -6853,6 +6866,16 @@ function sbSubscribe(onUpdate) {
         const byId = new Map();
         localArr.forEach(m => byId.set(m.id, m));
         remoteArr.forEach(m => byId.set(m.id, m));
+        const merged = [...byId.values()].sort((a, b) => a.id - b.id);
+        localStorage.setItem(row.key, JSON.stringify(merged));
+        if (onUpdate) onUpdate(row.key);
+        // v607 · Treat requests: merge by id so neither device overwrites the other
+      } else if (row.key === "hb_treatRequests") {
+        const localArr = JSON.parse(localStorage.getItem(row.key) || "[]");
+        const remoteArr = row.value || [];
+        const byId = new Map();
+        localArr.forEach(r => byId.set(r.id, r));
+        remoteArr.forEach(r => byId.set(r.id, r));
         const merged = [...byId.values()].sort((a, b) => a.id - b.id);
         localStorage.setItem(row.key, JSON.stringify(merged));
         if (onUpdate) onUpdate(row.key);
