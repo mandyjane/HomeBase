@@ -8480,6 +8480,8 @@ function App({
   const [showQuickAdd, setShowQuickAdd] = useState(() => lsGet(userKey("hb_showQuickAdd"), true));
   // v596 · Household goal placement: "home" | "tasks" | "both"
   const [goalPlace, setGoalPlace] = useState(() => lsGet("hb_goalPlace", "home"));
+  // v617 · Voice chat auto-send toggle
+  const [voiceChatAutoSend, setVoiceChatAutoSend] = useState(() => lsGet(userKey("hb_voiceChatAutoSend"), false));
   // v597 · Highlight a newly-added task/event card (pulses 3×) when partner adds one.
   // Set by notification tap or after addTask/addEvent push. Cleared after animation.
   const [highlightId, setHighlightId] = useState(null);
@@ -8541,6 +8543,9 @@ function App({
   useEffect(() => {
     lsSet("hb_goalPlace", goalPlace);
   }, [goalPlace]);
+  useEffect(() => {
+    lsSet(userKey("hb_voiceChatAutoSend"), voiceChatAutoSend);
+  }, [voiceChatAutoSend]);
   // v588 · CHAT — shared pinboard messages
   const [chatMessages, setChatMessages] = useState(() => lsGet("hb_chatMessages", []));
   const [showChatHome, setShowChatHome] = useState(() => lsGet(userKey("hb_showChatHome"), true));
@@ -18466,6 +18471,7 @@ function App({
       currentUser: currentUser,
       people: people,
       chatSeen: chatSeen,
+      voiceChatAutoSend: voiceChatAutoSend,
       onSend: text => {
         if (!text.trim() || !currentUser) return;
         const msg = {
@@ -18649,6 +18655,8 @@ function App({
       setGoalPlace: setGoalPlace,
       recycleBinCount: recycleBin.length,
       onOpenRecycleBin: () => setRecycleBinOpen(true),
+      voiceChatAutoSend: voiceChatAutoSend,
+      setVoiceChatAutoSend: setVoiceChatAutoSend,
       onChangePin: () => setChangePinSheet(true)
     })), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -66958,7 +66966,8 @@ function ChatTab({
   onDelete,
   onEdit,
   onReact,
-  chatSeen
+  chatSeen,
+  voiceChatAutoSend
 }) {
   const [text, setText] = useState("");
   const [editId, setEditId] = useState(null);
@@ -66968,11 +66977,54 @@ function ChatTab({
   const [actionMenu, setActionMenu] = useState(null);
   const scrollRef = useRef(null);
   const longRef = useRef(null);
+  // v617 · Voice dictation state
+  const [voiceState, setVoiceState] = useState(null); // null | "listening" | "error"
+  const voiceRef = useRef(null);
   // v593 · Scroll to bottom on new messages AND on reactions (content change, not just length)
-  const msgSig = useMemo(() => messages.map(m => m.id + ":" + (m.reactions ? Object.keys(m.reactions).join("") : "")).join("|"), [messages]);
+  const msgSig = useMemo(() => messages.map(m => m.id + ":" + (m.reactions ? Object.keys(m.reactions).join("") : "") + ":" + (m.text || "")).join("|"), [messages]);
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [msgSig]);
+
+  // v617 · Dictation mic — speech-to-text into chat input
+  function startDictation() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      setVoiceState("error");
+      return;
+    }
+    try {
+      voiceRef.current?.abort();
+    } catch (e) {}
+    const r = new SR();
+    r.lang = "en-AU";
+    r.interimResults = false;
+    r.maxAlternatives = 1;
+    r.onresult = ev => {
+      const txt = ev.results[0][0].transcript;
+      setVoiceState(null);
+      if (voiceChatAutoSend) {
+        if (txt.trim()) onSend(txt.trim());
+      } else {
+        setText(prev => (prev ? prev + " " : "") + txt);
+      }
+    };
+    r.onerror = () => setVoiceState("error");
+    r.onend = () => setVoiceState(v => v === "listening" ? null : v);
+    voiceRef.current = r;
+    setVoiceState("listening");
+    try {
+      r.start();
+    } catch (e) {
+      setVoiceState("error");
+    }
+  }
+  function stopDictation() {
+    try {
+      voiceRef.current?.stop();
+    } catch (e) {}
+    setVoiceState(null);
+  }
   function send() {
     if (!text.trim()) return;
     if (editId) {
@@ -67589,12 +67641,12 @@ function ChatTab({
         send();
       }
     },
-    placeholder: editId ? "Edit message..." : "Write a note...",
+    placeholder: editId ? "Edit message..." : voiceState === "listening" ? "Listening..." : "Write a note...",
     className: "sans",
     style: {
       flex: 1,
       background: C.card,
-      border: `1px solid ${editId ? C.accent : C.rule}`,
+      border: `1px solid ${editId ? C.accent : voiceState === "listening" ? "#A78BFA" : C.rule}`,
       borderRadius: 20,
       padding: "10px 16px",
       fontSize: 13,
@@ -67602,6 +67654,42 @@ function ChatTab({
       outline: "none"
     }
   }), /*#__PURE__*/React.createElement("button", {
+    onClick: voiceState === "listening" ? stopDictation : startDictation,
+    style: {
+      width: 38,
+      height: 38,
+      borderRadius: "50%",
+      background: voiceState === "listening" ? "#A78BFA" : "rgba(167,139,250,0.12)",
+      border: voiceState === "listening" ? "none" : "1.5px solid rgba(167,139,250,0.35)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer",
+      flexShrink: 0,
+      animation: voiceState === "listening" ? "pulse 1.5s infinite" : "none"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "17",
+    height: "17",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: voiceState === "listening" ? C.onAccent : "#A78BFA",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "9",
+    y: "2",
+    width: "6",
+    height: "11",
+    rx: "3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5 10a7 7 0 0 0 14 0"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "12",
+    y1: "19",
+    x2: "12",
+    y2: "22"
+  }))), /*#__PURE__*/React.createElement("button", {
     onClick: send,
     disabled: !text.trim(),
     style: {
@@ -67738,7 +67826,9 @@ function SettingsPage({
   goalPlace = "home",
   setGoalPlace,
   recycleBinCount = 0,
-  onOpenRecycleBin
+  onOpenRecycleBin,
+  voiceChatAutoSend = false,
+  setVoiceChatAutoSend
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClearRewards, setConfirmClearRewards] = useState(false);
@@ -69681,7 +69771,74 @@ function SettingsPage({
       color: C.inkMute,
       marginTop: 1
     }
-  }, "Verify notifications are working"))))), showPoints && /*#__PURE__*/React.createElement(SGroup, {
+  }, "Verify notifications are working"))))), /*#__PURE__*/React.createElement(SGroup, {
+    q: q,
+    label: "Voice",
+    GroupLabel: GroupLabel
+  }, /*#__PURE__*/React.createElement(SRow, {
+    hb: "voice chat auto send microphone dictation"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setVoiceChatAutoSend(v => !v),
+    style: {
+      ...rowBase
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 34,
+      height: 34,
+      borderRadius: 10,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: voiceChatAutoSend ? "rgba(167,139,250,0.15)" : "rgba(167,139,250,0.08)",
+      color: "#A78BFA"
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "17",
+    height: "17",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.9",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "9",
+    y: "2",
+    width: "6",
+    height: "11",
+    rx: "3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M5 10a7 7 0 0 0 14 0"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "12",
+    y1: "19",
+    x2: "12",
+    y2: "22"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Auto-send voice chat"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "block",
+      fontSize: 11,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, voiceChatAutoSend ? "Sends immediately after dictation" : "Fills the text field — tap send yourself")), /*#__PURE__*/React.createElement(Toggle, {
+    on: voiceChatAutoSend
+  })))), showPoints && /*#__PURE__*/React.createElement(SGroup, {
     q: q,
     label: "Data",
     GroupLabel: GroupLabel
@@ -70170,7 +70327,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v616"))))), diagOpen && (() => {
+  }, "v617"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
