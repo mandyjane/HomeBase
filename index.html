@@ -18106,7 +18106,24 @@ function App({
         fontWeight: 500,
         color: C.inkSoft
       }
-    }, sharedToGo > 0 ? `${sharedToGo} points to ${sharedGoal.treat}` : `Goal reached — enjoy ${sharedGoal.treat}!`)))), /*#__PURE__*/React.createElement(CombinedList, {
+    }, sharedToGo > 0 ? `${sharedToGo} points to ${sharedGoal.treat}` : `Goal reached — enjoy ${sharedGoal.treat}!`)))), range === "stock" ? /*#__PURE__*/React.createElement(StockView, {
+      items: stockItems,
+      view: stockView,
+      setView: setStockView,
+      onUpdate: (id, val) => setStockItems(s => s.map(i => i.id === id ? {
+        ...i,
+        current: val
+      } : i)),
+      onEdit: item => {
+        setEditStockItem(item);
+        setShowStockAdd(true);
+      },
+      onAdd: () => {
+        setEditStockItem(null);
+        setShowStockAdd(true);
+      },
+      onShoppingList: () => showToast("Shopping list coming soon", "info")
+    }) : /*#__PURE__*/React.createElement(CombinedList, {
       billPayer: billPayer,
       q: tabQ,
       groups: groups,
@@ -25269,24 +25286,7 @@ function CombinedList({
       fontWeight: 600,
       cursor: "pointer"
     }
-  }, "Stop")), range === "stock" ? /*#__PURE__*/React.createElement(StockView, {
-    items: stockItems,
-    view: stockView,
-    setView: setStockView,
-    onUpdate: (id, val) => setStockItems(s => s.map(i => i.id === id ? {
-      ...i,
-      current: val
-    } : i)),
-    onEdit: item => {
-      setEditStockItem(item);
-      setShowStockAdd(true);
-    },
-    onAdd: () => {
-      setEditStockItem(null);
-      setShowStockAdd(true);
-    },
-    onShoppingList: () => showToast("Shopping list coming soon", "info")
-  }) : /*#__PURE__*/React.createElement(React.Fragment, null, totalEmpty && q && q.trim().length >= 2 ? /*#__PURE__*/React.createElement("div", {
+  }, "Stop")), totalEmpty && q && q.trim().length >= 2 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 22px",
@@ -25582,7 +25582,7 @@ function CombinedList({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, "Clear"))))));
+  }, "Clear")))));
 }
 // Reliable drag-to-dismiss for bottom-sheet modals. Attaches non-passive touch
 // listeners to the sheet element via a ref so we can move the sheet with the
@@ -71580,7 +71580,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v623"))))), diagOpen && (() => {
+  }, "v624"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
