@@ -15833,7 +15833,7 @@ function App({
     })), tab !== "stats" && tab !== "calendar" && tab !== "chat" && (() => {
       const isWork = tab === "work";
       const isBillsTab = tab === "bills";
-      const addLabel = tab === "tasks" ? listType === "events" ? "Event" : "Task" : tab === "events" ? "Event" : isBillsTab ? "Bill" : "Add";
+      const addLabel = tab === "tasks" ? range === "stock" ? "Item" : listType === "events" ? "Event" : "Task" : tab === "events" ? "Event" : isBillsTab ? "Bill" : "Add";
       const grad = isWork ? ["#B38BFF", "#9a6ee0"] : isBillsTab ? [BILL_COLOR, mixHex(BILL_COLOR, "#000", 0.25)] : [C.heroTop, C.heroBot];
       const fg = isWork || isBillsTab ? "#fff" : C.onAccent;
       function handleAdd() {
