@@ -13387,8 +13387,15 @@ function App({
       // have merged them, which is the whole thing the kind exists to prevent.
       if (deadlineVisible(t)) groups[t.taskKind === "project" ? "Projects" : "Deadlines"].push(t);
       // v618: Also show under Today/Tomorrow/Overdue when due on those days
+      // v626: Overdue deadlines ALSO appear in Today (they need action now)
       if (range !== "deadlines" && inRange(t.dueDate)) {
-        if (t.dueDate < today) groups.Overdue.push(t);else if (t.dueDate === today) groups.Today.push(t);else groups.Upcoming.push(t);
+        if (t.dueDate < today) {
+          groups.Overdue.push(t);
+          groups.Today.push(t);
+        } else if (t.dueDate === today) groups.Today.push(t);else groups.Upcoming.push(t);
+      } else if (range !== "deadlines" && t.dueDate < today) {
+        // Overdue but outside the selected range — still show in Today
+        groups.Today.push(t);
       }
       return;
     }
@@ -13595,7 +13602,7 @@ function App({
   // OLDEST miss, carrying the count — so a task neglected for a month is still ONE row
   // and the dashboard cannot be flooded.
   const overdueTasks = tasks.map(t => {
-    if (isDeadlineTask(t)) return null; // deadlines have their own section
+    if (isDeadlineTask(t)) return null; // v618: deadlines shown in Today; v626: overdue counted below
     if (isBill(t)) return null; // bills are pulled out below
     if (isPrivateHidden(t)) return null; // v471: private tasks hidden from other person
     const miss = missedRun(t, today);
@@ -13605,7 +13612,9 @@ function App({
     row._missCount = miss.length;
     return row;
   }).filter(Boolean).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const overdueCount = overdueTasks.length;
+  // v626 · Overdue deadlines/projects — non-recurring, so just check dueDate < today
+  const overdueDeadlines = tasks.filter(t => isDeadlineTask(t) && !t.done && t.dueDate < today && !isPrivateHidden(t));
+  const overdueCount = overdueTasks.length + overdueDeadlines.length;
 
   // Startup overdue banner. Fires ONCE per app open, and only once overdueCount is
   // actually known (it's derived further down the render, so a mount-only []
@@ -67509,8 +67518,14 @@ function StockView({
   const outItems = items.filter(i => stockStatus(i) === "out");
   const lowItems = items.filter(i => stockStatus(i) === "low");
   const fullItems = items.filter(i => stockStatus(i) === "full");
-  const [collapsedFull, setCollapsedFull] = useState(true);
-  const [collapsedCats, setCollapsedCats] = useState({});
+  const [collapsedFull, setCollapsedFull] = useState(() => lsGet("hb_stockCollFull", true));
+  const [collapsedCats, setCollapsedCats] = useState(() => lsGet("hb_stockCollCats", {}));
+  useEffect(() => {
+    lsSet("hb_stockCollFull", collapsedFull);
+  }, [collapsedFull]);
+  useEffect(() => {
+    lsSet("hb_stockCollCats", collapsedCats);
+  }, [collapsedCats]);
   const shopCount = outItems.length + lowItems.length;
   if (view === "status") return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -71585,7 +71600,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v624"))))), diagOpen && (() => {
+  }, "v626"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
