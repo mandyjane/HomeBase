@@ -6619,7 +6619,7 @@ let sbUserId = null;
 // v339 · Per-user appearance keys. Appearance (mood, accent, bg, deadline) is personal
 // preference — Mandy and Liam can each have their own mood without overwriting the other.
 // Falls back to the shared key when not logged in (pre-auth boot).
-const APPEARANCE_KEYS = new Set(["hb_theme", "hb_accentSleek", "hb_accentBold", "hb_bgSleek", "hb_bgBold", "hb_deadlineMode", "hb_deadlineSleek", "hb_deadlineBold", "hb_billQuickPay", "hb_mortPropVal", "hb_countdowns", "hb_showCountdowns", "hb_showForecast", "hb_showQuickAdd"]);
+const APPEARANCE_KEYS = new Set(["hb_theme", "hb_accentSleek", "hb_accentBold", "hb_bgSleek", "hb_bgBold", "hb_deadlineMode", "hb_deadlineSleek", "hb_deadlineBold", "hb_billQuickPay", "hb_mortPropVal", "hb_countdowns", "hb_showCountdowns", "hb_showForecast", "hb_showQuickAdd", "hb_stockView"]);
 function userKey(k) {
   return sbUserId && APPEARANCE_KEYS.has(k) ? k + "_" + sbUserId : k;
 }
@@ -8486,6 +8486,11 @@ function App({
   const [goalPlace, setGoalPlace] = useState(() => lsGet("hb_goalPlace", "home"));
   // v617 · Voice chat auto-send toggle
   const [voiceChatAutoSend, setVoiceChatAutoSend] = useState(() => lsGet(userKey("hb_voiceChatAutoSend"), false));
+  // v623 · Stock / inventory tracking
+  const [stockItems, setStockItems] = useState(() => lsGet("hb_stockItems", []));
+  const [stockView, setStockView] = useState(() => lsGet(userKey("hb_stockView"), "status"));
+  const [showStockAdd, setShowStockAdd] = useState(false);
+  const [editStockItem, setEditStockItem] = useState(null);
   // v597 · Highlight a newly-added task/event card (pulses 3×) when partner adds one.
   // Set by notification tap or after addTask/addEvent push. Cleared after animation.
   const [highlightId, setHighlightId] = useState(null);
@@ -8550,6 +8555,12 @@ function App({
   useEffect(() => {
     lsSet(userKey("hb_voiceChatAutoSend"), voiceChatAutoSend);
   }, [voiceChatAutoSend]);
+  useEffect(() => {
+    lsSet("hb_stockItems", stockItems);
+  }, [stockItems]);
+  useEffect(() => {
+    lsSet(userKey("hb_stockView"), stockView);
+  }, [stockView]);
   // v588 · CHAT — shared pinboard messages
   const [chatMessages, setChatMessages] = useState(() => lsGet("hb_chatMessages", []));
   const [showChatHome, setShowChatHome] = useState(() => lsGet(userKey("hb_showChatHome"), true));
@@ -15834,6 +15845,9 @@ function App({
             taskKind: BILL_KIND
           });
           setShowAdd(true);
+        } else if (tab === "tasks" && range === "stock") {
+          setEditStockItem(null);
+          setShowStockAdd(true);
         } else if (tab === "tasks" && listType !== "events") {
           setEditTask({
             dueDate: sd
@@ -18897,6 +18911,30 @@ function App({
       onClose: () => {
         setShowChooser(false);
         setAddSeedDate(null);
+      }
+    }), showStockAdd && /*#__PURE__*/React.createElement(StockAddModal, {
+      item: editStockItem,
+      onSave: item => {
+        setStockItems(s => {
+          const idx = s.findIndex(i => i.id === item.id);
+          if (idx >= 0) {
+            const next = [...s];
+            next[idx] = item;
+            return next;
+          }
+          return [...s, item];
+        });
+        setShowStockAdd(false);
+        setEditStockItem(null);
+        showToast(editStockItem ? "Item updated" : "Item added", "success");
+      },
+      onDelete: id => {
+        setStockItems(s => s.filter(i => i.id !== id));
+        showToast("Item deleted", "info");
+      },
+      onClose: () => {
+        setShowStockAdd(false);
+        setEditStockItem(null);
       }
     }), showVoice && /*#__PURE__*/React.createElement(VoiceAddOverlay, {
       people: people,
@@ -25166,7 +25204,7 @@ function CombinedList({
   // "all" keeps its internal key so a saved hb_range preference still resolves —
   // only the LABEL changed to "Upcoming". "done" is the new completed-only range.
   // v498 · Deadlines view only applies to tasks — hide it on the Events page.
-  const RANGES = [["week", "Upcoming"], ...(showTasks ? [["deadlines", "Deadlines"]] : []), ["all", "All"], ["done", showEvents && !showTasks ? "Past" : "Done"]];
+  const RANGES = [["week", "Upcoming"], ...(showTasks ? [["deadlines", "Deadlines"]] : []), ["all", "All"], ["done", showEvents && !showTasks ? "Past" : "Done"], ["stock", "Stock"]];
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -25231,7 +25269,24 @@ function CombinedList({
       fontWeight: 600,
       cursor: "pointer"
     }
-  }, "Stop")), totalEmpty && q && q.trim().length >= 2 ? /*#__PURE__*/React.createElement("div", {
+  }, "Stop")), range === "stock" ? /*#__PURE__*/React.createElement(StockView, {
+    items: stockItems,
+    view: stockView,
+    setView: setStockView,
+    onUpdate: (id, val) => setStockItems(s => s.map(i => i.id === id ? {
+      ...i,
+      current: val
+    } : i)),
+    onEdit: item => {
+      setEditStockItem(item);
+      setShowStockAdd(true);
+    },
+    onAdd: () => {
+      setEditStockItem(null);
+      setShowStockAdd(true);
+    },
+    onShoppingList: () => showToast("Shopping list coming soon", "info")
+  }) : /*#__PURE__*/React.createElement(React.Fragment, null, totalEmpty && q && q.trim().length >= 2 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: "40px 22px",
@@ -25527,7 +25582,7 @@ function CombinedList({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, "Clear")))));
+  }, "Clear"))))));
 }
 // Reliable drag-to-dismiss for bottom-sheet modals. Attaches non-passive touch
 // listeners to the sheet element via a ref so we can move the sheet with the
@@ -26537,6 +26592,38 @@ function VoiceAddOverlay({
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState("");
   const recognitionRef = useRef(null);
+  const transcriptRef = useRef(""); // accumulate across continuous results
+
+  // v622 · Process the accumulated transcript
+  function processTranscript(txt) {
+    if (!txt.trim()) {
+      setState("error");
+      setError("No speech detected. Tap to try again.");
+      return;
+    }
+    setTranscript(txt);
+    setState("processing");
+    parseVoiceAI(txt, people, today, currentUser).then(ai => {
+      if (ai && (ai.title || ai.message || ai.type === "bonus")) {
+        onResult({
+          ...ai,
+          _source: "ai"
+        });
+      } else {
+        const local = parseVoiceLocal(txt, people, today);
+        onResult({
+          ...local,
+          _source: "local"
+        });
+      }
+    }).catch(() => {
+      const local = parseVoiceLocal(txt, people, today);
+      onResult({
+        ...local,
+        _source: "local"
+      });
+    });
+  }
   useEffect(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
@@ -26546,40 +26633,29 @@ function VoiceAddOverlay({
     }
     const r = new SR();
     r.lang = "en-AU";
-    r.interimResults = false;
+    r.continuous = true;
+    r.interimResults = true;
     r.maxAlternatives = 1;
     r.onresult = ev => {
-      const txt = ev.results[0][0].transcript;
-      setTranscript(txt);
-      setState("processing");
-      // v616 · AI-first: always use Claude API, local parser as offline fallback
-      parseVoiceAI(txt, people, today, currentUser).then(ai => {
-        if (ai && (ai.title || ai.message || ai.type === "bonus")) {
-          onResult({
-            ...ai,
-            _source: "ai"
-          });
-        } else {
-          const local = parseVoiceLocal(txt, people, today);
-          onResult({
-            ...local,
-            _source: "local"
-          });
-        }
-      }).catch(() => {
-        const local = parseVoiceLocal(txt, people, today);
-        onResult({
-          ...local,
-          _source: "local"
-        });
-      });
+      // v622 · Accumulate all results (continuous mode)
+      let final = "",
+        interim = "";
+      for (let i = 0; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) final += (final ? " " : "") + ev.results[i][0].transcript;else interim += (interim ? " " : "") + ev.results[i][0].transcript;
+      }
+      transcriptRef.current = final;
+      setTranscript((final + (interim ? " " + interim : "")).trim());
     };
     r.onerror = ev => {
-      if (ev.error === "not-allowed") setError("Microphone access denied. Check browser permissions.");else if (ev.error === "no-speech") setError("No speech detected. Tap to try again.");else setError("Could not hear you. Tap to try again.");
-      setState("error");
+      if (ev.error === "not-allowed") setError("Microphone access denied. Check browser permissions.");else if (ev.error === "no-speech") setError("No speech detected. Tap to try again.");else if (ev.error !== "aborted") setError("Could not hear you. Tap to try again.");
+      if (ev.error !== "aborted") setState("error");
     };
     r.onend = () => {
-      if (state === "listening" && !transcript) setState("error");
+      // In continuous mode, onend fires when user stops or on error
+      // If we have accumulated transcript and state is still listening, process it
+      if (transcriptRef.current && state === "listening") {
+        processTranscript(transcriptRef.current);
+      }
     };
     recognitionRef.current = r;
     try {
@@ -26594,10 +26670,23 @@ function VoiceAddOverlay({
       } catch (e) {}
     };
   }, []);
+
+  // v622 · Done button: stop listening and process what we have
+  function handleDone() {
+    try {
+      recognitionRef.current?.stop();
+    } catch (e) {}
+    const txt = transcriptRef.current || transcript;
+    if (txt.trim()) processTranscript(txt.trim());else {
+      setState("error");
+      setError("No speech detected. Tap to try again.");
+    }
+  }
   const retry = () => {
     setState("listening");
     setTranscript("");
     setError("");
+    transcriptRef.current = "";
     try {
       recognitionRef.current?.start();
     } catch (e) {}
@@ -26666,19 +26755,35 @@ function VoiceAddOverlay({
       marginBottom: 8,
       fontStyle: "italic"
     }
-  }, "Listening..."), /*#__PURE__*/React.createElement("p", {
+  }, "Listening..."), transcript ? /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      color: C.ink,
+      marginBottom: 4,
+      minHeight: 20,
+      padding: "0 8px",
+      lineHeight: 1.4
+    }
+  }, transcript) : /*#__PURE__*/React.createElement("p", {
     className: "sans",
     style: {
       fontSize: 11,
       color: C.inkMute,
       opacity: 0.6
     }
-  }, "Tasks, events, bills, chat, work & more"), /*#__PURE__*/React.createElement("button", {
+  }, "Tasks, events, bills, chat, work & more"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginTop: 24,
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
     onClick: onClose,
     className: "sans",
     style: {
-      marginTop: 24,
-      padding: "10px 28px",
+      padding: "10px 24px",
       borderRadius: 12,
       border: `1.5px solid ${C.rule}`,
       background: "transparent",
@@ -26687,7 +26792,20 @@ function VoiceAddOverlay({
       fontWeight: 600,
       cursor: "pointer"
     }
-  }, "Cancel")), state === "processing" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "Cancel"), transcript && /*#__PURE__*/React.createElement("button", {
+    onClick: handleDone,
+    className: "sans",
+    style: {
+      padding: "10px 24px",
+      borderRadius: 12,
+      border: "none",
+      background: VOICE_COLOR,
+      color: "#1a1714",
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "Done"))), state === "processing" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       width: 60,
       height: 60,
@@ -67182,6 +67300,896 @@ function RecycleBinSheet({
 // ─── CHAT TAB ─────────────────────────────────────────────────────────────────
 const RECENT_EMOJI = ["❤️", "😂", "👍", "🔥", "😍", "😢", "🙏", "💯"];
 const EMOJI_CATS = [["😊", "Smileys", ["😊", "😂", "🤣", "😅", "😆", "😁", "😄", "😃", "🥰", "😍", "😘", "😗", "😙", "😚", "🤗", "🤔", "🤭", "🫣", "😳", "😬", "🙄", "😤", "😮", "😯", "😲", "🥺", "😢", "😭", "😱", "😈", "🤩", "😎", "🥳", "😴", "🤤", "🤑", "🤮", "🤧", "🤕", "😷"]], ["❤️", "Hearts", ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💔", "❣️", "♥️", "🫶"]], ["👍", "Hands", ["👍", "👎", "👏", "🙌", "🤝", "🤞", "✌️", "🤟", "🤘", "👌", "🤌", "👋", "✋", "🖐️", "🖖", "💪", "🙏", "☝️", "👆", "👇", "👈", "👉", "🫡", "🫰"]], ["🎉", "Objects", ["🎉", "✨", "🔥", "💯", "⭐", "🌟", "💫", "🏆", "🎁", "🎂", "🎈", "🎊", "🎵", "🎶", "💰", "💸", "📱", "💻", "🏡", "🚗", "✈️", "🌈", "☀️", "🌙", "⚡", "❄️"]], ["🍕", "Food", ["🍕", "🍔", "🍟", "🌮", "🍣", "🍜", "🍝", "🍰", "🎂", "🍩", "🍪", "☕", "🍺", "🍷", "🥂", "🧋", "🍦", "🍫", "🥑", "🍳"]], ["😺", "Animals", ["😺", "😸", "😹", "😻", "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐸", "🐵", "🐔", "🐧", "🦆", "🦋", "🐝"]]];
+
+// ─── STOCK / INVENTORY (v623) ────────────────────────────────────────────────
+const STOCK_CATS = [{
+  key: "pantry",
+  label: "Pantry",
+  color: "#E5C07B",
+  icon: "bag"
+}, {
+  key: "fridge",
+  label: "Fridge & Freezer",
+  color: "#56B6C2",
+  icon: "fridge"
+}, {
+  key: "bathroom",
+  label: "Bathroom & Laundry",
+  color: "#A78BFA",
+  icon: "bath"
+}];
+function stockStatus(item) {
+  if (!item.current || item.current <= 0) return "out";
+  if (item.target > 0 && item.current / item.target <= 0.5) return "low";
+  return "full";
+}
+const STOCK_STATUS_COLORS = {
+  out: "#E0663A",
+  low: "#E5C07B",
+  full: "#5EE7B4"
+};
+const STOCK_CAT_ICONS = {
+  bag: c => /*#__PURE__*/React.createElement("svg", {
+    width: "15",
+    height: "15",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M3 6h18l-1 14H4z"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+  })),
+  fridge: c => /*#__PURE__*/React.createElement("svg", {
+    width: "15",
+    height: "15",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "4",
+    y: "2",
+    width: "16",
+    height: "20",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "4",
+    y1: "10",
+    x2: "20",
+    y2: "10"
+  })),
+  bath: c => /*#__PURE__*/React.createElement("svg", {
+    width: "15",
+    height: "15",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: c,
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M4 12h16a2 2 0 0 1 2 2v2a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4v-2a2 2 0 0 1 2-2z"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M6 12V5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2"
+  }))
+};
+function StockItemRow({
+  item,
+  onUpdate,
+  onEdit
+}) {
+  const st = stockStatus(item);
+  const stc = STOCK_STATUS_COLORS[st];
+  const cat = STOCK_CATS.find(c => c.key === item.category);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "8px 0",
+      borderBottom: `1px solid ${C.ruleSoft}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 4,
+      height: 28,
+      borderRadius: 2,
+      background: stc,
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      cursor: "pointer"
+    },
+    onClick: () => onEdit && onEdit(item)
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: C.ink,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, item.name), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, item.current, " of ", item.target, " ", item.unit || "")), cat && /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 8,
+      fontWeight: 600,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      padding: "2px 6px",
+      borderRadius: 4,
+      background: softTint(cat.color),
+      color: cat.color,
+      flexShrink: 0
+    }
+  }, cat.key === "bathroom" ? "Bath" : cat.label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      borderRadius: 8,
+      overflow: "hidden",
+      border: `1px solid ${C.rule}`,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onUpdate(item.id, Math.max(0, item.current - 1)),
+    style: {
+      width: 28,
+      height: 26,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.card,
+      border: "none",
+      color: C.inkMute,
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "-"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      minWidth: 28,
+      height: 26,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.bg,
+      fontSize: 12,
+      fontWeight: 600,
+      color: C.ink,
+      borderLeft: `1px solid ${C.rule}`,
+      borderRight: `1px solid ${C.rule}`
+    }
+  }, item.current), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onUpdate(item.id, item.current + 1),
+    style: {
+      width: 28,
+      height: 26,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.card,
+      border: "none",
+      color: C.inkMute,
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "+")));
+}
+function StockView({
+  items,
+  view,
+  setView,
+  onUpdate,
+  onEdit,
+  onAdd,
+  onShoppingList
+}) {
+  const outItems = items.filter(i => stockStatus(i) === "out");
+  const lowItems = items.filter(i => stockStatus(i) === "low");
+  const fullItems = items.filter(i => stockStatus(i) === "full");
+  const [collapsedFull, setCollapsedFull] = useState(true);
+  const [collapsedCats, setCollapsedCats] = useState({});
+  const shopCount = outItems.length + lowItems.length;
+  if (view === "status") return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      borderRadius: 8,
+      overflow: "hidden",
+      border: `1px solid ${C.rule}`
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setView("status"),
+    className: "sans",
+    style: {
+      padding: "6px 14px",
+      fontSize: 10,
+      fontWeight: 600,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      border: "none",
+      cursor: "pointer",
+      color: C.accent,
+      background: softTint(C.accent),
+      fontFamily: "inherit"
+    }
+  }, "By status"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setView("category"),
+    className: "sans",
+    style: {
+      padding: "6px 14px",
+      fontSize: 10,
+      fontWeight: 600,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      border: "none",
+      cursor: "pointer",
+      color: C.inkMute,
+      background: C.card,
+      fontFamily: "inherit"
+    }
+  }, "By area")), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute
+    }
+  }, items.length, " items")), outItems.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
+    className: "lbl",
+    style: {
+      marginBottom: 8,
+      color: "#E0663A"
+    }
+  }, "Out (", outItems.length, ")"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      borderRadius: 16,
+      padding: "2px 14px",
+      marginBottom: 10,
+      boxShadow: C.shadowSm
+    }
+  }, outItems.map(i => /*#__PURE__*/React.createElement(StockItemRow, {
+    key: i.id,
+    item: i,
+    onUpdate: onUpdate,
+    onEdit: onEdit
+  })))), lowItems.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
+    className: "lbl",
+    style: {
+      marginBottom: 8,
+      color: "#E5C07B"
+    }
+  }, "Low (", lowItems.length, ")"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      borderRadius: 16,
+      padding: "2px 14px",
+      marginBottom: 10,
+      boxShadow: C.shadowSm
+    }
+  }, lowItems.map(i => /*#__PURE__*/React.createElement(StockItemRow, {
+    key: i.id,
+    item: i,
+    onUpdate: onUpdate,
+    onEdit: onEdit
+  })))), fullItems.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
+    className: "lbl",
+    style: {
+      marginBottom: 8,
+      color: "#5EE7B4",
+      cursor: "pointer"
+    },
+    onClick: () => setCollapsedFull(!collapsedFull)
+  }, "Stocked (", fullItems.length, ") ", collapsedFull ? "▸" : "▾"), !collapsedFull && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      borderRadius: 16,
+      padding: "2px 14px",
+      marginBottom: 10,
+      boxShadow: C.shadowSm
+    }
+  }, fullItems.map(i => /*#__PURE__*/React.createElement(StockItemRow, {
+    key: i.id,
+    item: i,
+    onUpdate: onUpdate,
+    onEdit: onEdit
+  })))), items.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "40px 20px",
+      color: C.inkMute
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "serif",
+    style: {
+      fontSize: 18,
+      fontStyle: "italic",
+      marginBottom: 8
+    }
+  }, "No stock items yet"), /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 12
+    }
+  }, "Tap + to add your first item")), shopCount > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: onShoppingList,
+    className: "sans",
+    style: {
+      width: "100%",
+      padding: 11,
+      borderRadius: 12,
+      border: "none",
+      background: `linear-gradient(135deg,${C.heroTop},${C.heroBot})`,
+      color: C.onAccent,
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "3",
+    y1: "6",
+    x2: "21",
+    y2: "6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M16 10a4 4 0 01-8 0"
+  })), "Shopping list (", shopCount, " items)"));
+
+  // Category view
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      borderRadius: 8,
+      overflow: "hidden",
+      border: `1px solid ${C.rule}`
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setView("status"),
+    className: "sans",
+    style: {
+      padding: "6px 14px",
+      fontSize: 10,
+      fontWeight: 600,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      border: "none",
+      cursor: "pointer",
+      color: C.inkMute,
+      background: C.card,
+      fontFamily: "inherit"
+    }
+  }, "By status"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setView("category"),
+    className: "sans",
+    style: {
+      padding: "6px 14px",
+      fontSize: 10,
+      fontWeight: 600,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      border: "none",
+      cursor: "pointer",
+      color: C.accent,
+      background: softTint(C.accent),
+      fontFamily: "inherit"
+    }
+  }, "By area")), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute
+    }
+  }, items.length, " items")), STOCK_CATS.map(cat => {
+    const catItems = items.filter(i => i.category === cat.key).sort((a, b) => {
+      const sa = stockStatus(a) === "out" ? 0 : stockStatus(a) === "low" ? 1 : 2;
+      const sb = stockStatus(b) === "out" ? 0 : stockStatus(b) === "low" ? 1 : 2;
+      return sa - sb;
+    });
+    if (!catItems.length) return null;
+    const outC = catItems.filter(i => stockStatus(i) === "out").length;
+    const lowC = catItems.filter(i => stockStatus(i) === "low").length;
+    const collapsed = !!collapsedCats[cat.key];
+    const counts = [outC ? `${outC} out` : null, lowC ? `${lowC} low` : null].filter(Boolean).join(" · ");
+    return /*#__PURE__*/React.createElement("div", {
+      key: cat.key,
+      style: {
+        background: C.card,
+        borderRadius: 16,
+        padding: "12px 14px",
+        marginBottom: 10,
+        boxShadow: C.shadowSm
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: () => setCollapsedCats(c => ({
+        ...c,
+        [cat.key]: !c[cat.key]
+      })),
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        cursor: "pointer",
+        marginBottom: collapsed ? 0 : 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 30,
+        height: 30,
+        borderRadius: 9,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: softTint(cat.color)
+      }
+    }, STOCK_CAT_ICONS[cat.icon](cat.color)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontWeight: 600,
+        fontSize: 14,
+        color: C.ink
+      }
+    }, cat.label), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 10,
+        color: C.inkMute
+      }
+    }, catItems.length, " items", counts ? " · " + counts : "")), /*#__PURE__*/React.createElement("svg", {
+      width: "14",
+      height: "14",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: C.inkMute,
+      strokeWidth: "2"
+    }, /*#__PURE__*/React.createElement("polyline", {
+      points: collapsed ? "6 9 12 15 18 9" : "18 15 12 9 6 15"
+    }))), !collapsed && catItems.map(i => /*#__PURE__*/React.createElement(StockItemRow, {
+      key: i.id,
+      item: i,
+      onUpdate: onUpdate,
+      onEdit: onEdit
+    })));
+  }), items.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: "40px 20px",
+      color: C.inkMute
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "serif",
+    style: {
+      fontSize: 18,
+      fontStyle: "italic",
+      marginBottom: 8
+    }
+  }, "No stock items yet"), /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 12
+    }
+  }, "Tap + to add your first item")), shopCount > 0 && /*#__PURE__*/React.createElement("button", {
+    onClick: onShoppingList,
+    className: "sans",
+    style: {
+      width: "100%",
+      padding: 11,
+      borderRadius: 12,
+      border: "none",
+      background: `linear-gradient(135deg,${C.heroTop},${C.heroBot})`,
+      color: C.onAccent,
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "3",
+    y1: "6",
+    x2: "21",
+    y2: "6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M16 10a4 4 0 01-8 0"
+  })), "Shopping list (", shopCount, " items)"));
+}
+const STOCK_UNITS = ["packs", "bottles", "tins", "bags", "litres", "kg", "boxes", "rolls"];
+function StockAddModal({
+  item,
+  onSave,
+  onDelete,
+  onClose
+}) {
+  const [name, setName] = useState(item?.name || "");
+  const [cat, setCat] = useState(item?.category || "pantry");
+  const [target, setTarget] = useState(item?.target || 1);
+  const [unit, setUnit] = useState(item?.unit || "");
+  const [current, setCurrent] = useState(item?.current || 0);
+  const editing = !!item?.id;
+  const st = target > 0 ? current <= 0 ? "out" : current / target <= 0.5 ? "low" : "full" : "full";
+  const stc = STOCK_STATUS_COLORS[st];
+  const stLabel = st === "out" ? "Out" : st === "low" ? "Low" : "Stocked";
+  const catObj = STOCK_CATS.find(c => c.key === cat);
+  function save() {
+    if (!name.trim()) return;
+    onSave({
+      id: item?.id || Date.now(),
+      name: name.trim(),
+      category: cat,
+      target,
+      unit: unit.trim(),
+      current
+    });
+  }
+  const inputStyle = {
+    width: "100%",
+    background: C.bg,
+    border: `1px solid ${C.rule}`,
+    borderRadius: 12,
+    padding: "12px 16px",
+    fontSize: 14,
+    color: C.ink,
+    fontFamily: "'Roboto Condensed',sans-serif",
+    outline: "none"
+  };
+  const stepperStyle = (val, set, min = 0) => /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      borderRadius: 12,
+      overflow: "hidden",
+      border: `1px solid ${C.rule}`,
+      width: "100%"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => set(Math.max(min, val - 1)),
+    style: {
+      width: 44,
+      height: 44,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.bg,
+      border: "none",
+      color: C.inkMute,
+      fontSize: 20,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "-"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      height: 44,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.card,
+      fontSize: 18,
+      fontWeight: 600,
+      color: C.ink,
+      borderLeft: `1px solid ${C.rule}`,
+      borderRight: `1px solid ${C.rule}`
+    }
+  }, val), /*#__PURE__*/React.createElement("button", {
+    onClick: () => set(val + 1),
+    style: {
+      width: 44,
+      height: 44,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.bg,
+      border: "none",
+      color: C.inkMute,
+      fontSize: 20,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "+"));
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.target === e.currentTarget && onClose(),
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(26,23,20,0.6)",
+      zIndex: 200,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: "100%",
+      maxWidth: 480,
+      background: C.card,
+      borderRadius: "26px 26px 0 0",
+      padding: "20px 20px 36px",
+      maxHeight: "92vh",
+      overflowY: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      background: C.rule,
+      margin: "0 auto 16px"
+    }
+  }), /*#__PURE__*/React.createElement("p", {
+    className: "serif",
+    style: {
+      fontSize: 22,
+      fontStyle: "italic",
+      color: C.ink,
+      textAlign: "center",
+      marginBottom: 20
+    }
+  }, editing ? "Edit item" : "New stock item"), /*#__PURE__*/React.createElement("p", {
+    className: "lbl",
+    style: {
+      marginBottom: 6
+    }
+  }, "Item name"), /*#__PURE__*/React.createElement("input", {
+    value: name,
+    onChange: e => setName(e.target.value),
+    placeholder: "e.g. Olive oil, Shampoo, Milk",
+    style: inputStyle
+  }), /*#__PURE__*/React.createElement("p", {
+    className: "lbl",
+    style: {
+      marginBottom: 6,
+      marginTop: 16
+    }
+  }, "Area"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, STOCK_CATS.map(c => /*#__PURE__*/React.createElement("button", {
+    key: c.key,
+    onClick: () => setCat(c.key),
+    style: {
+      flex: 1,
+      padding: "10px 6px",
+      borderRadius: 12,
+      border: `1.5px solid ${cat === c.key ? C.accent : C.rule}`,
+      background: cat === c.key ? softTint(C.accent) : C.bg,
+      textAlign: "center",
+      cursor: "pointer",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 32,
+      height: 32,
+      borderRadius: 9,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: softTint(c.color)
+    }
+  }, STOCK_CAT_ICONS[c.icon](c.color)), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      fontWeight: 600,
+      color: cat === c.key ? C.accent : C.inkMute,
+      lineHeight: 1.3
+    }
+  }, c.key === "bathroom" ? "Bath & Laundry" : c.label)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "flex-end",
+      marginTop: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "lbl",
+    style: {
+      marginBottom: 6
+    }
+  }, "I like to have"), stepperStyle(target, setTarget, 1)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1.2
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "lbl",
+    style: {
+      marginBottom: 6
+    }
+  }, "Unit"), /*#__PURE__*/React.createElement("input", {
+    value: unit,
+    onChange: e => setUnit(e.target.value),
+    placeholder: "e.g. bottles",
+    style: {
+      ...inputStyle,
+      height: 46
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: 6,
+      marginTop: 8
+    }
+  }, STOCK_UNITS.map(u => /*#__PURE__*/React.createElement("button", {
+    key: u,
+    onClick: () => setUnit(u),
+    className: "sans",
+    style: {
+      padding: "5px 12px",
+      borderRadius: 8,
+      border: `1px solid ${unit === u ? C.accent : C.rule}`,
+      background: unit === u ? softTint(C.accent) : C.bg,
+      fontSize: 11,
+      color: unit === u ? C.accent : C.inkMute,
+      cursor: "pointer",
+      fontFamily: "inherit"
+    }
+  }, u))), /*#__PURE__*/React.createElement("p", {
+    className: "lbl",
+    style: {
+      marginBottom: 6,
+      marginTop: 16
+    }
+  }, "Current stock"), stepperStyle(current, setCurrent, 0), name.trim() && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.bg,
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginTop: 16,
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      border: `1px dashed ${C.rule}`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 4,
+      height: 28,
+      borderRadius: 2,
+      background: stc,
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      fontWeight: 500,
+      color: C.ink
+    }
+  }, name.trim()), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, current, " of ", target, " ", unit, " · ", catObj?.label, " · ", stLabel))), /*#__PURE__*/React.createElement("button", {
+    onClick: save,
+    disabled: !name.trim(),
+    className: "sans",
+    style: {
+      width: "100%",
+      padding: 14,
+      borderRadius: 14,
+      border: "none",
+      background: name.trim() ? `linear-gradient(135deg,${C.heroTop},${C.heroBot})` : C.rule,
+      color: name.trim() ? C.onAccent : C.inkMute,
+      fontSize: 14,
+      fontWeight: 700,
+      cursor: name.trim() ? "pointer" : "default",
+      marginTop: 20,
+      fontFamily: "inherit"
+    }
+  }, editing ? "Save changes" : "Add item"), editing && /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      onDelete(item.id);
+      onClose();
+    },
+    className: "sans",
+    style: {
+      width: "100%",
+      padding: 12,
+      borderRadius: 12,
+      border: `1.5px solid ${C.rule}`,
+      background: "transparent",
+      color: "#E06C75",
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: "pointer",
+      marginTop: 8,
+      fontFamily: "inherit"
+    }
+  }, "Delete item"), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "sans",
+    style: {
+      width: "100%",
+      padding: 12,
+      borderRadius: 12,
+      border: `1.5px solid ${C.rule}`,
+      background: "transparent",
+      color: C.inkMute,
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: "pointer",
+      marginTop: 8,
+      fontFamily: "inherit"
+    }
+  }, "Cancel")));
+}
 function ChatTab({
   messages,
   currentUser,
@@ -67211,6 +68219,8 @@ function ChatTab({
   }, [msgSig]);
 
   // v617 · Dictation mic — speech-to-text into chat input
+  // v622 · Continuous mode — keeps listening until user taps stop
+  const transcriptAccRef = useRef("");
   function startDictation() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
@@ -67222,19 +68232,39 @@ function ChatTab({
     } catch (e) {}
     const r = new SR();
     r.lang = "en-AU";
-    r.interimResults = false;
+    r.continuous = true;
+    r.interimResults = true;
     r.maxAlternatives = 1;
+    transcriptAccRef.current = "";
     r.onresult = ev => {
-      const txt = ev.results[0][0].transcript;
-      setVoiceState(null);
-      if (voiceChatAutoSend) {
-        if (txt.trim()) onSend(txt.trim());
-      } else {
-        setText(prev => (prev ? prev + " " : "") + txt);
+      let final = "",
+        interim = "";
+      for (let i = 0; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) final += (final ? " " : "") + ev.results[i][0].transcript;else interim += (interim ? " " : "") + ev.results[i][0].transcript;
       }
+      transcriptAccRef.current = final;
+      const preview = (final + (interim ? " " + interim : "")).trim();
+      setText(prev => {
+        // Replace any previous dictation preview with updated one
+        const base = prev.replace(/\u200B.*$/, "");
+        return base + (base ? " " : "") + "\u200B" + preview;
+      });
     };
     r.onerror = () => setVoiceState("error");
-    r.onend = () => setVoiceState(v => v === "listening" ? null : v);
+    r.onend = () => {
+      setVoiceState(null);
+      const final = transcriptAccRef.current;
+      if (final) {
+        setText(prev => {
+          const base = prev.replace(/\u200B.*$/, "");
+          const clean = (base + (base ? " " : "") + final).trim();
+          if (voiceChatAutoSend && clean) setTimeout(() => onSend(clean), 0);
+          return clean;
+        });
+      } else {
+        setText(prev => prev.replace(/\u200B.*$/, "").trim());
+      }
+    };
     voiceRef.current = r;
     setVoiceState("listening");
     try {
@@ -67247,7 +68277,6 @@ function ChatTab({
     try {
       voiceRef.current?.stop();
     } catch (e) {}
-    setVoiceState(null);
   }
   function send() {
     if (!text.trim()) return;
@@ -70551,7 +71580,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v621"))))), diagOpen && (() => {
+  }, "v623"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
