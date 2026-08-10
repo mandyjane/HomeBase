@@ -18106,7 +18106,39 @@ function App({
         fontWeight: 500,
         color: C.inkSoft
       }
-    }, sharedToGo > 0 ? `${sharedToGo} points to ${sharedGoal.treat}` : `Goal reached — enjoy ${sharedGoal.treat}!`)))), range === "stock" ? /*#__PURE__*/React.createElement(StockView, {
+    }, sharedToGo > 0 ? `${sharedToGo} points to ${sharedGoal.treat}` : `Goal reached — enjoy ${sharedGoal.treat}!`)))), (() => {
+      const _showTasks = listType !== "events";
+      const _showEvents = listType !== "tasks";
+      const _RANGES = [["week", "Upcoming"], ...(_showTasks ? [["deadlines", "Deadlines"]] : []), ["all", "All"], ["done", _showEvents && !_showTasks ? "Past" : "Done"], ["stock", "Stock"]];
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          background: C.ruleSoft,
+          borderRadius: 12,
+          padding: 3,
+          gap: 3,
+          marginBottom: 16
+        }
+      }, _RANGES.map(([val, lbl]) => {
+        const on = range === val;
+        return /*#__PURE__*/React.createElement("button", {
+          key: val,
+          onClick: () => setRange(val),
+          className: "sans",
+          style: {
+            flex: 1,
+            padding: "9px 4px",
+            borderRadius: 9,
+            border: "none",
+            cursor: "pointer",
+            fontSize: 12.5,
+            fontWeight: 700,
+            background: on ? C.accent : "transparent",
+            color: on ? C.onAccent : C.inkMute
+          }
+        }, lbl);
+      }));
+    })(), range === "stock" ? /*#__PURE__*/React.createElement(StockView, {
       items: stockItems,
       view: stockView,
       setView: setStockView,
@@ -25222,34 +25254,7 @@ function CombinedList({
   // only the LABEL changed to "Upcoming". "done" is the new completed-only range.
   // v498 · Deadlines view only applies to tasks — hide it on the Events page.
   const RANGES = [["week", "Upcoming"], ...(showTasks ? [["deadlines", "Deadlines"]] : []), ["all", "All"], ["done", showEvents && !showTasks ? "Past" : "Done"], ["stock", "Stock"]];
-  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      background: C.ruleSoft,
-      borderRadius: 12,
-      padding: 3,
-      gap: 3,
-      marginBottom: 16
-    }
-  }, RANGES.map(([val, lbl]) => {
-    const on = range === val;
-    return /*#__PURE__*/React.createElement("button", {
-      key: val,
-      onClick: () => setRange(val),
-      className: "sans",
-      style: {
-        flex: 1,
-        padding: "9px 4px",
-        borderRadius: 9,
-        border: "none",
-        cursor: "pointer",
-        fontSize: 12.5,
-        fontWeight: 700,
-        background: on ? C.accent : "transparent",
-        color: on ? C.onAccent : C.inkMute
-      }
-    }, lbl);
-  })), nagMode && nagTask && /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, nagMode && nagTask && /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.herSoft,
       borderRadius: 16,
