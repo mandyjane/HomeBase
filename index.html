@@ -11634,20 +11634,26 @@ function App({
             showToast("Bill updated", "success");
           } else {
             setTasks(ts => {
+              // v627 · Clean split: strip exceptions at or after the split date from the
+              // old series (they belong to the new series now). This prevents the old
+              // series from rendering a "ghost" completed occurrence after recurEnd.
+              const oldSrc = ts.find(x => x.id === orig.id);
+              const oldEx = oldSrc && oldSrc.exceptions || {};
+              const trimmedOldEx = {};
+              Object.keys(oldEx).forEach(k => {
+                if (k < d) trimmedOldEx[k] = {
+                  ...oldEx[k]
+                };
+              });
               const ended = ts.map(t => t.id === orig.id ? {
                 ...t,
-                recurEnd: addDays(d, -1)
+                recurEnd: addDays(d, -1),
+                exceptions: trimmedOldEx
               } : t);
-              // v406 · CARRY PAID HISTORY FORWARD. The old series keeps its exceptions
-              // (and its recurEnd), but the NEW series must inherit the paid records —
-              // otherwise billHistory on the active card shows 'No payments recorded yet'
-              // while the documents tab still lists the old series' attachments. Payments
-              // are historical facts about the BILL, not about a particular series segment.
+              // Carry paid history AND the split-date completion to the new series
               const paidEx = {};
-              const src = ts.find(x => x.id === orig.id);
-              const oldEx = src && src.exceptions || {};
               Object.keys(oldEx).forEach(k => {
-                if (k < d && oldEx[k] && oldEx[k].done && !oldEx[k].deleted) paidEx[k] = {
+                if (oldEx[k] && oldEx[k].done && !oldEx[k].deleted) paidEx[k] = {
                   ...oldEx[k]
                 };
               });
@@ -11832,6 +11838,8 @@ function App({
       // and left paid — deleting it is the user saying it should never have been there.
       // v398 · TWO-TIER DELETE. "one" = soft (restorable), "one-purge" = permanent.
       const purge = scope === "one-purge";
+      // v628 · Single-occurrence delete also goes to recycle bin (soft delete)
+      const prevEx = tasks.find(t => t.id === seriesId)?.exceptions?.[d];
       setTasks(ts => ts.map(t => t.id === seriesId ? {
         ...t,
         exceptions: {
@@ -11843,7 +11851,39 @@ function App({
           }
         }
       } : t));
-      showToast(purge ? "Permanently removed" : "Occurrence removed", "info");
+      if (!purge) {
+        const victim = tasks.find(t => t.id === seriesId);
+        if (victim) {
+          setRecycleBin(bin => [{
+            id: "rb_" + Date.now(),
+            type: "task-occ",
+            seriesId,
+            occDate: d,
+            title: occ.title || victim.title,
+            data: prevEx || null,
+            deletedAt: new Date().toISOString()
+          }, ...bin]);
+        }
+        showToast("Occurrence removed", "info", {
+          undo: () => {
+            setTasks(ts => ts.map(t => {
+              if (t.id !== seriesId) return t;
+              const ex = {
+                ...(t.exceptions || {})
+              };
+              if (prevEx) ex[d] = prevEx;else delete ex[d];
+              return {
+                ...t,
+                exceptions: ex
+              };
+            }));
+            setRecycleBin(bin => bin.filter(b => !(b.seriesId === seriesId && b.occDate === d)));
+            showToast("Occurrence restored", "success");
+          }
+        });
+      } else {
+        showToast("Permanently removed", "info");
+      }
     } else {
       // v535 · Move to recycle bin instead of hard-deleting
       const victim = tasks.find(t => t.id === seriesId);
@@ -18118,7 +18158,9 @@ function App({
     }, sharedToGo > 0 ? `${sharedToGo} points to ${sharedGoal.treat}` : `Goal reached — enjoy ${sharedGoal.treat}!`)))), (() => {
       const _showTasks = listType !== "events";
       const _showEvents = listType !== "tasks";
-      const _RANGES = [["week", "Upcoming"], ...(_showTasks ? [["deadlines", "Deadlines"]] : []), ["all", "All"], ["done", _showEvents && !_showTasks ? "Past" : "Done"], ["stock", "Stock"]];
+      const _RANGES = [["week", "Upcoming"], ...(_showTasks ? [["deadlines", "Deadlines"]] : []), ["all", "All"], ["done", _showEvents && !_showTasks ? "Past" : "Done"], ...(_showTasks ? [["stock", "Stock"]] : [])];
+      // v629 · If range is "stock" but we're on Events tab, reset to "week"
+      if (range === "stock" && !_showTasks) setTimeout(() => setRange("week"), 0);
       return /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
@@ -25262,7 +25304,7 @@ function CombinedList({
   // "all" keeps its internal key so a saved hb_range preference still resolves —
   // only the LABEL changed to "Upcoming". "done" is the new completed-only range.
   // v498 · Deadlines view only applies to tasks — hide it on the Events page.
-  const RANGES = [["week", "Upcoming"], ...(showTasks ? [["deadlines", "Deadlines"]] : []), ["all", "All"], ["done", showEvents && !showTasks ? "Past" : "Done"], ["stock", "Stock"]];
+  const RANGES = [["week", "Upcoming"], ...(showTasks ? [["deadlines", "Deadlines"]] : []), ["all", "All"], ["done", showEvents && !showTasks ? "Past" : "Done"], ...(showTasks ? [["stock", "Stock"]] : [])];
   return /*#__PURE__*/React.createElement(React.Fragment, null, nagMode && nagTask && /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.herSoft,
@@ -67029,14 +67071,27 @@ function RecycleBinSheet({
 }) {
   const [filter, setFilter] = useState("all");
   if (!open) return null;
-  const items = filter === "all" ? bin : bin.filter(b => b.type === filter);
+  const items = filter === "all" ? bin : bin.filter(b => b.type === filter || filter === "task" && b.type === "task-occ");
   const counts = {
     all: bin.length,
-    task: bin.filter(b => b.type === "task").length,
+    task: bin.filter(b => b.type === "task" || b.type === "task-occ").length,
     event: bin.filter(b => b.type === "event").length
   };
   function restore(item) {
-    if (item.type === "task") setTasks(ts => [...ts, item.data]);else setEvents(es => [...es, item.data]);
+    if (item.type === "task-occ") {
+      // v628 · Restore a single deleted occurrence: remove the deleted exception
+      setTasks(ts => ts.map(t => {
+        if (t.id !== item.seriesId) return t;
+        const ex = {
+          ...(t.exceptions || {})
+        };
+        if (item.data) ex[item.occDate] = item.data;else delete ex[item.occDate];
+        return {
+          ...t,
+          exceptions: ex
+        };
+      }));
+    } else if (item.type === "task") setTasks(ts => [...ts, item.data]);else setEvents(es => [...es, item.data]);
     setBin(b => b.filter(x => x.id !== item.id));
   }
   function purge(item) {
@@ -67223,7 +67278,7 @@ function RecycleBinSheet({
         color: C.ink,
         fontWeight: 500
       }
-    }, item.data.title || "Untitled"), /*#__PURE__*/React.createElement("div", {
+    }, item.title || item.data?.title || "Untitled"), /*#__PURE__*/React.createElement("div", {
       className: "sans",
       style: {
         fontSize: 10,
@@ -67245,7 +67300,7 @@ function RecycleBinSheet({
         background: softTint(col),
         color: col
       }
-    }, item.type.toUpperCase()), /*#__PURE__*/React.createElement("span", null, nearPurge ? `Purges in ${dl} day${dl === 1 ? "" : "s"}` : `Deleted ${d === 0 ? "today" : d === 1 ? "yesterday" : d + " days ago"}`))), /*#__PURE__*/React.createElement("div", {
+    }, item.type === "task-occ" ? "OCCURRENCE" : item.type.toUpperCase()), /*#__PURE__*/React.createElement("span", null, nearPurge ? `Purges in ${dl} day${dl === 1 ? "" : "s"}` : `Deleted ${d === 0 ? "today" : d === 1 ? "yesterday" : d + " days ago"}`))), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         gap: 6,
@@ -71600,7 +71655,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v626"))))), diagOpen && (() => {
+  }, "v629"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
