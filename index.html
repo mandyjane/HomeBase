@@ -29128,7 +29128,7 @@ function AgendaRow({
       flexWrap: "wrap",
       fontSize: 11.5,
       color: C.inkMute,
-      marginBottom: priority && !priority.noBadge ? 9 : 14
+      marginBottom: 14
     }
   }, (() => {
     const parts = [];
@@ -29182,25 +29182,22 @@ function AgendaRow({
         flexShrink: 0,
         opacity: .7
       }
-    }), el]);
-  })()), priority && !priority.noBadge && !compact && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: 6,
-      flexWrap: "wrap",
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 10,
-      fontWeight: 600,
-      padding: "3px 9px",
-      borderRadius: 20,
-      background: softTint(priority.color),
-      color: priority.color
-    }
-  }, priority.label)), row.done && onChangeCompletedBy && (t.points || 0) > 0 && (() => {
+    }), el]).concat(
+    // v637 · Priority badge inline with date
+    priority && !priority.noBadge && !compact ? [/*#__PURE__*/React.createElement("span", {
+      key: "pri",
+      className: "sans",
+      style: {
+        fontSize: 10,
+        fontWeight: 600,
+        padding: "3px 9px",
+        borderRadius: 20,
+        background: softTint(priority.color),
+        color: priority.color,
+        marginLeft: 2
+      }
+    }, priority.label)] : []);
+  })()), row.done && onChangeCompletedBy && (t.points || 0) > 0 && (() => {
     const aw = t._isOccurrence ? t.exceptions && t.exceptions[t._occDate] && t.exceptions[t._occDate].award : t.award;
     const herAw = aw && aw.her || 0,
       himAw = aw && aw.him || 0;
@@ -29296,7 +29293,11 @@ function AgendaRow({
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 7
+      gap: 7,
+      marginBottom: (() => {
+        const armedAuto = autoPayState(t, today) === "auto";
+        return onToggle && !armedAuto ? 8 : 0;
+      })()
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => setDelPrompt(true),
@@ -29317,7 +29318,11 @@ function AgendaRow({
       flexShrink: 0,
       padding: 0
     }
-  }, /*#__PURE__*/React.createElement(TrashIcon, null)), onSendToChat && /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement(TrashIcon, null)), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1
+    }
+  }), onSendToChat && /*#__PURE__*/React.createElement("button", {
     onClick: () => onSendToChat(t, bill ? "bill" : isTask ? "task" : "event"),
     "aria-label": "Send to chat",
     title: "Send to chat",
@@ -29352,11 +29357,7 @@ function AgendaRow({
     y2: "13"
   }), /*#__PURE__*/React.createElement("polygon", {
     points: "22 2 15 22 11 13 2 9 22 2"
-  }))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1
-    }
-  }), docSlot ? /*#__PURE__*/React.createElement("span", {
+  }))), docSlot ? /*#__PURE__*/React.createElement("span", {
     style: {
       display: "flex",
       alignItems: "center"
@@ -29437,7 +29438,7 @@ function AgendaRow({
       flexShrink: 0,
       opacity: t && t.publicHoliday ? 0.5 : 1
     }
-  }, "Edit"), (() => {
+  }, "Edit")), (() => {
     const armedAuto = autoPayState(t, today) === "auto";
     if (!onToggle || armedAuto) return null;
     return /*#__PURE__*/React.createElement("button", {
@@ -29448,20 +29449,21 @@ function AgendaRow({
       className: "sans" + (celebrate ? " cbdone" : ""),
       "aria-label": row.done ? bill ? "Mark unpaid" : "Mark not done" : bill ? "Mark paid" : "Mark done",
       style: {
-        display: "inline-flex",
+        display: "flex",
         alignItems: "center",
         gap: 8,
-        height: 30,
-        padding: "0 12px 0 6px",
+        width: "100%",
+        justifyContent: "center",
+        height: 40,
+        padding: "0 12px",
         borderRadius: 9,
         cursor: "pointer",
-        flexShrink: 0,
         position: "relative",
         border: `1.5px solid ${row.done || celebrate ? C.low : C.rule}`,
         background: row.done || celebrate ? softTint(C.low) : C.card,
         color: row.done || celebrate ? C.low : C.inkSoft,
-        fontSize: 11.5,
-        fontWeight: 600
+        fontSize: 13,
+        fontWeight: 700
       }
     }, celebrate && /*#__PURE__*/React.createElement("span", {
       className: "cbring"
@@ -29490,7 +29492,7 @@ function AgendaRow({
       strokeLinecap: "round",
       strokeLinejoin: "round"
     }))), row.done || celebrate ? bill ? "Paid" : "Done" : bill ? "Mark paid" : "Mark done");
-  })()), /*#__PURE__*/React.createElement(NotifSheet, {
+  })(), /*#__PURE__*/React.createElement(NotifSheet, {
     open: showNotif,
     onClose: () => setShowNotif(false),
     title: row.title || t.title,
@@ -71825,7 +71827,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v636"))))), diagOpen && (() => {
+  }, "v637"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
