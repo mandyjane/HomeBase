@@ -11616,7 +11616,12 @@ function App({
             dueDate: d,
             anchorDay: Number(d.slice(8, 10))
           };
-          if (!scheduleMoved(occBase, task, "dueDate")) {
+          // v632 · Distinguish date-move from recurrence-only change.
+          // Recurrence changes (weekly→custom, interval, days) update in place — no split.
+          // Only a DATE change triggers a series split (shifts the timeline).
+          const dateMoved = occBase.dueDate !== task.dueDate;
+          const recurOnly = scheduleMoved(occBase, task, "dueDate") && !dateMoved;
+          if (!scheduleMoved(occBase, task, "dueDate") || recurOnly) {
             const {
               id: _i,
               _seriesId,
@@ -12165,7 +12170,10 @@ function App({
             date: d,
             anchorDay: Number(d.slice(8, 10))
           };
-          if (!scheduleMoved(evOccBase, ev, "date")) {
+          // v632 · Same as tasks: recurrence-only changes update in place, no split
+          const evDateMoved = evOccBase.date !== ev.date;
+          const evRecurOnly = scheduleMoved(evOccBase, ev, "date") && !evDateMoved;
+          if (!scheduleMoved(evOccBase, ev, "date") || evRecurOnly) {
             const {
               id: _i,
               _seriesId,
@@ -71658,7 +71666,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v631"))))), diagOpen && (() => {
+  }, "v632"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
