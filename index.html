@@ -11102,6 +11102,26 @@ function App({
       const ex = {
         ...(t.exceptions || {})
       };
+      // v637 · If the due date changed, reschedule: delete old occurrence, create at new date
+      if (updates.dueDate && updates.dueDate !== occDate) {
+        const newDate = updates.dueDate;
+        ex[occDate] = {
+          ...(ex[occDate] || {}),
+          deleted: true
+        };
+        const {
+          dueDate: _dd,
+          ...otherUpdates
+        } = updates;
+        if (Object.keys(otherUpdates).length) ex[newDate] = {
+          ...(ex[newDate] || {}),
+          ...otherUpdates
+        };
+        return {
+          ...t,
+          exceptions: ex
+        };
+      }
       ex[occDate] = {
         ...(ex[occDate] || {}),
         ...updates
@@ -20026,7 +20046,8 @@ function EventCard({
   tapToEdit = false,
   onChangeType,
   onHistory,
-  histCount = 0
+  histCount = 0,
+  onSendToChat
 }) {
   const [open, setOpen] = useState(false);
   const [delPrompt, setDelPrompt] = useState(false);
@@ -20457,7 +20478,40 @@ function EventCard({
           alignItems: "center",
           flexShrink: 0
         }
-      }, /*#__PURE__*/React.createElement(TrashIcon, null)), isRdo && onToggleRdoWorked && /*#__PURE__*/React.createElement("button", {
+      }, /*#__PURE__*/React.createElement(TrashIcon, null)), onSendToChat && /*#__PURE__*/React.createElement("button", {
+        onClick: () => onSendToChat(ev, "event"),
+        "aria-label": "Send to chat",
+        className: "sans",
+        style: {
+          height: BTN_H,
+          padding: BTN_PAD,
+          borderRadius: BTN_R,
+          border: "1.5px solid rgba(167,139,250,0.35)",
+          background: "rgba(167,139,250,0.08)",
+          color: "#A78BFA",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "14",
+        height: "14",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "#A78BFA",
+        strokeWidth: "2.5",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      }, /*#__PURE__*/React.createElement("line", {
+        x1: "22",
+        y1: "2",
+        x2: "11",
+        y2: "13"
+      }), /*#__PURE__*/React.createElement("polygon", {
+        points: "22 2 15 22 11 13 2 9 22 2"
+      }))), isRdo && onToggleRdoWorked && /*#__PURE__*/React.createElement("button", {
         onClick: () => onToggleRdoWorked(ev, !rdoWorked),
         className: "sans",
         style: {
@@ -25628,7 +25682,8 @@ function CombinedList({
       onEndRepeat: endRepeatEvent,
       onEndRepeatAt: endRepeatEventAt,
       onSaveQuick: onSaveQuick,
-      isQuickSaved: isQuickSaved
+      isQuickSaved: isQuickSaved,
+      onSendToChat: onSendToChat
     })), b.tasks.map(task => /*#__PURE__*/React.createElement(TaskCard, {
       billPayer: billPayer,
       key: "t" + (task._seriesId || task.id) + "@" + (task._occDate || task.dueDate),
@@ -29293,11 +29348,7 @@ function AgendaRow({
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 7,
-      marginBottom: (() => {
-        const armedAuto = autoPayState(t, today) === "auto";
-        return onToggle && !armedAuto ? 8 : 0;
-      })()
+      gap: 5
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => setDelPrompt(true),
@@ -29369,8 +29420,8 @@ function AgendaRow({
       setShowNotif(true);
     },
     style: {
-      width: 32,
-      height: 32,
+      width: 30,
+      height: 30,
       borderRadius: 9,
       border: `1.5px solid ${t.alerts && t.alerts.length > 0 ? bill ? C.low : "#5EE7B4" : C.rule}`,
       background: t.alerts && t.alerts.length > 0 ? bill ? C.lowSoft : "rgba(94,231,180,0.12)" : C.page,
@@ -29384,8 +29435,8 @@ function AgendaRow({
       padding: 0
     }
   }, /*#__PURE__*/React.createElement("svg", {
-    width: "15",
-    height: "15",
+    width: "14",
+    height: "14",
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
@@ -29398,26 +29449,26 @@ function AgendaRow({
   })), (!t.alerts || t.alerts.length === 0) && /*#__PURE__*/React.createElement("span", {
     style: {
       position: "absolute",
-      width: 20,
+      width: 18,
       height: 1.5,
       background: C.inkMute,
       transform: "rotate(-45deg)",
       top: "50%",
       left: "50%",
-      marginLeft: -10,
+      marginLeft: -9,
       marginTop: -0.75
     }
   })), isTask && !bill && !row.done && onNag && /*#__PURE__*/React.createElement("button", {
     onClick: () => onNag(t),
     className: "sans",
     style: {
-      height: 30,
-      padding: "0 12px",
+      height: 28,
+      padding: "0 10px",
       borderRadius: 9,
       border: "none",
       background: softTint(personColor(people.her.color)),
       color: personColor(people.her.color),
-      fontSize: 11.5,
+      fontSize: 11,
       fontWeight: 600,
       cursor: "pointer",
       flexShrink: 0
@@ -29426,19 +29477,19 @@ function AgendaRow({
     onClick: onEdit,
     className: "sans",
     style: {
-      height: 30,
-      padding: "0 13px",
+      height: 28,
+      padding: "0 10px",
       borderRadius: 9,
       border: "none",
       background: t && t.publicHoliday ? C.rule : C.accentSoft,
       color: t && t.publicHoliday ? C.inkMute : C.accent,
-      fontSize: 11.5,
+      fontSize: 11,
       fontWeight: 700,
       cursor: t && t.publicHoliday ? "default" : "pointer",
       flexShrink: 0,
       opacity: t && t.publicHoliday ? 0.5 : 1
     }
-  }, "Edit")), (() => {
+  }, "Edit"), (() => {
     const armedAuto = autoPayState(t, today) === "auto";
     if (!onToggle || armedAuto) return null;
     return /*#__PURE__*/React.createElement("button", {
@@ -29449,28 +29500,27 @@ function AgendaRow({
       className: "sans" + (celebrate ? " cbdone" : ""),
       "aria-label": row.done ? bill ? "Mark unpaid" : "Mark not done" : bill ? "Mark paid" : "Mark done",
       style: {
-        display: "flex",
+        display: "inline-flex",
         alignItems: "center",
-        gap: 8,
-        width: "100%",
-        justifyContent: "center",
-        height: 40,
-        padding: "0 12px",
+        gap: 6,
+        height: 28,
+        padding: "0 10px 0 5px",
         borderRadius: 9,
         cursor: "pointer",
+        flexShrink: 0,
         position: "relative",
         border: `1.5px solid ${row.done || celebrate ? C.low : C.rule}`,
         background: row.done || celebrate ? softTint(C.low) : C.card,
         color: row.done || celebrate ? C.low : C.inkSoft,
-        fontSize: 13,
-        fontWeight: 700
+        fontSize: 11,
+        fontWeight: 600
       }
     }, celebrate && /*#__PURE__*/React.createElement("span", {
       className: "cbring"
     }), /*#__PURE__*/React.createElement("span", {
       style: {
-        width: 18,
-        height: 18,
+        width: 16,
+        height: 16,
         borderRadius: "50%",
         flexShrink: 0,
         border: `2px solid ${row.done || celebrate ? C.low : C.inkFaint}`,
@@ -29480,8 +29530,8 @@ function AgendaRow({
         justifyContent: "center"
       }
     }, (row.done || celebrate) && /*#__PURE__*/React.createElement("svg", {
-      width: "10",
-      height: "10",
+      width: "9",
+      height: "9",
       viewBox: "0 0 12 12"
     }, /*#__PURE__*/React.createElement("path", {
       className: celebrate ? "tickdraw" : "",
@@ -29491,8 +29541,8 @@ function AgendaRow({
       fill: "none",
       strokeLinecap: "round",
       strokeLinejoin: "round"
-    }))), row.done || celebrate ? bill ? "Paid" : "Done" : bill ? "Mark paid" : "Mark done");
-  })(), /*#__PURE__*/React.createElement(NotifSheet, {
+    }))), row.done || celebrate ? bill ? "Paid" : "Done" : bill ? "Pay" : "Done");
+  })()), /*#__PURE__*/React.createElement(NotifSheet, {
     open: showNotif,
     onClose: () => setShowNotif(false),
     title: row.title || t.title,
