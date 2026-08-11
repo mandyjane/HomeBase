@@ -11099,29 +11099,31 @@ function App({
   function quickBillUpdate(bill, occDate, updates) {
     setTasks(ts => ts.map(t => {
       if (t.id !== bill.id) return t;
-      const ex = {
-        ...(t.exceptions || {})
-      };
-      // v637 · If the due date changed, reschedule: delete old occurrence, create at new date
+      // v637 · If the due date changed, shift the series schedule
       if (updates.dueDate && updates.dueDate !== occDate) {
         const newDate = updates.dueDate;
-        ex[occDate] = {
-          ...(ex[occDate] || {}),
-          deleted: true
-        };
         const {
           dueDate: _dd,
           ...otherUpdates
         } = updates;
+        const ex = {
+          ...(t.exceptions || {})
+        };
+        // Store any amount update on the new date
         if (Object.keys(otherUpdates).length) ex[newDate] = {
           ...(ex[newDate] || {}),
           ...otherUpdates
         };
         return {
           ...t,
+          dueDate: newDate,
+          anchorDay: Number(newDate.slice(8, 10)),
           exceptions: ex
         };
       }
+      const ex = {
+        ...(t.exceptions || {})
+      };
       ex[occDate] = {
         ...(ex[occDate] || {}),
         ...updates
@@ -71877,7 +71879,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v637"))))), diagOpen && (() => {
+  }, "v638"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
