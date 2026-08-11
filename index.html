@@ -14163,7 +14163,9 @@ function App({
   const isEventRow = r => r.kind === "event" && !isWorkRow(r);
   const homeEventRows = homeAgenda.filter(isEventRow);
   const homeTaskRows = homeAgenda.filter(r => r.kind === "task" && !isBill(r.ref));
-  const homeOtherRows = homeTaskRows; // the "agenda" list is now tasks only
+  // v633 · Urgent deadlines/projects get their own section above regular tasks
+  const homeUrgentRows = homeTaskRows.filter(r => isDeadlineTask(r.ref) && r.ref.priority >= 5);
+  const homeOtherRows = homeTaskRows.filter(r => !(isDeadlineTask(r.ref) && r.ref.priority >= 5));
   const homeBillRows = homeBillAll.filter(r => !r.done);
   const homeBillPaid = homeBillAll.filter(r => r.done);
   const homeBillTotal = homeBillRows.reduce((a, r) => a + occAmount(r.ref, r._occDate || r.date), 0);
@@ -17811,7 +17813,33 @@ function App({
         open: paidOpen,
         setOpen: setPaidOpen,
         renderRows: renderRows
-      }), homeEventRows.length > 0 && /*#__PURE__*/React.createElement("div", {
+      }), homeUrgentRows.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginBottom: 10
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginBottom: 6
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 9,
+          fontWeight: 800,
+          letterSpacing: 1.6,
+          textTransform: "uppercase",
+          color: C.urgent
+        }
+      }, "Tasks · Urgent"), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1,
+          height: 1,
+          background: C.rule
+        }
+      })), renderRows(homeUrgentRows)), homeEventRows.length > 0 && /*#__PURE__*/React.createElement("div", {
         style: {
           marginBottom: 4
         }
@@ -71666,7 +71694,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v632"))))), diagOpen && (() => {
+  }, "v633"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
