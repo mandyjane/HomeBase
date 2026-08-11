@@ -14204,7 +14204,22 @@ function App({
   const homeEventRows = homeAgenda.filter(isEventRow);
   const homeTaskRows = homeAgenda.filter(r => r.kind === "task" && !isBill(r.ref));
   // v633 · Urgent deadlines/projects get their own section above regular tasks
-  const homeUrgentRows = homeTaskRows.filter(r => isDeadlineTask(r.ref) && r.ref.priority >= 5);
+  // v635 · Urgent deadlines/projects — ANY undone urgent deadline/project, regardless of due date
+  const homeUrgentRows = homeListTasks.filter(t => isDeadlineTask(t) && t.priority >= 5 && !t.done && !isPrivateHidden(t)).sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map(t => ({
+    kind: "task",
+    ref: t,
+    title: t.title,
+    sub: `${taskCatLabel(t)}`,
+    subLabel: taskCatLabel(t),
+    pName: assigneeName(t.assignee, people),
+    pColor: assigneeColor(t.assignee, people),
+    date: t.dueDate,
+    dotColor: C.urgent,
+    badge: "!",
+    overdue: t.dueDate < today,
+    done: false,
+    taskTime: t.time ? fmtTime(t.time) : null
+  }));
   const homeOtherRows = homeTaskRows.filter(r => !(isDeadlineTask(r.ref) && r.ref.priority >= 5));
   const homeBillRows = homeBillAll.filter(r => !r.done);
   const homeBillPaid = homeBillAll.filter(r => r.done);
@@ -71810,7 +71825,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v635"))))), diagOpen && (() => {
+  }, "v636"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
