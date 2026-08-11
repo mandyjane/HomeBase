@@ -5346,7 +5346,8 @@ const EVENT_CAT_KEYS = eventCatKeys();
 const EVENT_ICON_ALIAS = {
   glass: "cup",
   cal: "clock",
-  people: "users"
+  people: "users",
+  flag: "ph_flag"
 };
 function EventIcon({
   name,
@@ -13734,7 +13735,11 @@ function App({
       phIconKey: phSpecialIcons ? e.phIcon : undefined,
       time: "",
       sub: "Public Holiday · All day",
-      allDay: true
+      allDay: true,
+      publicHoliday: true,
+      assignee: e.assignee,
+      category: e.category,
+      phIcon: e.phIcon
     };
     if (!e.recur || e.recur === "none") return e;
     const d = nextOccurrenceDate(e, "date", today);
