@@ -12477,10 +12477,7 @@ function App({
   // `plan` is {date:{title,points,assignee,room,color}} for NEW rows only (existing chores
   // are shown read-only in the grid; this planner only ADDS). Kept deliberately additive.
   function commitChorePlan(adds) {
-    if (!adds || !adds.length) {
-      setShowPlanWeek(false);
-      return;
-    }
+    if (!adds || !adds.length) return;
     const recs = adds.map(a => ({
       id: uid(),
       title: (a.title || "").trim() || "Chore",
@@ -12499,17 +12496,13 @@ function App({
     }));
     setTasks(ts => [...ts, ...recs]);
     showToast(`${recs.length} chore${recs.length > 1 ? "s" : ""} planned`, "success");
-    setShowPlanWeek(false);
   }
   // v197 · Event planner commit. Mirrors commitChorePlan: batch-add, one record per
   // planned date. Only the fields the quick-add collects are set here — place, notes,
   // recurrence and end time stay at their defaults and are filled in the full editor
   // afterwards if wanted. euid() (not uid()) because events have their own id counter.
   function commitEventPlan(adds) {
-    if (!adds || !adds.length) {
-      setShowPlanWeek(false);
-      return;
-    }
+    if (!adds || !adds.length) return;
     const recs = adds.map(a => ({
       id: euid(),
       title: (a.title || "").trim() || "Event",
@@ -12525,17 +12518,13 @@ function App({
     }));
     setEvents(es => [...es, ...recs]);
     showToast(`${recs.length} event${recs.length > 1 ? "s" : ""} planned`, "success");
-    setShowPlanWeek(false);
   }
   // v164 Build E · Meal planner commit — one shared Dinner event per planned date. A date
   // already carrying a planned meal is REPLACED (delete old + add new); clearing removes it.
   // `plan` is {date:name|null}; only changed dates are passed.
   function commitMealPlan(changes) {
     const keys = Object.keys(changes || {});
-    if (!keys.length) {
-      setShowPlanWeek(false);
-      return;
-    }
+    if (!keys.length) return;
     setEvents(es => {
       // Drop any existing planned-meal event on the touched dates, then add the new ones.
       const touched = new Set(keys);
@@ -12567,7 +12556,6 @@ function App({
     });
     const n = keys.filter(k => (changes[k] || "").trim()).length;
     showToast(n ? `${n} meal${n > 1 ? "s" : ""} planned` : "Meals updated", "success");
-    setShowPlanWeek(false);
   }
   // Save a day-off (Shift-category event, no time/end). leave/sick carry dayOffHours.
   function saveDayOff(entry) {
@@ -24441,11 +24429,41 @@ function BillExpansion({
     style: {
       flex: 1
     }
-  }), /*#__PURE__*/React.createElement(BillDocRow, {
-    occ: occ,
-    onAttach: onAttachDoc,
-    onDelete: onDeleteDoc
-  }), /*#__PURE__*/React.createElement("button", {
+  }), onSendToChat && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSendToChat(occ, "bill"),
+    "aria-label": "Send to chat",
+    className: "sans",
+    style: {
+      width: BH,
+      height: BH,
+      borderRadius: BR,
+      border: "1.5px solid rgba(167,139,250,0.35)",
+      background: "rgba(167,139,250,0.08)",
+      color: "#A78BFA",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+      padding: 0
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "#A78BFA",
+    strokeWidth: "2.5",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: "22",
+    y1: "2",
+    x2: "11",
+    y2: "13"
+  }), /*#__PURE__*/React.createElement("polygon", {
+    points: "22 2 15 22 11 13 2 9 22 2"
+  }))), /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowNotif(true),
     style: {
       width: BH,
@@ -24613,7 +24631,29 @@ function BillExpansion({
     onAddPast: onAddPast,
     onRestore: onRestore,
     onPurge: onPurge
-  }));
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 0,
+      marginTop: 6,
+      paddingTop: 8,
+      borderTop: `1px solid ${C.ruleSoft}`
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: C.inkSoft,
+      marginRight: "auto"
+    }
+  }, "Receipt"), /*#__PURE__*/React.createElement(BillDocRow, {
+    occ: occ,
+    onAttach: onAttachDoc,
+    onDelete: onDeleteDoc
+  })));
 }
 
 // Two states: no document → a dashed, muted "Attach" clip. Has one → a solid,
@@ -41187,15 +41227,27 @@ function PlanWeekSheet({
     }, /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        width: 40,
+        width: 56,
         flexShrink: 0,
+        color: meal ? MEAL_COLOR : C.inkSoft
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: "block",
         fontWeight: 700,
         fontSize: 12,
         letterSpacing: 0.4,
-        textTransform: "uppercase",
-        color: meal ? MEAL_COLOR : C.inkSoft
+        textTransform: "uppercase"
       }
-    }, fmtDow(date)), /*#__PURE__*/React.createElement("div", {
+    }, fmtDow(date)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: "block",
+        fontSize: 10,
+        fontWeight: 600,
+        color: meal ? MEAL_COLOR : C.inkFaint,
+        marginTop: 1
+      }
+    }, fmtDnum(date))), /*#__PURE__*/React.createElement("div", {
       style: {
         flex: 1,
         minWidth: 0
@@ -41643,15 +41695,27 @@ function RotaModal({
     }, /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        width: 40,
+        width: 56,
         flexShrink: 0,
+        color: has ? tint : C.inkSoft
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: "block",
         fontWeight: 700,
         fontSize: 12,
         letterSpacing: 0.4,
-        textTransform: "uppercase",
-        color: has ? tint : C.inkSoft
+        textTransform: "uppercase"
       }
-    }, fmtDow(date)), /*#__PURE__*/React.createElement("div", {
+    }, fmtDow(date)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: "block",
+        fontSize: 10,
+        fontWeight: 600,
+        color: has ? tint : C.inkFaint,
+        marginTop: 1
+      }
+    }, fmtDnum(date))), /*#__PURE__*/React.createElement("div", {
       style: {
         flex: 1,
         minWidth: 0
@@ -61616,28 +61680,76 @@ function GoalCard({
     style: {
       display: "flex",
       gap: 6,
+      alignItems: "center",
       ...(g.locked ? {
         opacity: .45,
         pointerEvents: "none"
       } : {})
     }
-  }, [25, 50, 75, 100, 150, 200].map(v => /*#__PURE__*/React.createElement("button", {
-    key: v,
-    onClick: () => onSet(who, "target", v),
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      const v = Math.max(5, Math.round(((g.target || 100) - 25) / 5) * 5);
+      onSet(who, "target", v);
+    },
     className: "sans",
     style: {
-      flex: 1,
-      minWidth: 0,
-      padding: "9px 0",
-      borderRadius: 20,
+      flex: "0 0 38px",
+      height: 44,
+      borderRadius: 11,
+      border: `1.5px solid ${C.rule}`,
+      background: C.card,
+      color: C.inkSoft,
+      fontSize: 17,
+      fontWeight: 700,
       cursor: "pointer",
-      border: `1.5px solid ${g.target === v ? C.accent : C.rule}`,
-      background: g.target === v ? C.accentSoft : C.card,
-      color: g.target === v ? C.accent : C.inkMute,
-      fontSize: 12,
-      fontWeight: 700
+      padding: 0
     }
-  }, v)))));
+  }, "-"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "numeric",
+    min: "5",
+    max: "999",
+    value: g.target || 100,
+    onChange: e => {
+      const n = e.target.value;
+      onSet(who, "target", n === "" ? "" : Math.min(999, Math.round(Number(n)) || 5));
+    },
+    onBlur: e => onSet(who, "target", Math.max(5, Math.min(999, Math.round(Number(e.target.value)) || 100))),
+    className: "sans",
+    style: {
+      flex: "1 1 auto",
+      minWidth: 0,
+      textAlign: "center",
+      fontWeight: 700,
+      fontSize: 16,
+      height: 44,
+      borderRadius: 11,
+      border: `1.5px solid ${C.accent}`,
+      background: C.card,
+      color: C.ink,
+      fontFamily: "'Roboto Condensed',sans-serif"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => {
+      const v = Math.min(999, Math.round(((g.target || 100) + 25) / 5) * 5);
+      onSet(who, "target", v);
+    },
+    className: "sans",
+    style: {
+      flex: "0 0 38px",
+      height: 44,
+      borderRadius: 11,
+      border: `1.5px solid ${C.rule}`,
+      background: C.card,
+      color: C.inkSoft,
+      fontSize: 17,
+      fontWeight: 700,
+      cursor: "pointer",
+      padding: 0
+    }
+  }, "+"))));
 }
 
 // ─── PERSON SHEET: one goal, one record, no mixing ──────────────────────────
@@ -67903,21 +68015,34 @@ function StockItemRow({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, "-"), /*#__PURE__*/React.createElement("div", {
+  }, "-"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "numeric",
+    min: "0",
+    value: item.current,
+    onChange: e => {
+      const v = e.target.value;
+      onUpdate(item.id, v === "" ? 0 : Math.max(0, Math.round(Number(v)) || 0));
+    },
     style: {
-      minWidth: 28,
+      width: 36,
       height: 26,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
+      textAlign: "center",
       background: C.bg,
       fontSize: 12,
       fontWeight: 600,
       color: C.ink,
       borderLeft: `1px solid ${C.rule}`,
-      borderRight: `1px solid ${C.rule}`
+      borderRight: `1px solid ${C.rule}`,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 0,
+      fontFamily: "'Roboto Condensed',sans-serif",
+      outline: "none",
+      padding: 0,
+      MozAppearance: "textfield",
+      WebkitAppearance: "none"
     }
-  }, item.current), /*#__PURE__*/React.createElement("button", {
+  }), /*#__PURE__*/React.createElement("button", {
     onClick: () => onUpdate(item.id, item.current + 1),
     style: {
       width: 28,
@@ -68364,21 +68489,35 @@ function StockAddModal({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, "-"), /*#__PURE__*/React.createElement("div", {
+  }, "-"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "numeric",
+    min: min,
+    value: val,
+    onChange: e => {
+      const n = e.target.value;
+      set(n === "" ? min : Math.max(min, Math.round(Number(n)) || min));
+    },
+    onBlur: e => set(Math.max(min, Math.round(Number(e.target.value)) || min)),
     style: {
       flex: 1,
       height: 44,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
+      textAlign: "center",
       background: C.card,
       fontSize: 18,
       fontWeight: 600,
       color: C.ink,
       borderLeft: `1px solid ${C.rule}`,
-      borderRight: `1px solid ${C.rule}`
+      borderRight: `1px solid ${C.rule}`,
+      border: "none",
+      borderRadius: 0,
+      fontFamily: "'Roboto Condensed',sans-serif",
+      outline: "none",
+      padding: 0,
+      MozAppearance: "textfield",
+      WebkitAppearance: "none"
     }
-  }, val), /*#__PURE__*/React.createElement("button", {
+  }), /*#__PURE__*/React.createElement("button", {
     onClick: () => set(val + 1),
     style: {
       width: 44,
@@ -72143,7 +72282,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v643"))))), diagOpen && (() => {
+  }, "v644"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
