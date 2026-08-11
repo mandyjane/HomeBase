@@ -34469,7 +34469,7 @@ function BillsTab({
         color: C.inkSoft,
         marginRight: "auto"
       }
-    }, "Receipt"), "/* v639: resolve fresh bill from current tasks state — pmtEdit.bill is stale after attachDoc writes */", /*#__PURE__*/React.createElement(BillDocRow, {
+    }, "Receipt"), /*#__PURE__*/React.createElement(BillDocRow, {
       occ: materialize(bills.find(b => b.id === pmtEdit.bill.id) || pmtEdit.bill, pmtEdit.occDate, "dueDate"),
       onAttach: onAttachDoc,
       onDelete: onDeleteDoc,
