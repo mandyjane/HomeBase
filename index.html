@@ -13455,13 +13455,14 @@ function App({
   // v498 · `allEvents` includes public holidays (when enabled); raw `events` does not.
   const listEvents = [];
   const yearlyHorizon = addDays(today, 400); // v630 · yearly events need >365 day horizon
+  const evLookback = range === "done" ? addDays(today, -90) : today; // v631 · past view needs lookback
   allEvents.forEach(e => {
     if (!e.recur || e.recur === "none") {
       listEvents.push(e);
       return;
     }
     const horizon = e.recur === "yearly" || e.recur === "halfyearly" ? yearlyHorizon : listHorizon;
-    const dates = seriesDates(e, "date", today, horizon);
+    const dates = seriesDates(e, "date", evLookback, horizon);
     dates.forEach(d => {
       const ex = e.exceptions && e.exceptions[d];
       if (ex && ex.deleted) return;
@@ -71657,7 +71658,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v630"))))), diagOpen && (() => {
+  }, "v631"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
