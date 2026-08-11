@@ -21025,7 +21025,7 @@ function EventCard({
     }, ev.notes), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        gap: 8,
+        gap: 5,
         alignItems: "center",
         paddingTop: 12
       }
@@ -21050,28 +21050,15 @@ function EventCard({
       style: {
         flex: 1
       }
-    }), onChangeType && /*#__PURE__*/React.createElement("button", {
-      onClick: () => onChangeType(ev),
-      className: "sans",
-      style: {
-        height: BTN_H,
-        padding: BTN_PAD,
-        borderRadius: BTN_R,
-        border: `1.5px solid ${BTN_BRD}`,
-        background: BTN_BG,
-        color: T_SOFT,
-        fontSize: 12,
-        fontWeight: 600,
-        cursor: "pointer"
-      }
-    }, "Update"), onHistory && histCount > 0 && /*#__PURE__*/React.createElement("button", {
+    }), onHistory && histCount > 0 && /*#__PURE__*/React.createElement("button", {
       onClick: () => onHistory(ev),
       "aria-label": "History",
       title: "History",
       className: "sans",
       style: {
-        padding: "8px 10px",
-        borderRadius: 10,
+        height: BTN_H,
+        padding: "0 8px",
+        borderRadius: BTN_R,
         border: `1.5px solid ${BTN_BRD}`,
         background: BTN_BG,
         color: T_MUTE,
@@ -21080,7 +21067,8 @@ function EventCard({
         cursor: "pointer",
         display: "inline-flex",
         alignItems: "center",
-        gap: 5
+        gap: 5,
+        flexShrink: 0
       }
     }, /*#__PURE__*/React.createElement("svg", {
       width: "14",
@@ -21097,12 +21085,27 @@ function EventCard({
       d: "M3 4v5h5"
     }), /*#__PURE__*/React.createElement("path", {
       d: "M12 8v4l3 2"
-    })), histCount), /*#__PURE__*/React.createElement("button", {
+    })), histCount), onChangeType && /*#__PURE__*/React.createElement("button", {
+      onClick: () => onChangeType(ev),
+      className: "sans",
+      style: {
+        height: BTN_H,
+        padding: "0 10px",
+        borderRadius: BTN_R,
+        border: `1.5px solid ${BTN_BRD}`,
+        background: BTN_BG,
+        color: T_SOFT,
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: "pointer",
+        flexShrink: 0
+      }
+    }, "Update"), /*#__PURE__*/React.createElement("button", {
       onClick: () => onEdit(ev),
       className: "sans",
       style: {
         height: BTN_H,
-        padding: "0 16px",
+        padding: "0 14px",
         borderRadius: BTN_R,
         border: `1.5px solid ${BTN_BRD}`,
         background: BTN_BG,
@@ -35168,6 +35171,7 @@ function BillsTab({
       onEndRepeatAt: onEndRepeatAt,
       onAttachDoc: onAttachDoc,
       onDeleteDoc: onDeleteDoc,
+      onSendToChat: onSendToChat,
       showTimes: showTimes,
       billPayer: billPayer,
       hist: chgHist,
@@ -35594,6 +35598,7 @@ function BillsTab({
       onEndRepeatAt: onEndRepeatAt,
       onAttachDoc: onAttachDoc,
       onDeleteDoc: onDeleteDoc,
+      onSendToChat: onSendToChat,
       showTimes: showTimes,
       billPayer: billPayer,
       hist: hist,
