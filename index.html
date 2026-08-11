@@ -17592,7 +17592,33 @@ function App({
         style: {
           marginBottom: 18
         }
-      }, homeWorkRows.map(workRow))), /*#__PURE__*/React.createElement("div", {
+      }, homeWorkRows.map(workRow))), homeUrgentRows.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginBottom: 14
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginBottom: 6
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 9,
+          fontWeight: 800,
+          letterSpacing: 1.6,
+          textTransform: "uppercase",
+          color: C.urgent
+        }
+      }, "Tasks · Urgent"), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1,
+          height: 1,
+          background: C.rule
+        }
+      })), renderRows(homeUrgentRows)), /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
           alignItems: "center",
@@ -17854,33 +17880,7 @@ function App({
         open: paidOpen,
         setOpen: setPaidOpen,
         renderRows: renderRows
-      }), homeUrgentRows.length > 0 && /*#__PURE__*/React.createElement("div", {
-        style: {
-          marginBottom: 10
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          marginBottom: 6
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        className: "sans",
-        style: {
-          fontSize: 9,
-          fontWeight: 800,
-          letterSpacing: 1.6,
-          textTransform: "uppercase",
-          color: C.urgent
-        }
-      }, "Tasks · Urgent"), /*#__PURE__*/React.createElement("span", {
-        style: {
-          flex: 1,
-          height: 1,
-          background: C.rule
-        }
-      })), renderRows(homeUrgentRows)), homeEventRows.length > 0 && /*#__PURE__*/React.createElement("div", {
+      }), homeEventRows.length > 0 && /*#__PURE__*/React.createElement("div", {
         style: {
           marginBottom: 4
         }
