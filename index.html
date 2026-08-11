@@ -20526,7 +20526,7 @@ function EventCard({
         style: {
           padding: "0 13px 13px",
           display: "flex",
-          gap: 8,
+          gap: 5,
           alignItems: "center"
         },
         onClick: e => e.stopPropagation()
@@ -20546,7 +20546,11 @@ function EventCard({
           alignItems: "center",
           flexShrink: 0
         }
-      }, /*#__PURE__*/React.createElement(TrashIcon, null)), onSendToChat && /*#__PURE__*/React.createElement("button", {
+      }, /*#__PURE__*/React.createElement(TrashIcon, null)), /*#__PURE__*/React.createElement("span", {
+        style: {
+          flex: 1
+        }
+      }), onSendToChat && /*#__PURE__*/React.createElement("button", {
         onClick: () => onSendToChat(ev, "event"),
         "aria-label": "Send to chat",
         className: "sans",
@@ -21399,7 +21403,7 @@ function EventCard({
   })(), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 8,
+      gap: 5,
       alignItems: "center"
     }
   }, /*#__PURE__*/React.createElement("button", {
@@ -21424,7 +21428,41 @@ function EventCard({
     style: {
       flex: 1
     }
-  }), /*#__PURE__*/React.createElement("button", {
+  }), onSendToChat && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSendToChat(ev, "event"),
+    "aria-label": "Send to chat",
+    className: "sans",
+    style: {
+      width: BTN_H,
+      height: BTN_H,
+      borderRadius: BTN_R,
+      border: "1.5px solid rgba(167,139,250,0.35)",
+      background: "rgba(167,139,250,0.08)",
+      color: "#A78BFA",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+      padding: 0
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "#A78BFA",
+    strokeWidth: "2.5",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: "22",
+    y1: "2",
+    x2: "11",
+    y2: "13"
+  }), /*#__PURE__*/React.createElement("polygon", {
+    points: "22 2 15 22 11 13 2 9 22 2"
+  }))), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: e => {
       e.stopPropagation();
@@ -30460,7 +30498,7 @@ function TaskCard({
     })(), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
-        gap: 8,
+        gap: 5,
         alignItems: "center",
         flexWrap: "nowrap"
       }
@@ -30482,14 +30520,18 @@ function TaskCard({
         justifyContent: "center",
         flexShrink: 0
       }
-    }, /*#__PURE__*/React.createElement(TrashIcon, null)), onSendToChat && /*#__PURE__*/React.createElement("button", {
+    }, /*#__PURE__*/React.createElement(TrashIcon, null)), /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1
+      }
+    }), onSendToChat && /*#__PURE__*/React.createElement("button", {
       onClick: () => onSendToChat(task, bill ? "bill" : "task"),
       "aria-label": "Send to chat",
       title: "Send to chat",
       className: "sans",
       style: {
+        width: BTN_H,
         height: BTN_H,
-        padding: BTN_PAD,
         borderRadius: BTN_R,
         border: "1.5px solid rgba(167,139,250,0.35)",
         background: "rgba(167,139,250,0.08)",
@@ -30498,7 +30540,8 @@ function TaskCard({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        flexShrink: 0
+        flexShrink: 0,
+        padding: 0
       }
     }, /*#__PURE__*/React.createElement("svg", {
       width: "14",
@@ -30516,11 +30559,7 @@ function TaskCard({
       y2: "13"
     }), /*#__PURE__*/React.createElement("polygon", {
       points: "22 2 15 22 11 13 2 9 22 2"
-    }))), /*#__PURE__*/React.createElement("span", {
-      style: {
-        flex: 1
-      }
-    }), task.done && task.doneAt && onSetDoneAt && BILLUI.editPaid ? /*#__PURE__*/React.createElement("button", {
+    }))), task.done && task.doneAt && onSetDoneAt && BILLUI.editPaid ? /*#__PURE__*/React.createElement("button", {
       onClick: () => setDoneEdit(true),
       "aria-label": "Edit completion date and time",
       className: "sans",
@@ -72104,7 +72143,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v642"))))), diagOpen && (() => {
+  }, "v643"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
