@@ -10131,6 +10131,46 @@ function App({
   // refundPoints instead, which is the existing precise-unwind path. Positive → award,
   // negative → refund; either way the EXACT {her,him} split is stored on the entry so
   // undo can reverse what was actually paid rather than recompute it.
+  // v634 · Send item info to chat
+  function sendToChat(item, type) {
+    if (!currentUser) return;
+    const p = people[item.assignee] || {};
+    let text = "";
+    if (type === "task") {
+      const cat = item.category ? item.category.toUpperCase() : "";
+      const recLabel = item.recur && item.recur !== "none" ? "Repeats " + item.recur : "";
+      text = `[Task] ${item.title}${cat ? " · " + cat : ""}${item.dueDate ? " · Due " + shortDate(item.dueDate) : ""}${recLabel ? " · " + recLabel : ""}${p.name ? " · " + p.name : ""}`;
+    } else if (type === "bill") {
+      const amt = occAmount(item, item._occDate || item.dueDate);
+      text = `[Bill] ${item.title} — ${fmtMoney(amt)}${item.dueDate ? " · Due " + shortDate(item.dueDate) : ""}${p.name ? " · " + p.name : ""}`;
+    } else if (type === "event") {
+      const time = item.time ? fmtTime(item.time) : "";
+      const endT = item.endTime ? " – " + fmtTime(item.endTime) : "";
+      text = `[Event] ${item.title}${time ? " · " + time + endT : ""}${item.date ? " · " + shortDate(item.date) : ""}${item.place ? " · " + item.place : ""}${p.name ? " · " + p.name : ""}`;
+    }
+    if (!text) return;
+    const msg = {
+      id: Date.now(),
+      text,
+      author: currentUser,
+      t: new Date().toISOString()
+    };
+    setChatMessages(m => {
+      const next = [...m, msg];
+      sbChatPush("hb_chatMessages", next);
+      _lsSetOrig("hb_chatMessages", next);
+      return next;
+    });
+    setChatSeen(s => {
+      const next = {
+        ...s,
+        [currentUser]: msg.id
+      };
+      sbChatPush("hb_chatSeen", next);
+      return next;
+    });
+    showToast("Sent to chat", "success");
+  }
   function awardBonus(who, amt, reason) {
     const n = Math.round(Number(amt) || 0);
     if (!n) return;
@@ -13784,7 +13824,7 @@ function App({
   // two drift apart - the exact failure this project hit three times in v49 with one
   // control drawn twice. Overdue rows are deliberately EXCLUDED, matching the list below:
   // an overdue series already has its own row, and is not "due today".
-  const dueTodayTasks = homeListTasks.filter(t => t.dueDate === today && !t.done && !isDeadlineTask(t) && !doneTodayKeys.has(occKey(t)) && !overdueSeriesIds.has(t._seriesId || t.id));
+  const dueTodayTasks = homeListTasks.filter(t => t.dueDate === today && !t.done && !doneTodayKeys.has(occKey(t)) && !overdueSeriesIds.has(t._seriesId || t.id));
   // OVERDUE SERIES COUNT AS OUTSTANDING TOO. `dueTodayTasks` deliberately excludes them
   // (an overdue series already has its own row above and is not "due today"), but for the
   // purpose of suppressing tomorrow's duplicate they are the SAME situation and arguably
@@ -17513,7 +17553,8 @@ function App({
           onEditDayNote: row.kind === "event" && isSpan(row.ref) ? (ev, n) => setHomeDayNoteEdit({
             ev,
             n
-          }) : null
+          }) : null,
+          onSendToChat: sendToChat
         });
       });
       if (homeAgenda.length === 0) return homeByDate.length === 0 && /*#__PURE__*/React.createElement("p", {
@@ -18355,7 +18396,8 @@ function App({
       onClearCompleted: clearCompleted,
       onChangeCompletedBy: changeCompletedBy,
       highlightId: highlightId,
-      clearHighlight: () => setHighlightId(null)
+      clearHighlight: () => setHighlightId(null),
+      onSendToChat: sendToChat
     })), tab === "work" && /*#__PURE__*/React.createElement(WorkTab, {
       q: tabQ,
       events: events,
@@ -25245,7 +25287,8 @@ function CombinedList({
   billPayer = true,
   onChangeCompletedBy,
   highlightId,
-  clearHighlight
+  clearHighlight,
+  onSendToChat
 }) {
   const showTasks = listType !== "events";
   const showEvents = listType !== "tasks";
@@ -25502,7 +25545,8 @@ function CombinedList({
         onSaveQuick: onSaveQuick,
         isQuickSaved: isQuickSaved,
         onSetDoneAt: setDoneAt,
-        onChangeCompletedBy: task.done && !isBill(task) && onChangeCompletedBy ? newPT => onChangeCompletedBy(task, newPT) : null
+        onChangeCompletedBy: task.done && !isBill(task) && onChangeCompletedBy ? newPT => onChangeCompletedBy(task, newPT) : null,
+        onSendToChat: onSendToChat
       })));
     }
     const count = b.tasks.length + b.events.length;
@@ -25587,7 +25631,8 @@ function CombinedList({
       onSaveQuick: onSaveQuick,
       isQuickSaved: isQuickSaved,
       onSetDoneAt: setDoneAt,
-      onChangeCompletedBy: task.done && !isBill(task) && onChangeCompletedBy ? newPT => onChangeCompletedBy(task, newPT) : null
+      onChangeCompletedBy: task.done && !isBill(task) && onChangeCompletedBy ? newPT => onChangeCompletedBy(task, newPT) : null,
+      onSendToChat: onSendToChat
     })));
   }), confirmClear && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setConfirmClear(false),
@@ -28084,7 +28129,8 @@ function AgendaRow({
   billPayer = true,
   tickInExpansion = false,
   billQuickPay = false,
-  onEditDayNote
+  onEditDayNote,
+  onSendToChat
 }) {
   const [open, setOpen] = useState(compact); // compact: the parent card IS the expansion
   // Deleting a RECURRING row used to be hard-coded to scope "one" by the caller,
@@ -29256,7 +29302,42 @@ function AgendaRow({
       flexShrink: 0,
       padding: 0
     }
-  }, /*#__PURE__*/React.createElement(TrashIcon, null)), /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement(TrashIcon, null)), onSendToChat && /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSendToChat(t, bill ? "bill" : isTask ? "task" : "event"),
+    "aria-label": "Send to chat",
+    title: "Send to chat",
+    className: "sans",
+    style: {
+      width: BTN_H,
+      height: BTN_H,
+      borderRadius: BTN_R,
+      border: "1.5px solid rgba(167,139,250,0.35)",
+      background: "rgba(167,139,250,0.08)",
+      color: "#A78BFA",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+      padding: 0
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "#A78BFA",
+    strokeWidth: "2.5",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: "22",
+    y1: "2",
+    x2: "11",
+    y2: "13"
+  }), /*#__PURE__*/React.createElement("polygon", {
+    points: "22 2 15 22 11 13 2 9 22 2"
+  }))), /*#__PURE__*/React.createElement("span", {
     style: {
       flex: 1
     }
@@ -29524,7 +29605,8 @@ function TaskCard({
   onSetDoneAt,
   isQuickSaved,
   billPayer = true,
-  onChangeCompletedBy
+  onChangeCompletedBy,
+  onSendToChat
 }) {
   const [doneEdit, setDoneEdit] = useState(false);
   const [docOpen, setDocOpen] = useState(false);
@@ -30261,7 +30343,41 @@ function TaskCard({
         justifyContent: "center",
         flexShrink: 0
       }
-    }, /*#__PURE__*/React.createElement(TrashIcon, null)), /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement(TrashIcon, null)), onSendToChat && /*#__PURE__*/React.createElement("button", {
+      onClick: () => onSendToChat(task, bill ? "bill" : "task"),
+      "aria-label": "Send to chat",
+      title: "Send to chat",
+      className: "sans",
+      style: {
+        height: BTN_H,
+        padding: BTN_PAD,
+        borderRadius: BTN_R,
+        border: "1.5px solid rgba(167,139,250,0.35)",
+        background: "rgba(167,139,250,0.08)",
+        color: "#A78BFA",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("svg", {
+      width: "14",
+      height: "14",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "#A78BFA",
+      strokeWidth: "2.5",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    }, /*#__PURE__*/React.createElement("line", {
+      x1: "22",
+      y1: "2",
+      x2: "11",
+      y2: "13"
+    }), /*#__PURE__*/React.createElement("polygon", {
+      points: "22 2 15 22 11 13 2 9 22 2"
+    }))), /*#__PURE__*/React.createElement("span", {
       style: {
         flex: 1
       }
@@ -71694,7 +71810,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v633"))))), diagOpen && (() => {
+  }, "v635"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
