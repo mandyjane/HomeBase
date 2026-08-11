@@ -8072,8 +8072,16 @@ function App({
       event: "events"
     };
     const t = tabMap[targetTab] || targetTab;
-    if (t === "tasks") setListType("tasks");
-    if (t === "events") setListType("events");
+    if (t === "tasks") {
+      setListType("tasks");
+      setRange("all");
+    }
+    if (t === "events") {
+      setListType("events");
+      setRange("all");
+    }
+    // v641 · Bills tab: ensure we're on the "upcoming" view so the item is visible
+    if (t === "bills") setBillsView("upcoming");
     setTab(t);
     setTimeout(() => {
       const el = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`);
@@ -18740,6 +18748,7 @@ function App({
       onBillsView: setBillsView,
       mortAddTxRef: mortAddTxRef,
       mortShowPropVal: mortShowPropVal,
+      onSendToChat: sendToChat,
       onEdit: t => {
         setEditTask(t);
         setShowAdd(true);
@@ -29012,7 +29021,7 @@ function AgendaRow({
     name: advice.iconKey,
     size: 11
   }), "Fine window"))), !compact && (() => {
-    const showName = row.pName && !(bill && !billPayer);
+    const showName = row.pName && !(bill && !billPayer) && !(row.ref && row.ref.publicHoliday);
     const nameEl = showName ? row.ref && (row.ref.assignee || row.ref.done && row.ref.award) ? /*#__PURE__*/React.createElement(AssigneeBadges, {
       assignee: row.ref.done ? completedByKey(row.ref) : row.ref.assignee,
       people: people,
@@ -29467,7 +29476,7 @@ function AgendaRow({
     y2: "13"
   }), /*#__PURE__*/React.createElement("polygon", {
     points: "22 2 15 22 11 13 2 9 22 2"
-  }))), docSlot ? /*#__PURE__*/React.createElement("span", {
+  }))), !bill && docSlot ? /*#__PURE__*/React.createElement("span", {
     style: {
       display: "flex",
       alignItems: "center"
@@ -33657,7 +33666,8 @@ function BillsTab({
   billsView = "upcoming",
   onBillsView,
   mortAddTxRef,
-  mortShowPropVal = true
+  mortShowPropVal = true,
+  onSendToChat
 }) {
   const [openId, setOpenId] = useState(null);
   const [billCatchUpId, setBillCatchUpId] = useState(null); // v399: which bill is in catch-up mode
@@ -35200,11 +35210,7 @@ function BillsTab({
       onDelete: scope => onDelete(scope === "one" || scope === "one-purge" ? chgOcc : r.bill, scope),
       onEndRepeat: onEndRepeat,
       onEndRepeatAt: onEndRepeatAt,
-      docSlot: /*#__PURE__*/React.createElement(BillDocRow, {
-        occ: chgOcc,
-        onAttach: onAttachDoc,
-        onDelete: onDeleteDoc
-      })
+      onSendToChat: onSendToChat
     })), /*#__PURE__*/React.createElement(BillHistory, {
       hist: chgHist,
       today: today,
@@ -35212,7 +35218,29 @@ function BillsTab({
       onAddPast: onAddPast,
       onRestore: onRestore,
       onPurge: onPurge
-    }))));
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 0,
+        marginTop: 6,
+        paddingTop: 8,
+        borderTop: `1px solid ${C.ruleSoft}`
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: C.inkSoft,
+        marginRight: "auto"
+      }
+    }, "Receipt"), /*#__PURE__*/React.createElement(BillDocRow, {
+      occ: chgOcc,
+      onAttach: onAttachDoc,
+      onDelete: onDeleteDoc
+    })))));
   }
 
   // NOT a component — a render helper, called as renderBill(r).
@@ -35606,11 +35634,7 @@ function BillsTab({
       onDelete: scope => onDelete(scope === "one" || scope === "one-purge" ? r.occ : r.bill, scope),
       onEndRepeat: onEndRepeat,
       onEndRepeatAt: onEndRepeatAt,
-      docSlot: /*#__PURE__*/React.createElement(BillDocRow, {
-        occ: r.occ,
-        onAttach: onAttachDoc,
-        onDelete: onDeleteDoc
-      })
+      onSendToChat: onSendToChat
     })), /*#__PURE__*/React.createElement(BillHistory, {
       hist: hist,
       today: today,
@@ -35618,7 +35642,29 @@ function BillsTab({
       onAddPast: onAddPast,
       onRestore: onRestore,
       onPurge: onPurge
-    }))));
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 0,
+        marginTop: 6,
+        paddingTop: 8,
+        borderTop: `1px solid ${C.ruleSoft}`
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: C.inkSoft,
+        marginRight: "auto"
+      }
+    }, "Receipt"), /*#__PURE__*/React.createElement(BillDocRow, {
+      occ: r.occ,
+      onAttach: onAttachDoc,
+      onDelete: onDeleteDoc
+    })))));
   }
   return /*#__PURE__*/React.createElement("div", {
     className: "fade"
@@ -69007,7 +69053,7 @@ function ChatTab({
         display: "flex",
         gap: 8,
         alignItems: "flex-start",
-        maxWidth: "82%",
+        maxWidth: m.card ? "92%" : "82%",
         position: "relative",
         ...(isMe ? {
           alignSelf: "flex-end",
@@ -72107,7 +72153,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v640"))))), diagOpen && (() => {
+  }, "v642"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
@@ -74919,10 +74965,14 @@ function EventModal({
   }));
   const endRef = useRef(null); // v268 · the To picker, auto-opened after From
   function pickCat(k) {
-    setForm(f => ({
-      ...f,
-      category: k
-    }));
+    setForm(f => {
+      const upd = {
+        ...f,
+        category: k
+      };
+      if (k === "Birthday" && (!f.recur || f.recur === "none")) upd.recur = "yearly";
+      return upd;
+    });
     setCatErr(false);
   }
   // A CATEGORY IS REQUIRED *(v116)*. "Date" was a default, not a choice. See TaskModal.
