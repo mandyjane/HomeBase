@@ -8063,6 +8063,28 @@ function App({
   });
   const [tab, setTab] = useState("home");
   const [listType, setListType] = useState("tasks");
+  // v640 · Chat card navigation — flash the target item after tab switch
+  function navigateToItem(targetTab, itemId) {
+    const tabMap = {
+      task: "tasks",
+      bill: "bills",
+      event: "events"
+    };
+    const t = tabMap[targetTab] || targetTab;
+    if (t === "tasks") setListType("tasks");
+    if (t === "events") setListType("events");
+    setTab(t);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-item-id="${CSS.escape(itemId)}"]`);
+      if (!el) return;
+      el.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+      el.classList.add("chat-flash");
+      setTimeout(() => el.classList.remove("chat-flash"), 2400);
+    }, 200);
+  }
   const [showPoints, setShowPoints] = useState(() => lsGet("hb_showPoints", true));
   // v237 · TWO COLLAPSIBLES ON THE DASHBOARD. The level cards and the household goal card
   // LOOK adjacent on screen but live in different render blocks — the level cards sit in the
@@ -10135,25 +10157,52 @@ function App({
   function sendToChat(item, type) {
     if (!currentUser) return;
     const p = people[item.assignee] || {};
-    let text = "";
+    const itemId = item._seriesId || item.id;
+    let text = "",
+      card = null;
     if (type === "task") {
       const cat = item.category ? item.category.toUpperCase() : "";
       const recLabel = item.recur && item.recur !== "none" ? "Repeats " + item.recur : "";
       text = `[Task] ${item.title}${cat ? " · " + cat : ""}${item.dueDate ? " · Due " + shortDate(item.dueDate) : ""}${recLabel ? " · " + recLabel : ""}${p.name ? " · " + p.name : ""}`;
+      const sub = [item.dueDate ? "Due " + shortDate(item.dueDate) : "", recLabel, p.name].filter(Boolean).join(" · ");
+      card = {
+        type: "task",
+        itemId,
+        title: item.title,
+        subtitle: sub
+      };
     } else if (type === "bill") {
       const amt = occAmount(item, item._occDate || item.dueDate);
       text = `[Bill] ${item.title} — ${fmtMoney(amt)}${item.dueDate ? " · Due " + shortDate(item.dueDate) : ""}${p.name ? " · " + p.name : ""}`;
+      const sub = [fmtMoney(amt), item.dueDate ? "Due " + shortDate(item.dueDate) : "", p.name].filter(Boolean).join(" · ");
+      card = {
+        type: "bill",
+        itemId,
+        title: item.title,
+        subtitle: sub,
+        amount: amt
+      };
     } else if (type === "event") {
       const time = item.time ? fmtTime(item.time) : "";
       const endT = item.endTime ? " – " + fmtTime(item.endTime) : "";
       text = `[Event] ${item.title}${time ? " · " + time + endT : ""}${item.date ? " · " + shortDate(item.date) : ""}${item.place ? " · " + item.place : ""}${p.name ? " · " + p.name : ""}`;
+      const sub = [time ? time + endT : "", item.date ? shortDate(item.date) : "", item.place, p.name].filter(Boolean).join(" · ");
+      card = {
+        type: "event",
+        itemId,
+        title: item.title,
+        subtitle: sub
+      };
     }
     if (!text) return;
     const msg = {
       id: Date.now(),
       text,
       author: currentUser,
-      t: new Date().toISOString()
+      t: new Date().toISOString(),
+      ...(card ? {
+        card
+      } : {})
     };
     setChatMessages(m => {
       const next = [...m, msg];
@@ -14625,6 +14674,8 @@ function App({
         button.sans{font-family:'Roboto Condensed',sans-serif}
         .lbl{font-family:'Roboto Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:${C.inkMute}}
         .card-tap{cursor:pointer;transition:transform 0.16s,box-shadow 0.16s}
+        @keyframes chatFlash{0%,100%{box-shadow:none}15%,85%{box-shadow:0 0 0 2px var(--accent,#5EE7B4),0 0 18px rgba(94,231,180,0.35)}}
+        .chat-flash{animation:chatFlash 2.4s ease!important}
         .card-tap:active{transform:scale(0.99)}
         input,select,textarea{background:${C.pageWarm} !important;color:${C.ink} !important;border:1.5px solid ${C.rule} !important;border-radius:12px !important;padding:11px 13px !important;font-family:'Roboto Condensed',sans-serif !important;font-size:14px !important;width:100%;max-width:100% !important;box-sizing:border-box !important;outline:none !important;transition:border-color 0.18s}
         input[type="date"],input[type="time"]{-webkit-min-logical-width:0 !important;min-width:0 !important;width:100% !important;max-width:100% !important;overflow:hidden !important}
@@ -18799,7 +18850,8 @@ function App({
         sbChatPush("hb_chatMessages", next);
         _lsSetOrig("hb_chatMessages", next);
         return next;
-      })
+      }),
+      onNavigate: navigateToItem
     }), tab === "settings" && /*#__PURE__*/React.createElement(SettingsPage, {
       tasks: tasks,
       events: events,
@@ -29778,6 +29830,7 @@ function TaskCard({
         position: "relative"
       }
     }, /*#__PURE__*/React.createElement("div", {
+      "data-item-id": task._seriesId || task.id,
       className: `card-tap${celebrate ? ` exit-${celebrate.exit}` : ""}`,
       style: {
         background: C.card,
@@ -35227,6 +35280,7 @@ function BillsTab({
     const cardShadow = hasOverdue ? `inset 4px 0 0 ${C.urgent}, ${C.shadowSm}` : C.shadowSm;
     return /*#__PURE__*/React.createElement("div", {
       key: r._key || r.bill.id,
+      "data-item-id": r.bill.id,
       style: {
         background: C.card,
         border: `1px solid ${hasOverdue ? C.urgent : C.rule}`,
@@ -68489,6 +68543,171 @@ function StockAddModal({
     }
   }, "Cancel")));
 }
+
+// v640 · Chat card — styled mini-card for tasks/bills/events sent to chat
+function ChatCard({
+  card,
+  onNavigate
+}) {
+  const cfg = {
+    task: {
+      color: "#5EE7B4",
+      soft: "rgba(94,231,180,0.14)",
+      label: "Task",
+      tab: "Tasks",
+      icon: /*#__PURE__*/React.createElement("svg", {
+        width: "16",
+        height: "16",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "#5EE7B4",
+        strokeWidth: "2",
+        strokeLinecap: "round"
+      }, /*#__PURE__*/React.createElement("path", {
+        d: "M9 11l3 3 8-8"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"
+      }))
+    },
+    bill: {
+      color: "#E0B84A",
+      soft: "rgba(224,184,74,0.15)",
+      label: "Bill",
+      tab: "Bills",
+      icon: /*#__PURE__*/React.createElement("svg", {
+        width: "16",
+        height: "16",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "#E0B84A",
+        strokeWidth: "2",
+        strokeLinecap: "round"
+      }, /*#__PURE__*/React.createElement("path", {
+        d: "M12 2v20M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6"
+      }))
+    },
+    event: {
+      color: "#5FA8E0",
+      soft: "rgba(95,168,224,0.16)",
+      label: "Event",
+      tab: "Events",
+      icon: /*#__PURE__*/React.createElement("svg", {
+        width: "16",
+        height: "16",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "#5FA8E0",
+        strokeWidth: "2",
+        strokeLinecap: "round"
+      }, /*#__PURE__*/React.createElement("rect", {
+        x: "3",
+        y: "4",
+        width: "18",
+        height: "18",
+        rx: "2"
+      }), /*#__PURE__*/React.createElement("path", {
+        d: "M16 2v4M8 2v4M3 10h18"
+      }))
+    }
+  };
+  const c = cfg[card.type] || cfg.task;
+  return /*#__PURE__*/React.createElement("div", {
+    onClick: e => {
+      e.stopPropagation();
+      if (onNavigate) onNavigate(card.type, card.itemId);
+    },
+    style: {
+      background: C.card,
+      border: `1px solid ${C.rule}`,
+      borderRadius: 10,
+      overflow: "hidden",
+      cursor: "pointer",
+      margin: "2px 0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "10px 12px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 32,
+      height: 32,
+      borderRadius: "50%",
+      background: c.soft,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0
+    }
+  }, c.icon), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: C.ink,
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis"
+    }
+  }, card.title), card.subtitle && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10.5,
+      color: C.inkMute,
+      marginTop: 1,
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis"
+    }
+  }, card.subtitle)), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 8,
+      fontWeight: 700,
+      letterSpacing: ".5px",
+      textTransform: "uppercase",
+      padding: "2px 7px",
+      borderRadius: 4,
+      background: c.soft,
+      color: c.color,
+      flexShrink: 0
+    }
+  }, c.label)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      padding: "5px 12px",
+      background: rgbaFromHex(C.accent, 0.06),
+      borderTop: `1px solid ${C.rule}`
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "10",
+    height: "10",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.accent,
+    strokeWidth: "2.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M5 12h14M13 6l6 6-6 6"
+  })), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 9,
+      color: C.accent,
+      fontWeight: 600
+    }
+  }, "View in ", c.tab)));
+}
 function ChatTab({
   messages,
   currentUser,
@@ -68498,7 +68717,8 @@ function ChatTab({
   onEdit,
   onReact,
   chatSeen,
-  voiceChatAutoSend
+  voiceChatAutoSend,
+  onNavigate
 }) {
   const [text, setText] = useState("");
   const [editId, setEditId] = useState(null);
@@ -68852,7 +69072,10 @@ function ChatTab({
         userSelect: "none",
         WebkitUserSelect: "none"
       }
-    }, /*#__PURE__*/React.createElement("p", {
+    }, m.card ? /*#__PURE__*/React.createElement(ChatCard, {
+      card: m.card,
+      onNavigate: onNavigate
+    }) : /*#__PURE__*/React.createElement("p", {
       className: "sans",
       style: {
         fontSize: 13.5,
@@ -71879,7 +72102,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v639"))))), diagOpen && (() => {
+  }, "v640"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
