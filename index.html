@@ -14204,8 +14204,8 @@ function App({
   const homeEventRows = homeAgenda.filter(isEventRow);
   const homeTaskRows = homeAgenda.filter(r => r.kind === "task" && !isBill(r.ref));
   // v633 · Urgent deadlines/projects get their own section above regular tasks
-  // v635 · Urgent deadlines/projects — ANY undone urgent deadline/project, regardless of due date
-  const homeUrgentRows = homeListTasks.filter(t => isDeadlineTask(t) && t.priority >= 5 && !t.done && !isPrivateHidden(t)).sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map(t => ({
+  // v636 · Urgent deadlines/projects — from homeByDate which already excludes done
+  const homeUrgentRows = homeByDate.filter(t => t.priority >= 5).sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map(t => ({
     kind: "task",
     ref: t,
     title: t.title,
