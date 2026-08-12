@@ -63954,25 +63954,67 @@ function RewardsModal({
   }, "Points target"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 6
+      gap: 6,
+      alignItems: "center"
     }
-  }, [50, 100, 150, 200, 250, 300].map(v => /*#__PURE__*/React.createElement("button", {
-    key: v,
-    onClick: () => setShared("target", v),
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setShared("target", Math.max(5, Math.round(((form.shared.target || 100) - 25) / 5) * 5)),
     className: "sans",
     style: {
-      flex: 1,
-      minWidth: 0,
-      padding: "9px 0",
-      borderRadius: 20,
+      flex: "0 0 38px",
+      height: 44,
+      borderRadius: 11,
+      border: `1.5px solid ${C.rule}`,
+      background: C.card,
+      color: C.inkSoft,
+      fontSize: 17,
+      fontWeight: 700,
       cursor: "pointer",
-      border: `1.5px solid ${form.shared.target === v ? C.accent : C.rule}`,
-      background: form.shared.target === v ? C.accentSoft : C.card,
-      color: form.shared.target === v ? C.accent : C.inkMute,
-      fontSize: 12,
-      fontWeight: 700
+      padding: 0
     }
-  }, v))))), /*#__PURE__*/React.createElement("div", {
+  }, "-"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "numeric",
+    min: "5",
+    max: "999",
+    value: form.shared.target || 100,
+    onChange: e => {
+      const n = e.target.value;
+      setShared("target", n === "" ? "" : Math.min(999, Math.round(Number(n)) || 5));
+    },
+    onBlur: e => setShared("target", Math.max(5, Math.min(999, Math.round(Number(e.target.value)) || 100))),
+    className: "sans",
+    style: {
+      flex: "1 1 auto",
+      minWidth: 0,
+      textAlign: "center",
+      fontWeight: 700,
+      fontSize: 16,
+      height: 44,
+      borderRadius: 11,
+      border: `1.5px solid ${C.accent}`,
+      background: C.card,
+      color: C.ink,
+      fontFamily: "'Roboto Condensed',sans-serif"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setShared("target", Math.min(999, Math.round(((form.shared.target || 100) + 25) / 5) * 5)),
+    className: "sans",
+    style: {
+      flex: "0 0 38px",
+      height: 44,
+      borderRadius: 11,
+      border: `1.5px solid ${C.rule}`,
+      background: C.card,
+      color: C.inkSoft,
+      fontSize: 17,
+      fontWeight: 700,
+      cursor: "pointer",
+      padding: 0
+    }
+  }, "+")))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.card,
       border: `1px solid ${C.rule}`,
@@ -64254,25 +64296,67 @@ function RewardsModal({
   }, "Points target"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
-      gap: 6
+      gap: 6,
+      alignItems: "center"
     }
-  }, [25, 50, 75, 100, 150, 200].map(v => /*#__PURE__*/React.createElement("button", {
-    key: v,
-    onClick: () => setPersonal("target", v),
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setPersonal("target", Math.max(5, Math.round(((form.her.target || 100) - 25) / 5) * 5)),
     className: "sans",
     style: {
-      flex: 1,
-      minWidth: 0,
-      padding: "9px 0",
-      borderRadius: 20,
+      flex: "0 0 38px",
+      height: 44,
+      borderRadius: 11,
+      border: `1.5px solid ${C.rule}`,
+      background: C.card,
+      color: C.inkSoft,
+      fontSize: 17,
+      fontWeight: 700,
       cursor: "pointer",
-      border: `1.5px solid ${form.her.target === v ? C.low : C.rule}`,
-      background: form.her.target === v ? softTint(C.low) : C.card,
-      color: form.her.target === v ? C.low : C.inkMute,
-      fontSize: 12,
-      fontWeight: 700
+      padding: 0
     }
-  }, v))))), /*#__PURE__*/React.createElement("div", {
+  }, "-"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "numeric",
+    min: "5",
+    max: "999",
+    value: form.her.target || 100,
+    onChange: e => {
+      const n = e.target.value;
+      setPersonal("target", n === "" ? "" : Math.min(999, Math.round(Number(n)) || 5));
+    },
+    onBlur: e => setPersonal("target", Math.max(5, Math.min(999, Math.round(Number(e.target.value)) || 100))),
+    className: "sans",
+    style: {
+      flex: "1 1 auto",
+      minWidth: 0,
+      textAlign: "center",
+      fontWeight: 700,
+      fontSize: 16,
+      height: 44,
+      borderRadius: 11,
+      border: `1.5px solid ${C.low}`,
+      background: C.card,
+      color: C.ink,
+      fontFamily: "'Roboto Condensed',sans-serif"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setPersonal("target", Math.min(999, Math.round(((form.her.target || 100) + 25) / 5) * 5)),
+    className: "sans",
+    style: {
+      flex: "0 0 38px",
+      height: 44,
+      borderRadius: 11,
+      border: `1.5px solid ${C.rule}`,
+      background: C.card,
+      color: C.inkSoft,
+      fontSize: 17,
+      fontWeight: 700,
+      cursor: "pointer",
+      padding: 0
+    }
+  }, "+")))), /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.card,
       border: `1px solid ${C.rule}`,
@@ -68931,13 +69015,15 @@ function StockScanOverlay({
       display: "flex",
       alignItems: "center",
       gap: 10,
-      padding: "9px 11px",
+      padding: "10px 12px",
       borderRadius: 10,
       border: `1.5px solid ${C.rule}`,
-      background: C.bg,
+      background: C.card,
+      color: C.ink,
       cursor: "pointer",
       width: "100%",
-      textAlign: "left"
+      textAlign: "left",
+      fontFamily: "'Roboto Condensed',sans-serif"
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -68951,7 +69037,6 @@ function StockScanOverlay({
     style: {
       fontSize: 13,
       fontWeight: 600,
-      color: C.ink,
       flex: 1
     }
   }, item.name), /*#__PURE__*/React.createElement("span", {
