@@ -14467,9 +14467,9 @@ function App({
     };
   }, [visTasks, bonusLog]);
 
-  // Per-person level info — from ALL-TIME points, not period points.
-  const herLevel = levelInfo(allTimePoints.her);
-  const himLevel = levelInfo(allTimePoints.him);
+  // Per-person level info — from period points (current period performance).
+  const herLevel = levelInfo(points.her);
+  const himLevel = levelInfo(points.him);
 
   // Reward goals: shared uses combined points; personal uses own points.
   const combinedPoints = (points.her || 0) + (points.him || 0);
@@ -15689,7 +15689,7 @@ function App({
           color: personColor(people[key].color),
           fontWeight: 700
         }
-      }, "\u00b7 ", allTimePoints[key]))));
+      }, "\u00b7 ", earnedPts[key]))));
     })(), /*#__PURE__*/React.createElement("span", {
       style: {
         flex: 1,
@@ -15839,7 +15839,7 @@ function App({
           color: C.ink,
           lineHeight: 1
         }
-      }, allTimePoints[key]), /*#__PURE__*/React.createElement("span", {
+      }, earned), /*#__PURE__*/React.createElement("span", {
         className: "sans",
         style: {
           fontSize: 9,
