@@ -6782,12 +6782,12 @@ async function sbPullAll() {
     return;
   }
   if (!data || !data.length) return;
-  let changed = false;
+  // v658 · Return the Set of keys that actually changed so callers can
+  // selectively re-read state (truthy for backwards compat with boolean checks).
+  const changedKeys = new Set();
   data.forEach(row => {
     try {
       // v619 · Skip appearance keys — they are per-user, local-only preferences.
-      // Stale entries in sync_store (pushed before the key was in APPEARANCE_KEYS)
-      // must not overwrite the local user-keyed value on every pull.
       if (APPEARANCE_KEYS.has(row.key.replace(/_[0-9a-f-]+$/, ""))) return;
       const local = localStorage.getItem(row.key);
       const remote = JSON.stringify(row.value);
@@ -6802,7 +6802,7 @@ async function sbPullAll() {
         const mergedStr = JSON.stringify(merged);
         if (local !== mergedStr) {
           localStorage.setItem(row.key, mergedStr);
-          changed = true;
+          changedKeys.add(row.key);
         }
         // v607 · Treat requests: merge by id — both devices add/update items
       } else if (row.key === "hb_treatRequests") {
@@ -6815,22 +6815,19 @@ async function sbPullAll() {
         const mergedStr = JSON.stringify(merged);
         if (local !== mergedStr) {
           localStorage.setItem(row.key, mergedStr);
-          changed = true;
+          changedKeys.add(row.key);
         }
       } else if (local !== remote) {
         // v657 · Guard: skip if local push is pending OR if we pushed this key
-        // within the last 10s. The v653 guard compared client Date.now() against
-        // Supabase server updated_at — clock skew (server ahead by even a few
-        // hundred ms) made our own write look older than the echo, so the guard
-        // failed. Pure client-side comparison eliminates clock skew entirely.
+        // within the last 10s. Pure client-side comparison eliminates clock skew.
         if (sbPending[row.key]) return;
         if (sbPushTimestamps[row.key] && Date.now() - sbPushTimestamps[row.key] < 10000) return;
         localStorage.setItem(row.key, remote);
-        changed = true;
+        changedKeys.add(row.key);
       }
     } catch {}
   });
-  return changed;
+  return changedKeys.size ? changedKeys : null;
 }
 
 // Push all hb_ keys from localStorage to Supabase (initial seed)
@@ -7707,6 +7704,9 @@ function AppRoot() {
     return false; // will be resolved by useEffect
   });
   const [checking, setChecking] = useState(true);
+  // v658 · Track which keys changed so the sync re-read only refreshes those,
+  // not all state. Prevents a chat/event echo from overwriting recently-modified tasks.
+  const syncDirtyRef = useRef(new Set());
   const [syncVersion, setSyncVersion] = useState(0);
   useEffect(() => {
     const sb = sbInit();
@@ -7739,7 +7739,11 @@ function AppRoot() {
             });
             // Real-time subscription — on genuine remote update, bump syncVersion
             // so App re-reads from localStorage WITHOUT remounting.
-            sbSubscribe(() => setSyncVersion(v => v + 1));
+            // v658 · Track the key so sync re-read only refreshes what changed.
+            sbSubscribe(key => {
+              syncDirtyRef.current.add(key);
+              setSyncVersion(v => v + 1);
+            });
           } else {
             setChecking(false);
           }
@@ -7755,7 +7759,10 @@ function AppRoot() {
       setAuthed(true);
       sbSeedAll();
     });
-    sbSubscribe(() => setSyncVersion(v => v + 1));
+    sbSubscribe(key => {
+      syncDirtyRef.current.add(key);
+      setSyncVersion(v => v + 1);
+    });
   }
   if (checking) return null;
   if (!authed) return React.createElement(LoginScreen, {
@@ -7764,13 +7771,15 @@ function AppRoot() {
   return React.createElement(CrashBoundary, null, React.createElement(App, {
     sbUserName,
     sbUserId,
-    syncVersion
+    syncVersion,
+    syncDirtyRef
   }));
 }
 function App({
   sbUserName,
   sbUserId: _sbUserId,
-  syncVersion = 0
+  syncVersion = 0,
+  syncDirtyRef
 }) {
   const [tasks, setTasks] = useState(() => {
     let loaded = lsGet("hb_tasks", SAMPLE) || [];
@@ -9587,12 +9596,24 @@ function App({
   // When the other device pushes a change, AppRoot bumps syncVersion. This effect
   // re-reads the affected state from localStorage WITHOUT remounting the component,
   // so the current tab, scroll position, and expanded cards all stay put.
+  //
+  // v658 · KEY-AWARE RE-READ. Before this fix, every syncVersion bump re-read ALL
+  // state including tasks/events — even when the bump was from a chat message or
+  // treat request. If the realtime handler correctly blocked stale hb_tasks data
+  // (via the 10s push guard), this effect undid that protection by blindly reading
+  // hb_tasks from localStorage. Now we only refresh keys the handler actually wrote.
   useEffect(() => {
     if (syncVersion < 1) return; // skip initial mount
-    const syncedTasks = lsGet("hb_tasks", SAMPLE) || [];
+    const dirty = syncDirtyRef ? syncDirtyRef.current : null;
+    if (syncDirtyRef) syncDirtyRef.current = new Set();
+    // Tasks + events: only refresh if the realtime handler actually wrote them
+    const syncTasks = !dirty || dirty.has("hb_tasks");
+    const syncEvents = !dirty || dirty.has("hb_events");
+    const syncedTasks = syncTasks ? lsGet("hb_tasks", SAMPLE) || [] : tasks;
+    if (syncTasks) setTasks(syncedTasks);
+    if (syncEvents) setEvents(lsGet("hb_events", SAMPLE_EVENTS));
+    // Lightweight keys: always refresh (low-risk, need to stay in sync)
     const syncedBonusLog = lsGet("hb_bonusLog", []);
-    setTasks(syncedTasks);
-    setEvents(lsGet("hb_events", SAMPLE_EVENTS));
     setPointsPeriods(lsGet("hb_pointsPeriods", {
       week: {
         her: 0,
@@ -9630,7 +9651,6 @@ function App({
     setTreatApproval(lsGet("hb_treatApproval", false));
     setPointsResetAt(lsGet("hb_pointsResetAt", null));
     // v533 · Auto-recount points after sync to prevent drift from last-write-wins.
-    // Uses ground truth (task completion data + bonus log) instead of the synced total.
     const _rr = lsGet("hb_rewardReset", null);
     const _fp = freshPeriods(null, _rr);
     const _starts = [_fp.week.key, _fp.fort.key, _fp.month.key].filter(Boolean).sort();
@@ -9669,13 +9689,15 @@ function App({
         // The push notification arrives faster than the realtime subscription,
         // so tapping a notification often shows stale data. sbPullAll writes to
         // localStorage, then we re-read affected state.
-        // v606 · Explicitly re-read treatRequests after pull so approval cards appear
+        // v658 · sbPullAll now returns a Set of changed keys (or null). Only refresh
+        // the state variables whose keys actually changed. This prevents a pull from
+        // overwriting recently-modified tasks/events when those keys were guarded.
         sbPullAll().then(changed => {
           if (!changed) return;
-          setTreatRequests(lsGet("hb_treatRequests", []));
-          setTasks(lsGet("hb_tasks", SAMPLE) || []);
-          setEvents(lsGet("hb_events", SAMPLE_EVENTS));
-          setRewards(lsGet("hb_rewards", DEFAULT_REWARDS));
+          if (changed.has("hb_treatRequests")) setTreatRequests(lsGet("hb_treatRequests", []));
+          if (changed.has("hb_tasks")) setTasks(lsGet("hb_tasks", SAMPLE) || []);
+          if (changed.has("hb_events")) setEvents(lsGet("hb_events", SAMPLE_EVENTS));
+          if (changed.has("hb_rewards")) setRewards(lsGet("hb_rewards", DEFAULT_REWARDS));
         });
       }
     };
@@ -73507,7 +73529,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v657"))))), diagOpen && (() => {
+  }, "v658"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
