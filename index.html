@@ -14457,9 +14457,19 @@ function App({
     };
   })];
 
-  // Per-person level info (each levels on their own points).
-  const herLevel = levelInfo(points.her);
-  const himLevel = levelInfo(points.him);
+  // v647 · All-time points — drives levels and the big PTS number on dashboard + tasks tab
+  const allTimePoints = useMemo(() => {
+    const h = [...collectCompletedTasks(visTasks, "her", null, null, null), ...collectBonusActivity(bonusLog, "her", null, null, null)].reduce((s, t) => s + (t.points || 0), 0);
+    const m = [...collectCompletedTasks(visTasks, "him", null, null, null), ...collectBonusActivity(bonusLog, "him", null, null, null)].reduce((s, t) => s + (t.points || 0), 0);
+    return {
+      her: h,
+      him: m
+    };
+  }, [visTasks, bonusLog]);
+
+  // Per-person level info — from ALL-TIME points, not period points.
+  const herLevel = levelInfo(allTimePoints.her);
+  const himLevel = levelInfo(allTimePoints.him);
 
   // Reward goals: shared uses combined points; personal uses own points.
   const combinedPoints = (points.her || 0) + (points.him || 0);
@@ -15679,7 +15689,7 @@ function App({
           color: personColor(people[key].color),
           fontWeight: 700
         }
-      }, "\u00b7 ", earnedPts[key]))));
+      }, "\u00b7 ", allTimePoints[key]))));
     })(), /*#__PURE__*/React.createElement("span", {
       style: {
         flex: 1,
@@ -15829,7 +15839,7 @@ function App({
           color: C.ink,
           lineHeight: 1
         }
-      }, earned), /*#__PURE__*/React.createElement("span", {
+      }, allTimePoints[key]), /*#__PURE__*/React.createElement("span", {
         className: "sans",
         style: {
           fontSize: 9,
@@ -15986,7 +15996,7 @@ function App({
         color: C.ink,
         marginLeft: 2
       }
-    }, points[key]), /*#__PURE__*/React.createElement("span", {
+    }, allTimePoints[key]), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
         fontSize: 9,
@@ -62249,6 +62259,13 @@ function PersonSheet({
   }, [tasks, bonusLog, who, periodStartDate, resetFilter]);
   // v645 · Ground truth points — always consistent with Activity tab
   const groundTruthPts = activityTasks.reduce((s, t) => s + (t.points || 0), 0);
+  // v647 · All-time points for level and header display
+  const allTimePtsPS = useMemo(() => {
+    if (who === "shared") return 0;
+    const t = collectCompletedTasks(tasks, who, null, null, null);
+    const b = collectBonusActivity(bonusLog, who, null, null, null);
+    return [...t, ...b].reduce((s, x) => s + (x.points || 0), 0);
+  }, [tasks, bonusLog, who]);
   return /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
     className: "hb-scrim",
@@ -62317,7 +62334,7 @@ function PersonSheet({
       alignItems: "center",
       gap: 6
     }
-  }, /*#__PURE__*/React.createElement("span", null, who === "shared" ? "Shared goal" : `Level ${levelInfo(groundTruthPts).level} \u00b7 ${groundTruthPts} points`), who === "shared" && /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("span", null, who === "shared" ? "Shared goal" : `Level ${levelInfo(allTimePtsPS).level} \u00b7 ${allTimePtsPS} points`), who === "shared" && /*#__PURE__*/React.createElement("span", {
     style: {
       marginLeft: "auto",
       fontWeight: 700,
@@ -72963,7 +72980,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v646"))))), diagOpen && (() => {
+  }, "v647"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
