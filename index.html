@@ -6818,12 +6818,11 @@ async function sbPullAll() {
           changed = true;
         }
       } else if (local !== remote) {
-        // v656 · Guard: skip if local push is pending OR if we pushed this key
-        // within the last 10 seconds. The v653 guard compared client Date.now()
-        // against Supabase server updated_at — clock skew between client and server
-        // caused the guard to fail (server a few hundred ms ahead makes our own
-        // write look older than the echo). Pure client-side comparison eliminates
-        // this. 10s is generous enough for any echo/re-push chain to settle.
+        // v657 · Guard: skip if local push is pending OR if we pushed this key
+        // within the last 10s. The v653 guard compared client Date.now() against
+        // Supabase server updated_at — clock skew (server ahead by even a few
+        // hundred ms) made our own write look older than the echo, so the guard
+        // failed. Pure client-side comparison eliminates clock skew entirely.
         if (sbPending[row.key]) return;
         if (sbPushTimestamps[row.key] && Date.now() - sbPushTimestamps[row.key] < 10000) return;
         localStorage.setItem(row.key, remote);
@@ -6899,8 +6898,7 @@ function sbSubscribe(onUpdate) {
         localStorage.setItem(row.key, JSON.stringify(merged));
         if (onUpdate) onUpdate(row.key);
       } else {
-        // v656 · Skip if local push is pending or was pushed within the last 10s.
-        // v653 compared client time vs server time — clock skew broke the guard.
+        // v657 · Skip if local push is pending or pushed within 10s (client-side only).
         if (sbPending[row.key]) return;
         if (sbPushTimestamps[row.key] && Date.now() - sbPushTimestamps[row.key] < 10000) return;
         const remote = JSON.stringify(row.value);
@@ -9591,21 +9589,10 @@ function App({
   // so the current tab, scroll position, and expanded cards all stay put.
   useEffect(() => {
     if (syncVersion < 1) return; // skip initial mount
-    // v656 · Guard: do NOT re-read tasks/events from localStorage if we have a
-    // pending push or pushed within the last 10s. A syncVersion bump can come from
-    // ANY key — if the realtime handler correctly blocked stale hb_tasks data, this
-    // re-read would undo that protection by reading from localStorage before the
-    // persistence effect has written.
-    const taskGuard = sbPending["hb_tasks"] || sbPushTimestamps["hb_tasks"] && Date.now() - sbPushTimestamps["hb_tasks"] < 10000;
-    const eventGuard = sbPending["hb_events"] || sbPushTimestamps["hb_events"] && Date.now() - sbPushTimestamps["hb_events"] < 10000;
-    if (!taskGuard) {
-      const syncedTasks = lsGet("hb_tasks", SAMPLE) || [];
-      setTasks(syncedTasks);
-    }
-    if (!eventGuard) {
-      setEvents(lsGet("hb_events", SAMPLE_EVENTS));
-    }
+    const syncedTasks = lsGet("hb_tasks", SAMPLE) || [];
     const syncedBonusLog = lsGet("hb_bonusLog", []);
+    setTasks(syncedTasks);
+    setEvents(lsGet("hb_events", SAMPLE_EVENTS));
     setPointsPeriods(lsGet("hb_pointsPeriods", {
       week: {
         her: 0,
@@ -9683,19 +9670,11 @@ function App({
         // so tapping a notification often shows stale data. sbPullAll writes to
         // localStorage, then we re-read affected state.
         // v606 · Explicitly re-read treatRequests after pull so approval cards appear
-        // v656 · Guard: sbPullAll itself blocks stale data for recently-pushed keys,
-        // but the setTasks/setEvents below must also respect the guard — if sbPullAll
-        // skipped hb_tasks (guard active), reading from localStorage here is fine
-        // (it still has our local version). If the guard expired, sbPullAll wrote
-        // the remote version and we pick that up. Either way, the guard here
-        // prevents a race where sbPullAll writes stale data just as the guard expires.
         sbPullAll().then(changed => {
           if (!changed) return;
           setTreatRequests(lsGet("hb_treatRequests", []));
-          const tGuard = sbPending["hb_tasks"] || sbPushTimestamps["hb_tasks"] && Date.now() - sbPushTimestamps["hb_tasks"] < 10000;
-          const eGuard = sbPending["hb_events"] || sbPushTimestamps["hb_events"] && Date.now() - sbPushTimestamps["hb_events"] < 10000;
-          if (!tGuard) setTasks(lsGet("hb_tasks", SAMPLE) || []);
-          if (!eGuard) setEvents(lsGet("hb_events", SAMPLE_EVENTS));
+          setTasks(lsGet("hb_tasks", SAMPLE) || []);
+          setEvents(lsGet("hb_events", SAMPLE_EVENTS));
           setRewards(lsGet("hb_rewards", DEFAULT_REWARDS));
         });
       }
@@ -73528,7 +73507,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v656"))))), diagOpen && (() => {
+  }, "v657"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
