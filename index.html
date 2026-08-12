@@ -12226,6 +12226,14 @@ function App({
         }))
       });
       setShowAdd(true);
+    } else if (q.data.category === SHIFT_CAT) {
+      // v648 · Shift quick-adds open ShiftModal, not EventModal
+      setEditShift({
+        ...q.data,
+        date: todayStr(),
+        recur: "none"
+      });
+      setShowShiftModal(true);
     } else {
       setEditEvent({
         ...q.data,
@@ -14277,7 +14285,8 @@ function App({
   const homeTaskRows = homeAgenda.filter(r => r.kind === "task" && !isBill(r.ref));
   // v633 · Urgent deadlines/projects get their own section above regular tasks
   // v636 · Urgent deadlines/projects — from homeByDate which already excludes done
-  const homeUrgentRows = homeByDate.filter(t => t.priority >= 5).sort((a, b) => a.dueDate.localeCompare(b.dueDate)).map(t => ({
+  // v648 · Urgent section includes priority>=5 AND overdue tasks (deadlines, projects, regular)
+  const homeUrgentRows = homeByDate.filter(t => t.priority >= 5 || t.dueDate && t.dueDate < today).sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "")).map(t => ({
     kind: "task",
     ref: t,
     title: t.title,
@@ -14292,7 +14301,8 @@ function App({
     done: false,
     taskTime: t.time ? fmtTime(t.time) : null
   }));
-  const homeOtherRows = homeTaskRows.filter(r => !(isDeadlineTask(r.ref) && r.ref.priority >= 5));
+  const _urgentIds = new Set(homeUrgentRows.map(r => r.ref._seriesId || r.ref.id));
+  const homeOtherRows = homeTaskRows.filter(r => !_urgentIds.has(r.ref._seriesId || r.ref.id));
   const homeBillRows = homeBillAll.filter(r => !r.done);
   const homeBillPaid = homeBillAll.filter(r => r.done);
   const homeBillTotal = homeBillRows.reduce((a, r) => a + occAmount(r.ref, r._occDate || r.date), 0);
