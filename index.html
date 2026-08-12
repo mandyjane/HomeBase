@@ -6812,6 +6812,12 @@ async function sbPullAll() {
           changed = true;
         }
       } else if (local !== remote) {
+        // v651 · Guard: skip keys that have a pending local push — the local version
+        // is newer than what Supabase has. Without this, the 500ms debounce window
+        // lets a realtime event overwrite a completion the user just made.
+        if (sbPending[row.key] || (row.key === "hb_tasks" || row.key === "hb_events") && sbLastLocalWrite && Date.now() - sbLastLocalWrite < 2000) {
+          return; // local is ahead — don't overwrite
+        }
         localStorage.setItem(row.key, remote);
         changed = true;
       }
@@ -6885,6 +6891,8 @@ function sbSubscribe(onUpdate) {
         localStorage.setItem(row.key, JSON.stringify(merged));
         if (onUpdate) onUpdate(row.key);
       } else {
+        // v651 · Skip if we have a pending local push for this key — local is ahead
+        if (sbPending[row.key]) return;
         const remote = JSON.stringify(row.value);
         const local = localStorage.getItem(row.key);
         if (local !== remote) {
@@ -73568,7 +73576,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v651"))))), diagOpen && (() => {
+  }, "v652"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
