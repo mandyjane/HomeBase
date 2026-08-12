@@ -40078,8 +40078,8 @@ const PLAN_TAB_ICONS = {
   work: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
   meal: "M3 2v7c0 1.1.9 2 2 2h2a2 2 0 0 0 2-2V2M6 2v20M15 2v20M15 8c0-3 1.5-6 4-6v20"
 };
-// ORDER LIVES HERE, ONCE. Mandy's order: Tasks, Bills, Events, Work, Meals.
-const PLAN_TABS = ["chore", "bill", "event", "work", "meal"];
+// ORDER LIVES HERE, ONCE. v651: Tasks/Bills/Events hidden — only Work + Meals used.
+const PLAN_TABS = ["work", "meal"];
 // LABELS, ONCE. Colours are read from live tokens at render time (they follow the
 // theme), so this holds only the text — but it means RotaModal and PlanWeekSheet can
 // never disagree about what a tab is called.
@@ -73568,7 +73568,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v650"))))), diagOpen && (() => {
+  }, "v651"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
