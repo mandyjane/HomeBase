@@ -41515,12 +41515,12 @@ function RotaModal({
   }, [events, person, monday, weekEnd]);
   const [rows, setRows] = useState(seeded);
   // Re-seed whenever the week or person changes.
+  // v648 · Only reset rows when person or week changes. Event-data updates from sync
+  // must NOT wipe user edits mid-planning — seeded is read at render time anyway.
   useEffect(() => {
     setRows(seeded);
-    setDelAsk(null);
-  }, [seeded]);
-  useEffect(() => {
     setOpenDay(null);
+    setDelAsk(null);
   }, [person, monday]);
   const saved = [...(savedShifts || [])].filter(s => s.time).sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
   function setDay(date, data) {
