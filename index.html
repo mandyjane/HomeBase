@@ -14457,19 +14457,20 @@ function App({
     };
   })];
 
-  // v647 · All-time points — drives levels and the big PTS number on dashboard + tasks tab
+  // v648 · "All time since reset" points — matches Activity tab's totals exactly.
+  // Uses effectiveResetAt as the floor so pre-reset tasks are excluded.
   const allTimePoints = useMemo(() => {
-    const h = [...collectCompletedTasks(visTasks, "her", null, null, null), ...collectBonusActivity(bonusLog, "her", null, null, null)].reduce((s, t) => s + (t.points || 0), 0);
-    const m = [...collectCompletedTasks(visTasks, "him", null, null, null), ...collectBonusActivity(bonusLog, "him", null, null, null)].reduce((s, t) => s + (t.points || 0), 0);
+    const h = [...collectCompletedTasks(visTasks, "her", null, null, effectiveResetAt), ...collectBonusActivity(bonusLog, "her", null, null, effectiveResetAt)].reduce((s, t) => s + (t.points || 0), 0);
+    const m = [...collectCompletedTasks(visTasks, "him", null, null, effectiveResetAt), ...collectBonusActivity(bonusLog, "him", null, null, effectiveResetAt)].reduce((s, t) => s + (t.points || 0), 0);
     return {
       her: h,
       him: m
     };
-  }, [visTasks, bonusLog]);
+  }, [visTasks, bonusLog, effectiveResetAt]);
 
-  // Per-person level info — from period points (current period performance).
-  const herLevel = levelInfo(points.her);
-  const himLevel = levelInfo(points.him);
+  // v648 · Per-person level info — from all-time-since-reset points.
+  const herLevel = levelInfo(allTimePoints.her);
+  const himLevel = levelInfo(allTimePoints.him);
 
   // Reward goals: shared uses combined points; personal uses own points.
   const combinedPoints = (points.her || 0) + (points.him || 0);
@@ -62259,13 +62260,13 @@ function PersonSheet({
   }, [tasks, bonusLog, who, periodStartDate, resetFilter]);
   // v645 · Ground truth points — always consistent with Activity tab
   const groundTruthPts = activityTasks.reduce((s, t) => s + (t.points || 0), 0);
-  // v647 · All-time points for level and header display
+  // v648 · All-time-since-reset points for level and header display
   const allTimePtsPS = useMemo(() => {
     if (who === "shared") return 0;
-    const t = collectCompletedTasks(tasks, who, null, null, null);
-    const b = collectBonusActivity(bonusLog, who, null, null, null);
+    const t = collectCompletedTasks(tasks, who, null, null, pointsResetAt);
+    const b = collectBonusActivity(bonusLog, who, null, null, pointsResetAt);
     return [...t, ...b].reduce((s, x) => s + (x.points || 0), 0);
-  }, [tasks, bonusLog, who]);
+  }, [tasks, bonusLog, who, pointsResetAt]);
   return /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
     className: "hb-scrim",
@@ -72980,7 +72981,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v647"))))), diagOpen && (() => {
+  }, "v648"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
