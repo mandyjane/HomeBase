@@ -16517,17 +16517,9 @@ function App({
       }), /*#__PURE__*/React.createElement("path", {
         d: "M15.5 14.5a4.6 4.6 0 0 1 5 4.5"
       }));
-      // v610 · Compute earned points from ground truth (same as Home level cards)
-      const taskTabPts = {};
-      ["her", "him"].forEach(k => {
-        const g = rewards[k] || DEFAULT_REWARDS[k];
-        const p = migratePeriod(g.period);
-        const bk = periodBucket(p, fp);
-        const _pStart = bk ? bk.key : null;
-        const _acts = collectCompletedTasks(visTasks, k, _pStart, null, effectiveResetAt);
-        const _bActs = collectBonusActivity(bonusLog, k, _pStart, null, effectiveResetAt);
-        taskTabPts[k] = [..._acts, ..._bActs].reduce((s, t) => s + (t.points || 0), 0);
-      });
+      // v660 · Tasks tab pills show all-time-since-reset points (allTimePoints),
+      // not the period-based computation that was here before. The v648 fix added
+      // allTimePoints but this code path still used periodBucket-based calculation.
       return /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
@@ -16573,7 +16565,7 @@ function App({
           color: C.ink,
           marginLeft: 1
         }
-      }, taskTabPts[key]))), /*#__PURE__*/React.createElement("div", {
+      }, allTimePoints[key]))), /*#__PURE__*/React.createElement("div", {
         style: {
           flex: 1
         }
@@ -50821,7 +50813,7 @@ function WorkTab({
   useEffect(() => {
     lsSet("hb_dayOpen", dayOpen);
   }, [dayOpen]);
-  const [showPast, setShowPast] = useState(false); // expand past shifts (week-grouped)
+  const [workView, setWorkView] = useState("upcoming"); // v661 · upcoming | past
   // v544 · Public holiday lookup by date for day dividers
   const phByDate = useMemo(() => {
     const m = {};
@@ -51411,101 +51403,102 @@ function WorkTab({
     });
     return out;
   };
-  const PersonOT = ({
-    pkey
-  }) => {
-    const p = ot[pkey],
-      per = people[pkey];
-    return /*#__PURE__*/React.createElement("div", {
+
+  // v661 · Compact table-grid overview — shared column headers, one data row per person.
+  const OTTable = () => {
+    const tG = C.heroBot || "#5EE7B4";
+    const rows = PEOPLE_KEYS.map(k => {
+      const p = ot[k],
+        per = people[k];
+      const sickHrs = p.sick || 0,
+        leaveOnly = p.leave || 0,
+        leaveHrs = leaveOnly + sickHrs;
+      const otHrs = p.total;
+      const ordHrs = Math.max(0, p.worked - p.daily - p.weekly - leaveHrs);
+      const totalHrs = ordHrs + otHrs + leaveHrs;
+      return {
+        k,
+        per,
+        ordHrs,
+        otHrs,
+        leaveHrs,
+        totalHrs
+      };
+    });
+    const GRD = "70px 1fr 1fr 1fr 1fr";
+    return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
       style: {
-        marginBottom: 14
+        display: "grid",
+        gridTemplateColumns: GRD,
+        gap: 0,
+        marginBottom: 3
+      }
+    }, /*#__PURE__*/React.createElement("div", null), ["Ord", "OT", "Leave", "Total"].map((h, i) => /*#__PURE__*/React.createElement("div", {
+      key: h,
+      className: "lbl",
+      style: {
+        textAlign: "center",
+        fontSize: 8,
+        padding: "0 2px",
+        color: i === 3 ? tG : C.inkFaint
+      }
+    }, h))), rows.map(r => /*#__PURE__*/React.createElement("div", {
+      key: r.k,
+      style: {
+        display: "grid",
+        gridTemplateColumns: GRD,
+        gap: 4,
+        marginBottom: 4
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 9
+        gap: 6,
+        padding: "6px 0"
       }
     }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 8,
+        height: 8,
+        borderRadius: "50%",
+        background: personColor(r.per.color),
+        flexShrink: 0
+      }
+    }), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 9,
-        fontSize: 14,
-        fontWeight: 600,
+        fontSize: 12,
+        fontWeight: 700,
         color: C.ink
+      }
+    }, r.per.name)), [[r.ordHrs, "ord"], [r.otHrs, "ot"], [r.leaveHrs, "leave"], [r.totalHrs, "total"]].map(([val, kind]) => /*#__PURE__*/React.createElement("div", {
+      key: kind,
+      style: {
+        textAlign: "center",
+        padding: "6px 2px",
+        borderRadius: 9,
+        background: kind === "total" ? softTint(tG) : C.mood === "sleek" ? "rgba(255,255,255,0.03)" : C.pageWarm,
+        border: `1px solid ${kind === "total" ? mixHex(tG, C.card, 0.55) : C.ruleSoft}`
       }
     }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        width: 11,
-        height: 11,
-        borderRadius: "50%",
-        background: personColor(per.color)
-      }
-    }), per.name), /*#__PURE__*/React.createElement("span", {
       className: numClass(),
       style: {
-        fontSize: 20,
+        fontSize: 13,
         ...numItalic(),
-        color: C.ink
+        color: kind === "ot" ? val > 0 ? OT_COLOR : C.inkFaint : kind === "leave" ? val > 0 ? LEAVE_COLOR : C.inkFaint : kind === "total" ? tG : val > 0 ? C.ink : C.inkFaint
       }
-    }, fmtH(Math.max(0, p.worked - p.daily - p.weekly) + p.total))), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        gap: 6
-      }
-    }, (() => {
-      // v169 · OT hrs = daily + weekly + logged (p.total already folds manual in);
-      // Ord hrs = worked minus the OT portion inside it; Total = Ord + OT.
-      // v172 · Leave (sick+annual+TOIL) is ALREADY inside worked, so we SPLIT it
-      // out of Ord: Ord shows true worked-ordinary, Leave its own cell, and
-      // Total = Ord + OT + Leave stays exactly the previous total (no double-count).
-      const otHrs = p.total;
-      // v209 · sick and annual leave are SEPARATE amounts sharing ONE cell — five
-      // numeric cells will not fit 412px. The label names whichever is present so
-      // the number is never ambiguous; when both exist it reads "Leave / sick".
-      const sickHrs = p.sick || 0;
-      const leaveOnly = p.leave || 0;
-      const leaveHrs = leaveOnly + sickHrs;
-      const leaveLbl = leaveOnly > 0 && sickHrs > 0 ? "Leave / sick" : sickHrs > 0 ? "Sick hrs" : "Leave hrs";
-      const ordHrs = Math.max(0, p.worked - p.daily - p.weekly - leaveHrs);
-      const totalHrs = ordHrs + otHrs + leaveHrs;
-      return [["Ord hrs", ordHrs, "ord"], ["OT hrs", otHrs, "ot"], [leaveLbl, leaveHrs, "leave"], ["Total", totalHrs, "total"]].map(([lbl, val, kind]) => /*#__PURE__*/React.createElement("div", {
-        key: lbl,
-        style: {
-          flex: 1,
-          padding: "10px 5px",
-          borderRadius: 11,
-          background: kind === "total" ? softTint(C.heroBot || "#5EE7B4") : C.mood === "sleek" ? "rgba(255,255,255,0.03)" : C.pageWarm,
-          border: `1px solid ${kind === "total" ? mixHex(C.heroBot || "#5EE7B4", C.card, 0.55) : C.ruleSoft}`
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        className: "lbl",
-        style: {
-          fontSize: 8,
-          marginBottom: 4,
-          color: kind === "total" ? C.heroBot || "#5EE7B4" : C.inkFaint
-        }
-      }, lbl), /*#__PURE__*/React.createElement("div", {
-        className: numClass(),
-        style: {
-          fontSize: 14,
-          color: kind === "ot" ? val > 0 ? OT_COLOR : C.inkFaint : kind === "leave" ? val > 0 ? LEAVE_COLOR : C.inkFaint : kind === "total" ? C.heroBot || "#5EE7B4" : val > 0 ? C.ink : C.inkFaint
-        }
-      }, fmtH(val))));
-    })()));
+    }, fmtH(val)))))));
   };
   return /*#__PURE__*/React.createElement("div", {
     className: "fade"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.card,
-      borderRadius: otCollapsed ? 16 : 20,
-      padding: otCollapsed ? "0" : 20,
+      borderRadius: otCollapsed ? 16 : 18,
+      padding: otCollapsed ? "0" : "14px 16px",
       boxShadow: C.shadowMd,
-      marginBottom: 18,
+      marginBottom: 14,
       transition: "padding 0.15s"
     }
   }, otCollapsed ? /*#__PURE__*/React.createElement("div", {
@@ -51614,7 +51607,7 @@ function WorkTab({
       alignItems: "center",
       gap: 9,
       cursor: "pointer",
-      marginBottom: 16
+      marginBottom: 10
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -51671,7 +51664,7 @@ function WorkTab({
       borderRadius: 10,
       padding: 3,
       gap: 3,
-      marginBottom: 16
+      marginBottom: 10
     }
   }, [["week", "Week"], ...(anyFortnight ? [["fortnight", "Fortnight"]] : []), ["month", "Month"], ["year", "Year"]].map(([val, lbl]) => {
     const on = otPeriodSafe === val;
@@ -51715,11 +51708,7 @@ function WorkTab({
         margin: "-10px 0 12px"
       }
     }, fStr, " – ", tStr);
-  })(), otShiftCount > 0 ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(PersonOT, {
-    pkey: "her"
-  }), /*#__PURE__*/React.createElement(PersonOT, {
-    pkey: "him"
-  }), /*#__PURE__*/React.createElement("p", {
+  })(), otShiftCount > 0 ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(OTTable, null), /*#__PURE__*/React.createElement("p", {
     className: "sans",
     style: {
       fontSize: 11,
@@ -51838,7 +51827,34 @@ function WorkTab({
       textAlign: "center",
       padding: "20px 10px"
     }
-  }, "No upcoming shifts."), upcomingWeeks.map((w, wi) => /*#__PURE__*/React.createElement("div", {
+  }, "No upcoming shifts."), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      background: C.ruleSoft,
+      borderRadius: 12,
+      padding: 3,
+      gap: 3,
+      marginBottom: 14
+    }
+  }, [["upcoming", "Upcoming"], ["past", `Past (${pastCount})`]].map(([val, lbl]) => {
+    const on = workView === val;
+    return /*#__PURE__*/React.createElement("button", {
+      key: val,
+      onClick: () => setWorkView(val),
+      className: "sans",
+      style: {
+        flex: 1,
+        padding: "9px 4px",
+        borderRadius: 9,
+        border: "none",
+        cursor: "pointer",
+        fontSize: 12.5,
+        fontWeight: 700,
+        background: on ? SHIFT_COLOR : "transparent",
+        color: on ? "#fff" : C.inkMute
+      }
+    }, lbl);
+  })), workView === "upcoming" ? /*#__PURE__*/React.createElement(React.Fragment, null, upcomingWeeks.map((w, wi) => /*#__PURE__*/React.createElement("div", {
     key: w.wk,
     style: {
       marginBottom: wi < upcomingWeeks.length - 1 ? 20 : 8
@@ -51850,53 +51866,11 @@ function WorkTab({
     sick: w.sick,
     toil: w.toil,
     color: SHIFT_COLOR
-  }), renderWeekItems(w.items))), pastCount > 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 8
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setShowPast(p => !p),
-    className: "sans",
-    style: {
-      width: "100%",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-      background: C.card,
-      border: `1.5px solid ${C.rule}`,
-      borderRadius: 13,
-      padding: "12px",
-      color: C.inkSoft,
-      fontSize: 12.5,
-      fontWeight: 700,
-      cursor: "pointer",
-      boxShadow: C.shadowSm
-    }
-  }, /*#__PURE__*/React.createElement("svg", {
-    width: "15",
-    height: "15",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "2.2",
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    style: {
-      transform: showPast ? "rotate(180deg)" : "none",
-      transition: "transform 0.2s"
-    }
-  }, /*#__PURE__*/React.createElement("polyline", {
-    points: "6 9 12 15 18 9"
-  })), showPast ? "Hide past shifts" : `Show past shifts (${pastCount})`), showPast && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 16
-    }
-  }, pastWeeks.map(w => /*#__PURE__*/React.createElement("div", {
+  }), renderWeekItems(w.items)))) : /*#__PURE__*/React.createElement(React.Fragment, null, pastWeeks.length > 0 ? pastWeeks.map(w => /*#__PURE__*/React.createElement("div", {
     key: w.wk,
     style: {
       marginBottom: 20,
-      opacity: 0.82
+      opacity: 0.85
     }
   }, /*#__PURE__*/React.createElement(WeekDivider, {
     label: w.label,
@@ -51905,7 +51879,16 @@ function WorkTab({
     sick: w.sick,
     toil: w.toil,
     color: C.inkMute
-  }), renderWeekItems(w.items)))))), /*#__PURE__*/React.createElement(ConfirmDelete, {
+  }), renderWeekItems(w.items))) : /*#__PURE__*/React.createElement("p", {
+    className: "serif",
+    style: {
+      fontSize: 14,
+      fontStyle: "italic",
+      color: C.inkMute,
+      textAlign: "center",
+      padding: "22px 10px"
+    }
+  }, "No past shifts yet."))), /*#__PURE__*/React.createElement(ConfirmDelete, {
     open: !!delOT,
     title: "Delete this overtime?",
     body: delOT ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", {
@@ -73532,7 +73515,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v659"))))), diagOpen && (() => {
+  }, "v661"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
