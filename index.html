@@ -18388,6 +18388,53 @@ function App({
         ...i,
         current: val
       } : i)),
+      onUpdateSize: (id, sz, qty) => setStockItems(its => its.map(i => {
+        if (i.id !== id) return i;
+        const sizes = {
+          ...(i.sizes || {})
+        };
+        if (qty <= 0) {
+          const {
+            [sz]: _,
+            ...rest
+          } = sizes;
+          return {
+            ...i,
+            sizes: rest
+          };
+        }
+        sizes[sz] = {
+          ...(sizes[sz] || {
+            qty: 0
+          }),
+          qty
+        };
+        if (qty > 1 && sizes[sz].opened) sizes[sz].opened = false; // auto-clear opened when qty>1
+        return {
+          ...i,
+          sizes
+        };
+      })),
+      onToggleOpened: (id, sz) => setStockItems(its => its.map(i => {
+        if (i.id !== id) return i;
+        if (sz) {
+          const sizes = {
+            ...(i.sizes || {})
+          };
+          sizes[sz] = {
+            ...(sizes[sz] || {}),
+            opened: !sizes[sz]?.opened
+          };
+          return {
+            ...i,
+            sizes
+          };
+        }
+        return {
+          ...i,
+          opened: !i.opened
+        };
+      })),
       onEdit: item => {
         setEditStockItem(item);
         setShowStockAdd(true);
@@ -19212,9 +19259,14 @@ function App({
         ...i,
         current: qty
       } : i)),
-      onCreate: barcode => {
+      onCreate: (barcode, name, size) => {
         setShowStockScan(false);
-        setEditStockItem(null);
+        setEditStockItem({
+          _prefill: true,
+          name: name || '',
+          _barcode: barcode,
+          _size: size || ''
+        });
         setShowStockAdd(true);
       },
       onClose: () => setShowStockScan(false)
@@ -68006,9 +68058,20 @@ const STOCK_AREA_COLORS = {
   fridge: "#56B6C2",
   bathroom: "#A78BFA"
 };
+// v650 · Stock helpers — sizes, opened, current derivation
+function stockCurrent(item) {
+  if (item.sizes && Object.keys(item.sizes).length > 0) return Object.values(item.sizes).reduce((s, v) => s + (v.qty || 0), 0);
+  return item.current || 0;
+}
+function stockHasOpened(item) {
+  if (item.sizes) return Object.values(item.sizes).some(v => v.opened);
+  return !!item.opened;
+}
 function stockStatus(item) {
-  if (!item.current || item.current <= 0) return "out";
-  if (item.target > 0 && item.current / item.target <= 0.5) return "low";
+  const cur = stockCurrent(item);
+  if (!cur || cur <= 0) return "out";
+  if (stockHasOpened(item) && cur === 1) return "low";
+  if (item.target > 0 && cur / item.target <= 0.5) return "low";
   return "full";
 }
 const STOCK_STATUS_COLORS = {
@@ -68067,19 +68130,57 @@ const STOCK_CAT_ICONS = {
 function StockItemRow({
   item,
   onUpdate,
-  onEdit
+  onEdit,
+  onUpdateSize,
+  onToggleOpened
 }) {
   const st = stockStatus(item);
   const stc = STOCK_STATUS_COLORS[st];
   const cat = STOCK_CATS.find(c => c.key === item.category);
+  const cur = stockCurrent(item);
+  const hasSizes = item.sizes && Object.keys(item.sizes).length > 0;
+  const hasOpen = stockHasOpened(item);
+  const [expanded, setExpanded] = useState(false);
   return /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderBottom: `1px solid ${C.ruleSoft}`,
+      position: "relative",
+      overflow: "hidden"
+    }
+  }, hasOpen && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: -1,
+      right: -1,
+      width: 0,
+      height: 0,
+      borderStyle: "solid",
+      borderWidth: "0 26px 26px 0",
+      borderColor: `transparent #E0B84A transparent transparent`,
+      zIndex: 1
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      position: "absolute",
+      top: 4,
+      right: 0,
+      transform: "rotate(45deg)",
+      fontSize: 5.5,
+      fontWeight: 800,
+      color: "#0F1117",
+      letterSpacing: .2,
+      zIndex: 2
+    }
+  }, "OPEN")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
       gap: 8,
       padding: "8px 0",
-      borderBottom: `1px solid ${C.ruleSoft}`
-    }
+      cursor: hasSizes ? "pointer" : "default"
+    },
+    onClick: () => hasSizes && setExpanded(e => !e)
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       width: 4,
@@ -68094,7 +68195,12 @@ function StockItemRow({
       minWidth: 0,
       cursor: "pointer"
     },
-    onClick: () => onEdit && onEdit(item)
+    onClick: e => {
+      if (!hasSizes) {
+        e.stopPropagation();
+        onEdit && onEdit(item);
+      }
+    }
   }, /*#__PURE__*/React.createElement("div", {
     className: "sans",
     style: {
@@ -68112,7 +68218,7 @@ function StockItemRow({
       color: C.inkMute,
       marginTop: 1
     }
-  }, item.current, " of ", item.target, " ", item.unit || "")), cat && /*#__PURE__*/React.createElement("span", {
+  }, cur, " of ", item.target, " ", item.unit || "", hasOpen ? " · " + (hasSizes ? Object.values(item.sizes).filter(v => v.opened).length + " opened" : "opened") : "")), cat && /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: {
       fontSize: 8,
@@ -68125,7 +68231,7 @@ function StockItemRow({
       color: cat.color,
       flexShrink: 0
     }
-  }, cat.key === "bathroom" ? "Bath" : cat.label), /*#__PURE__*/React.createElement("div", {
+  }, cat.key === "bathroom" ? "Bath" : cat.label), !hasSizes && /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -68135,7 +68241,10 @@ function StockItemRow({
       flexShrink: 0
     }
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => onUpdate(item.id, Math.max(0, item.current - 1)),
+    onClick: e => {
+      e.stopPropagation();
+      onUpdate(item.id, Math.max(0, cur - 1));
+    },
     style: {
       width: 28,
       height: 26,
@@ -68153,7 +68262,8 @@ function StockItemRow({
     type: "number",
     inputMode: "numeric",
     min: "0",
-    value: item.current,
+    value: cur,
+    onClick: e => e.stopPropagation(),
     onChange: e => {
       const v = e.target.value;
       onUpdate(item.id, v === "" ? 0 : Math.max(0, Math.round(Number(v)) || 0));
@@ -68166,8 +68276,6 @@ function StockItemRow({
       fontSize: 12,
       fontWeight: 600,
       color: C.ink,
-      borderLeft: `1px solid ${C.rule}`,
-      borderRight: `1px solid ${C.rule}`,
       border: `1px solid ${C.rule}`,
       borderRadius: 0,
       fontFamily: "'Roboto Condensed',sans-serif",
@@ -68177,7 +68285,10 @@ function StockItemRow({
       WebkitAppearance: "none"
     }
   }), /*#__PURE__*/React.createElement("button", {
-    onClick: () => onUpdate(item.id, item.current + 1),
+    onClick: e => {
+      e.stopPropagation();
+      onUpdate(item.id, cur + 1);
+    },
     style: {
       width: 28,
       height: 26,
@@ -68191,7 +68302,160 @@ function StockItemRow({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, "+")));
+  }, "+")), hasSizes && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "right",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      color: C.ink
+    }
+  }, cur), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.inkMute,
+      marginLeft: 2
+    }
+  }, "/ ", item.target)), /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.inkFaint,
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    style: {
+      flexShrink: 0,
+      transform: expanded ? "rotate(180deg)" : "none",
+      transition: "transform 0.2s"
+    }
+  }, /*#__PURE__*/React.createElement("polyline", {
+    points: "6 9 12 15 18 9"
+  })))), hasSizes && expanded && /*#__PURE__*/React.createElement(React.Fragment, null, Object.entries(item.sizes).sort(([a], [b]) => b.localeCompare(a)).map(([sz, v]) => /*#__PURE__*/React.createElement("div", {
+    key: sz,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "8px 14px 8px 20px",
+      borderTop: `1px solid ${C.ruleSoft}`,
+      background: v.opened ? "rgba(224,184,74,0.04)" : "transparent"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      fontWeight: 700,
+      color: v.opened ? "#E0B84A" : "#5EE7B4",
+      minWidth: 50
+    }
+  }, sz), v.opened && /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 8,
+      fontWeight: 700,
+      letterSpacing: .4,
+      textTransform: "uppercase",
+      padding: "2px 7px",
+      borderRadius: 4,
+      background: "rgba(224,184,74,0.15)",
+      color: "#E0B84A"
+    }
+  }, "OPENED"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onToggleOpened && onToggleOpened(item.id, sz),
+    className: "sans",
+    style: {
+      fontSize: 9,
+      fontWeight: 600,
+      padding: "3px 8px",
+      borderRadius: 6,
+      border: `1px solid ${v.opened ? "#E0B84A" : C.rule}`,
+      background: v.opened ? "rgba(224,184,74,0.12)" : "transparent",
+      color: v.opened ? "#E0B84A" : C.inkMute,
+      cursor: "pointer"
+    }
+  }, v.opened ? "Close" : "Open"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      borderRadius: 8,
+      overflow: "hidden",
+      border: `1px solid ${C.rule}`,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onUpdateSize && onUpdateSize(item.id, sz, Math.max(0, (v.qty || 0) - 1)),
+    style: {
+      width: 26,
+      height: 24,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.card,
+      border: "none",
+      color: C.inkMute,
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "-"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      minWidth: 24,
+      height: 24,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 11,
+      fontWeight: 600,
+      color: C.ink,
+      background: C.bg,
+      borderLeft: `1px solid ${C.rule}`,
+      borderRight: `1px solid ${C.rule}`
+    }
+  }, v.qty || 0), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onUpdateSize && onUpdateSize(item.id, sz, (v.qty || 0) + 1),
+    style: {
+      width: 26,
+      height: 24,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.card,
+      border: "none",
+      color: C.inkMute,
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "+")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "6px 14px 8px 20px",
+      borderTop: `1px solid ${C.ruleSoft}`
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onEdit && onEdit(item),
+    className: "sans",
+    style: {
+      background: "none",
+      border: `1.5px dashed ${C.accent}`,
+      borderRadius: 8,
+      color: C.accent,
+      fontSize: 10,
+      fontWeight: 600,
+      padding: "5px 10px",
+      cursor: "pointer"
+    }
+  }, "+ Add size"))));
 }
 function StockView({
   items,
@@ -68657,9 +68921,42 @@ function StockScanOverlay({
   const streamRef = useRef(null);
   const lastScanRef = useRef("");
   const cooldownRef = useRef(0);
-  const [mode, setMode] = useState("in"); // "in" = +1, "out" = -1
+  const [mode, setMode] = useState(null); // null = ask each scan, "in" = bulk +1, "out" = bulk -1
+  const [askAction, setAskAction] = useState(null); // {item, code} — prompt for neutral mode
   const [toast, setToast] = useState(null);
-  const [linkPrompt, setLinkPrompt] = useState(null); // {barcode}
+  const [linkPrompt, setLinkPrompt] = useState(null); // {barcode, product?}
+  // v650 · Open Food Facts API lookup
+  async function lookupBarcode(code) {
+    setLinkPrompt({
+      barcode: code,
+      loading: true
+    });
+    try {
+      const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json`);
+      const d = await r.json();
+      if (d.status === 1 && d.product) {
+        const p = d.product;
+        setLinkPrompt({
+          barcode: code,
+          product: {
+            name: p.product_name || "",
+            brand: p.brands || "",
+            size: p.quantity || "",
+            image: p.image_front_small_url || "",
+            category: p.categories_tags?.[0]?.replace("en:", "").replace(/-/g, " ") || ""
+          }
+        });
+      } else {
+        setLinkPrompt({
+          barcode: code
+        });
+      }
+    } catch (e) {
+      setLinkPrompt({
+        barcode: code
+      });
+    }
+  }
   const [barcodes] = useState(() => lsGet("hb_stockBarcodes", {}));
   const saveBarcodes = b => {
     lsSet("hb_stockBarcodes", b);
@@ -68738,23 +69035,15 @@ function StockScanOverlay({
     if (itemId) {
       const item = items.find(i => i.id === itemId);
       if (item) {
-        const delta = mode === "in" ? 1 : -1;
-        const newQty = Math.max(0, item.current + delta);
-        onUpdate(item.id, newQty);
-        const status = stockStatus({
-          ...item,
-          current: newQty
-        });
-        setToast({
-          title: item.name,
-          delta,
-          newQty,
-          target: item.target,
-          unit: item.unit || "",
-          area: item.area || "",
-          mode
-        });
-        setTimeout(() => setToast(null), 2500);
+        if (mode === null) {
+          // Neutral mode — ask user what to do
+          setAskAction({
+            item,
+            code
+          });
+        } else {
+          applyDelta(item, mode === "in" ? 1 : -1);
+        }
       } else {
         setLinkPrompt({
           barcode: code
@@ -68765,6 +69054,20 @@ function StockScanOverlay({
         barcode: code
       });
     }
+  }
+  function applyDelta(item, delta) {
+    const newQty = Math.max(0, item.current + delta);
+    onUpdate(item.id, newQty);
+    setToast({
+      title: item.name,
+      delta,
+      newQty,
+      target: item.target,
+      unit: item.unit || "",
+      area: item.area || "",
+      mode: delta > 0 ? "in" : "out"
+    });
+    setTimeout(() => setToast(null), 2500);
   }
   function linkBarcode(code, itemId) {
     const bc = lsGet("hb_stockBarcodes", {});
@@ -68878,7 +69181,7 @@ function StockScanOverlay({
       border: "1px solid rgba(255,255,255,0.2)"
     }
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setMode("in"),
+    onClick: () => setMode(m => m === "in" ? null : "in"),
     className: "sans",
     style: {
       padding: "7px 14px",
@@ -68890,7 +69193,7 @@ function StockScanOverlay({
       color: mode === "in" ? "#0F1117" : "rgba(255,255,255,0.6)"
     }
   }, "+ Stock in"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setMode("out"),
+    onClick: () => setMode(m => m === "out" ? null : "out"),
     className: "sans",
     style: {
       padding: "7px 14px",
@@ -68932,7 +69235,7 @@ function StockScanOverlay({
       color: "rgba(255,255,255,0.7)",
       fontWeight: 600
     }
-  }, "Point at a barcode")), toast && /*#__PURE__*/React.createElement("div", {
+  }, mode === null ? "Point at a barcode" : mode === "in" ? "Bulk stock in mode" : "Bulk use up mode")), toast && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       top: 70,
@@ -68992,7 +69295,93 @@ function StockScanOverlay({
       fontSize: 11,
       color: C.inkMute
     }
-  }, toast.mode === "in" ? "Stocked in" : "Used up", toast.area ? " · " + toast.area : ""))), linkPrompt && /*#__PURE__*/React.createElement("div", {
+  }, toast.mode === "in" ? "Stocked in" : "Used up", toast.area ? " · " + toast.area : ""))), askAction && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 3,
+      background: C.card,
+      borderRadius: "18px 18px 0 0",
+      padding: "20px 16px 28px"
+    },
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: C.ink,
+      marginBottom: 4
+    }
+  }, askAction.item.name), /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute,
+      marginBottom: 14
+    }
+  }, askAction.item.current, "/", askAction.item.target, " ", askAction.item.unit || "", " · ", askAction.item.area || "Stock"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      applyDelta(askAction.item, 1);
+      setAskAction(null);
+      lastScanRef.current = "";
+    },
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: "14px",
+      borderRadius: 12,
+      border: "none",
+      background: "#5EE7B4",
+      color: "#0F1117",
+      fontSize: 14,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "+ Stock in"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      applyDelta(askAction.item, -1);
+      setAskAction(null);
+      lastScanRef.current = "";
+    },
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: "14px",
+      borderRadius: 12,
+      border: "none",
+      background: "#FF6B6B",
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "- Use up")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setAskAction(null);
+      lastScanRef.current = "";
+    },
+    className: "sans",
+    style: {
+      display: "block",
+      margin: "12px auto 0",
+      padding: "8px 20px",
+      borderRadius: 8,
+      border: `1px solid ${C.rule}`,
+      background: "transparent",
+      color: C.inkMute,
+      fontSize: 12,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Skip")), linkPrompt && /*#__PURE__*/React.createElement("div", {
     style: {
       position: "absolute",
       bottom: 0,
@@ -69016,7 +69405,61 @@ function StockScanOverlay({
       color: C.accent,
       marginBottom: 6
     }
-  }, "New barcode detected"), /*#__PURE__*/React.createElement("p", {
+  }, "New barcode detected"), linkPrompt.loading && /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      color: C.inkMute,
+      padding: "12px 0"
+    }
+  }, "Looking up product..."), !linkPrompt.loading && linkPrompt.product && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "center",
+      padding: "8px 0 12px",
+      borderBottom: `1px solid ${C.rule}`,
+      marginBottom: 10
+    }
+  }, linkPrompt.product.image && /*#__PURE__*/React.createElement("img", {
+    src: linkPrompt.product.image,
+    style: {
+      width: 44,
+      height: 44,
+      borderRadius: 8,
+      objectFit: "cover",
+      background: "#fff",
+      flexShrink: 0
+    },
+    alt: ""
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: C.ink
+    }
+  }, linkPrompt.product.name), linkPrompt.product.brand && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.inkMute,
+      marginTop: 1
+    }
+  }, linkPrompt.product.brand), linkPrompt.product.size && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: C.accent,
+      fontWeight: 600,
+      marginTop: 1
+    }
+  }, linkPrompt.product.size))), !linkPrompt.loading && !linkPrompt.product && /*#__PURE__*/React.createElement("p", {
     className: "sans",
     style: {
       fontSize: 11,
@@ -69024,7 +69467,7 @@ function StockScanOverlay({
       fontFamily: "monospace",
       marginBottom: 12
     }
-  }, linkPrompt.barcode), /*#__PURE__*/React.createElement("p", {
+  }, linkPrompt.barcode), !linkPrompt.loading && /*#__PURE__*/React.createElement("p", {
     className: "sans",
     style: {
       fontSize: 12,
@@ -69076,8 +69519,9 @@ function StockScanOverlay({
     }
   }, item.current, "/", item.target, " ", item.unit || "")))), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
+      const p = linkPrompt.product || {};
       setLinkPrompt(null);
-      onCreate && onCreate(linkPrompt.barcode);
+      onCreate && onCreate(linkPrompt.barcode, p.name || "", p.size || "");
     },
     className: "sans",
     style: {
@@ -69147,21 +69591,37 @@ function StockAddModal({
   const [target, setTarget] = useState(item?.target || 1);
   const [unit, setUnit] = useState(item?.unit || "");
   const [current, setCurrent] = useState(item?.current || 0);
+  const [form, setForm] = useState({
+    _newBarcode: ""
+  });
   const editing = !!item?.id;
-  const st = target > 0 ? current <= 0 ? "out" : current / target <= 0.5 ? "low" : "full" : "full";
+  const prefillBarcode = item?._barcode || "";
+  const prefillSize = item?._size || "";
+  const cur = editing ? stockCurrent(item) : current;
+  const st = target > 0 ? cur <= 0 ? "out" : cur / target <= 0.5 ? "low" : "full" : "full";
   const stc = STOCK_STATUS_COLORS[st];
   const stLabel = st === "out" ? "Out" : st === "low" ? "Low" : "Stocked";
   const catObj = STOCK_CATS.find(c => c.key === cat);
   function save() {
     if (!name.trim()) return;
-    onSave({
+    const saved = {
       id: item?.id || Date.now(),
       name: name.trim(),
       category: cat,
       target,
       unit: unit.trim(),
-      current
-    });
+      current,
+      ...(editing ? {} : {})
+    };
+    // If we have sizes from the existing item, preserve them
+    if (item?.sizes) saved.sizes = item.sizes;
+    onSave(saved);
+    // Auto-link barcode if prefilled from scan
+    if (prefillBarcode) {
+      const bc = lsGet("hb_stockBarcodes", {});
+      bc[prefillBarcode] = saved.id;
+      lsSet("hb_stockBarcodes", bc);
+    }
   }
   const inputStyle = {
     width: "100%",
@@ -69452,7 +69912,7 @@ function StockAddModal({
   }, editing ? "Save changes" : "Add item"), editing && (() => {
     const bc = lsGet("hb_stockBarcodes", {});
     const linked = Object.entries(bc).filter(([_k, v]) => v === item.id);
-    return linked.length > 0 ? /*#__PURE__*/React.createElement("div", {
+    return /*#__PURE__*/React.createElement("div", {
       style: {
         marginTop: 12,
         marginBottom: 4
@@ -69463,11 +69923,12 @@ function StockAddModal({
         display: "block",
         marginBottom: 6
       }
-    }, "Linked barcodes (", linked.length, ")"), /*#__PURE__*/React.createElement("div", {
+    }, "Barcodes", linked.length > 0 ? ` (${linked.length})` : ""), linked.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         flexWrap: "wrap",
-        gap: 6
+        gap: 6,
+        marginBottom: 8
       }
     }, linked.map(([code]) => /*#__PURE__*/React.createElement("span", {
       key: code,
@@ -69502,7 +69963,69 @@ function StockAddModal({
         fontSize: 13,
         lineHeight: 1
       }
-    }, "×"))))) : null;
+    }, "×")))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "text",
+      inputMode: "numeric",
+      placeholder: "Type or paste barcode",
+      value: form._newBarcode || "",
+      onChange: e => setForm(f => ({
+        ...f,
+        _newBarcode: e.target.value.replace(/[^0-9]/g, "")
+      })),
+      className: "sans",
+      style: {
+        flex: 1,
+        height: 38,
+        borderRadius: 10,
+        border: `1.5px solid ${C.rule}`,
+        background: C.card,
+        color: C.ink,
+        fontSize: 13,
+        padding: "0 10px",
+        fontFamily: "monospace"
+      }
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        const code = (form._newBarcode || "").trim();
+        if (!code) return;
+        const b = lsGet("hb_stockBarcodes", {});
+        if (b[code] === item.id) {
+          setForm(f => ({
+            ...f,
+            _newBarcode: ""
+          }));
+          return;
+        }
+        if (b[code]) {
+          const other = (items || []).find(i => i.id === b[code]);
+          if (other && !confirm("This barcode is linked to " + other.name + ". Move it here?")) return;
+        }
+        b[code] = item.id;
+        lsSet("hb_stockBarcodes", b);
+        setForm(f => ({
+          ...f,
+          _newBarcode: ""
+        }));
+      },
+      className: "sans",
+      style: {
+        height: 38,
+        padding: "0 14px",
+        borderRadius: 10,
+        border: `1.5px solid ${C.accent}`,
+        background: softTint(C.accent),
+        color: C.accent,
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: "pointer",
+        flexShrink: 0
+      }
+    }, "Add")));
   })(), editing && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       onDelete(item.id);
@@ -73045,7 +73568,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v648"))))), diagOpen && (() => {
+  }, "v650"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
