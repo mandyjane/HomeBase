@@ -12471,7 +12471,6 @@ function App({
     if (nUpd) parts.push(`${nUpd} updated`);
     if (nDel) parts.push(`${nDel} removed`);
     if (parts.length) showToast(parts.join(" · "), "success");
-    setShowRota(false);
   }
   // v164 Build E · Chore planner commit — writes one-off tasks due on each planned date.
   // `plan` is {date:{title,points,assignee,room,color}} for NEW rows only (existing chores
@@ -41483,9 +41482,11 @@ function RotaModal({
   // Re-seed whenever the week or person changes.
   useEffect(() => {
     setRows(seeded);
-    setOpenDay(null);
     setDelAsk(null);
   }, [seeded]);
+  useEffect(() => {
+    setOpenDay(null);
+  }, [person, monday]);
   const saved = [...(savedShifts || [])].filter(s => s.time).sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
   function setDay(date, data) {
     setRows(r => ({
