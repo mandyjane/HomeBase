@@ -9591,10 +9591,21 @@ function App({
   // so the current tab, scroll position, and expanded cards all stay put.
   useEffect(() => {
     if (syncVersion < 1) return; // skip initial mount
-    const syncedTasks = lsGet("hb_tasks", SAMPLE) || [];
+    // v656 · Guard: do NOT re-read tasks/events from localStorage if we have a
+    // pending push or pushed within the last 10s. A syncVersion bump can come from
+    // ANY key — if the realtime handler correctly blocked stale hb_tasks data, this
+    // re-read would undo that protection by reading from localStorage before the
+    // persistence effect has written.
+    const taskGuard = sbPending["hb_tasks"] || sbPushTimestamps["hb_tasks"] && Date.now() - sbPushTimestamps["hb_tasks"] < 10000;
+    const eventGuard = sbPending["hb_events"] || sbPushTimestamps["hb_events"] && Date.now() - sbPushTimestamps["hb_events"] < 10000;
+    if (!taskGuard) {
+      const syncedTasks = lsGet("hb_tasks", SAMPLE) || [];
+      setTasks(syncedTasks);
+    }
+    if (!eventGuard) {
+      setEvents(lsGet("hb_events", SAMPLE_EVENTS));
+    }
     const syncedBonusLog = lsGet("hb_bonusLog", []);
-    setTasks(syncedTasks);
-    setEvents(lsGet("hb_events", SAMPLE_EVENTS));
     setPointsPeriods(lsGet("hb_pointsPeriods", {
       week: {
         her: 0,
@@ -9672,11 +9683,19 @@ function App({
         // so tapping a notification often shows stale data. sbPullAll writes to
         // localStorage, then we re-read affected state.
         // v606 · Explicitly re-read treatRequests after pull so approval cards appear
+        // v656 · Guard: sbPullAll itself blocks stale data for recently-pushed keys,
+        // but the setTasks/setEvents below must also respect the guard — if sbPullAll
+        // skipped hb_tasks (guard active), reading from localStorage here is fine
+        // (it still has our local version). If the guard expired, sbPullAll wrote
+        // the remote version and we pick that up. Either way, the guard here
+        // prevents a race where sbPullAll writes stale data just as the guard expires.
         sbPullAll().then(changed => {
           if (!changed) return;
           setTreatRequests(lsGet("hb_treatRequests", []));
-          setTasks(lsGet("hb_tasks", SAMPLE) || []);
-          setEvents(lsGet("hb_events", SAMPLE_EVENTS));
+          const tGuard = sbPending["hb_tasks"] || sbPushTimestamps["hb_tasks"] && Date.now() - sbPushTimestamps["hb_tasks"] < 10000;
+          const eGuard = sbPending["hb_events"] || sbPushTimestamps["hb_events"] && Date.now() - sbPushTimestamps["hb_events"] < 10000;
+          if (!tGuard) setTasks(lsGet("hb_tasks", SAMPLE) || []);
+          if (!eGuard) setEvents(lsGet("hb_events", SAMPLE_EVENTS));
           setRewards(lsGet("hb_rewards", DEFAULT_REWARDS));
         });
       }
