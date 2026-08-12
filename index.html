@@ -69449,7 +69449,61 @@ function StockAddModal({
       marginTop: 20,
       fontFamily: "inherit"
     }
-  }, editing ? "Save changes" : "Add item"), editing && /*#__PURE__*/React.createElement("button", {
+  }, editing ? "Save changes" : "Add item"), editing && (() => {
+    const bc = lsGet("hb_stockBarcodes", {});
+    const linked = Object.entries(bc).filter(([_k, v]) => v === item.id);
+    return linked.length > 0 ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 12,
+        marginBottom: 4
+      }
+    }, /*#__PURE__*/React.createElement("label", {
+      className: "lbl",
+      style: {
+        display: "block",
+        marginBottom: 6
+      }
+    }, "Linked barcodes (", linked.length, ")"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6
+      }
+    }, linked.map(([code]) => /*#__PURE__*/React.createElement("span", {
+      key: code,
+      className: "sans",
+      style: {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        fontSize: 10,
+        color: C.inkMute,
+        background: C.bg,
+        border: `1px solid ${C.rule}`,
+        borderRadius: 8,
+        padding: "4px 6px 4px 8px",
+        fontFamily: "monospace"
+      }
+    }, code.length > 13 ? code.slice(0, 6) + "\u2026" + code.slice(-4) : code, /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        const b = lsGet("hb_stockBarcodes", {});
+        delete b[code];
+        lsSet("hb_stockBarcodes", b);
+        setForm(f => ({
+          ...f
+        }));
+      },
+      style: {
+        background: "none",
+        border: "none",
+        color: C.inkFaint,
+        cursor: "pointer",
+        padding: 0,
+        fontSize: 13,
+        lineHeight: 1
+      }
+    }, "×"))))) : null;
+  })(), editing && /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       onDelete(item.id);
       onClose();
