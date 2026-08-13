@@ -6704,6 +6704,25 @@ function sbChatPush(key, val) {
     if (error) console.warn("[sb] chat push error:", key, error.message);
   });
 }
+
+// v664 · Merge tasks (or events) by id, keeping the version with the newer _modAt.
+// Eliminates last-write-wins clobbering: both devices' changes survive.
+function mergeById(localArr, remoteArr) {
+  const byId = new Map();
+  (localArr || []).forEach(t => byId.set(t.id, t));
+  (remoteArr || []).forEach(t => {
+    const existing = byId.get(t.id);
+    if (!existing) {
+      byId.set(t.id, t);
+      return;
+    } // new from other device
+    const lm = existing._modAt || 0,
+      rm = t._modAt || 0;
+    if (rm > lm) byId.set(t.id, t); // remote is newer
+    // else keep local (it's newer or same)
+  });
+  return [...byId.values()];
+}
 function sbPush(key, val) {
   if (!sbReady || !sbHouseholdId) return;
   sbPending[key] = val;
@@ -6817,9 +6836,21 @@ async function sbPullAll() {
           localStorage.setItem(row.key, mergedStr);
           changedKeys.add(row.key);
         }
+        // v664 · Tasks & events: merge by id (like chat/treats) instead of last-write-wins.
+        // Each item has _modAt stamped on local mutation; merge keeps the newer version per id.
+        // This replaces the v657 blocking guard for these two keys — no more 10s window needed.
+      } else if (row.key === "hb_tasks" || row.key === "hb_events") {
+        if (sbPending[row.key]) return; // still flush pending push first
+        const localArr = local ? JSON.parse(local) : [];
+        const remoteArr = row.value || [];
+        const merged = mergeById(localArr, remoteArr);
+        const mergedStr = JSON.stringify(merged);
+        if (local !== mergedStr) {
+          localStorage.setItem(row.key, mergedStr);
+          changedKeys.add(row.key);
+        }
       } else if (local !== remote) {
-        // v657 · Guard: skip if local push is pending OR if we pushed this key
-        // within the last 10s. Pure client-side comparison eliminates clock skew.
+        // v657 · Guard for other keys: skip if pushed within 10s.
         if (sbPending[row.key]) return;
         if (sbPushTimestamps[row.key] && Date.now() - sbPushTimestamps[row.key] < 10000) return;
         localStorage.setItem(row.key, remote);
@@ -6894,8 +6925,20 @@ function sbSubscribe(onUpdate) {
         const merged = [...byId.values()].sort((a, b) => a.id - b.id);
         localStorage.setItem(row.key, JSON.stringify(merged));
         if (onUpdate) onUpdate(row.key);
+        // v664 · Tasks & events: merge by id instead of last-write-wins.
+      } else if (row.key === "hb_tasks" || row.key === "hb_events") {
+        if (sbPending[row.key]) return;
+        const local = localStorage.getItem(row.key);
+        const localArr = local ? JSON.parse(local) : [];
+        const remoteArr = row.value || [];
+        const merged = mergeById(localArr, remoteArr);
+        const mergedStr = JSON.stringify(merged);
+        if (local !== mergedStr) {
+          localStorage.setItem(row.key, mergedStr);
+          if (onUpdate) onUpdate(row.key);
+        }
       } else {
-        // v657 · Skip if local push is pending or pushed within 10s (client-side only).
+        // v657 · Other keys: skip if pushed within 10s (client-side only).
         if (sbPending[row.key]) return;
         if (sbPushTimestamps[row.key] && Date.now() - sbPushTimestamps[row.key] < 10000) return;
         const remote = JSON.stringify(row.value);
@@ -9451,8 +9494,40 @@ function App({
     const meta = document.querySelector('meta[name="viewport"]');
     if (meta) meta.setAttribute("content", "width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover");
   }, []);
+
+  // v664 · Stamp _modAt on tasks that changed since last persist.
+  // This makes merge-by-id work: both devices can tell which version is newer per task.
+  const _prevTasksRef = useRef(null);
   useEffect(() => {
-    lsSet("hb_tasks", tasks);
+    const prev = _prevTasksRef.current;
+    const now = Date.now();
+    const stamped = tasks.map(t => {
+      if (!prev) return t._modAt ? t : {
+        ...t,
+        _modAt: now
+      };
+      const old = prev.find(p => p.id === t.id);
+      // If the task is new or changed (ignoring _modAt itself), stamp it
+      if (!old) return {
+        ...t,
+        _modAt: now
+      };
+      const {
+        _modAt: _a,
+        ...tClean
+      } = t;
+      const {
+        _modAt: _b,
+        ...oClean
+      } = old;
+      if (JSON.stringify(tClean) !== JSON.stringify(oClean)) return {
+        ...t,
+        _modAt: now
+      };
+      return t; // unchanged — keep existing _modAt
+    });
+    _prevTasksRef.current = stamped;
+    lsSet("hb_tasks", stamped);
   }, [tasks]);
 
   // ── SHRINK THE PHOTOS ALREADY IN STORE *(v142)* ────────────────────────────
@@ -9534,8 +9609,38 @@ function App({
       if (orphans.length) orphans.forEach(o => docDelete(o.ref));
     } catch {}
   }, [tasks]);
+
+  // v664 · Stamp _modAt on events (same merge-by-id pattern as tasks)
+  const _prevEventsRef = useRef(null);
   useEffect(() => {
-    lsSet("hb_events", events);
+    const prev = _prevEventsRef.current;
+    const now = Date.now();
+    const stamped = events.map(e => {
+      if (!prev) return e._modAt ? e : {
+        ...e,
+        _modAt: now
+      };
+      const old = prev.find(p => p.id === e.id);
+      if (!old) return {
+        ...e,
+        _modAt: now
+      };
+      const {
+        _modAt: _a,
+        ...eClean
+      } = e;
+      const {
+        _modAt: _b,
+        ...oClean
+      } = old;
+      if (JSON.stringify(eClean) !== JSON.stringify(oClean)) return {
+        ...e,
+        _modAt: now
+      };
+      return e;
+    });
+    _prevEventsRef.current = stamped;
+    lsSet("hb_events", stamped);
   }, [events]);
   useEffect(() => {
     lsSet("hb_manualOT", manualOT);
@@ -73477,7 +73582,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v663"))))), diagOpen && (() => {
+  }, "v664"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
