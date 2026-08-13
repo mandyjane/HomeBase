@@ -45233,8 +45233,9 @@ function MortgageView({
   // ── Helpers ──
   const herName = people?.her?.name || "Her";
   const himName = people?.him?.name || "Him";
-  const herColor = people?.her?.color ? "#" + people.her.color.replace("#", "") : C.her || "#FF6B9D";
-  const himColor = people?.him?.color ? "#" + people.him.color.replace("#", "") : C.accent || "#4FA3E8";
+  // v668 · Use personColor() for correct saturation/lightness (was raw people.color)
+  const herColor = personColor(people?.her?.color) || C.her || "#FF6B9D";
+  const himColor = personColor(people?.him?.color) || C.accent || "#4FA3E8";
   function whoLabel(w) {
     return w === "her" ? herName : w === "him" ? himName : "Both";
   }
@@ -45243,6 +45244,49 @@ function MortgageView({
   }
   function whoInitial(w) {
     return w === "her" ? herName.charAt(0).toUpperCase() : w === "him" ? himName.charAt(0).toUpperCase() : "HH";
+  }
+  // v668 · Border-ring circle badge for mortgage transactions
+  function MtgBadge({
+    who,
+    size = 26
+  }) {
+    const inner = size - 3;
+    const isBoth = who !== "her" && who !== "him";
+    const col = whoColor(who);
+    const bg = isBoth ? `linear-gradient(135deg,${herColor},${himColor})` : col;
+    const txt = isBoth ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        background: `linear-gradient(135deg,${herColor},${himColor})`,
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent"
+      }
+    }, whoInitial(who)) : /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: col
+      }
+    }, whoInitial(who));
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: bg,
+        padding: "1.5px",
+        borderRadius: "50%",
+        display: "inline-flex",
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        width: inner,
+        height: inner,
+        borderRadius: "50%",
+        background: C.card,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: size < 24 ? 8 : 10,
+        fontWeight: 800
+      }
+    }, txt));
   }
   function fmtDate(ymd) {
     if (!ymd) return "";
@@ -46913,21 +46957,10 @@ function MortgageView({
       fontFamily: "inherit",
       borderBottom: i < regularTx.length - 1 ? `1px solid ${sRule}` : "none"
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 26,
-      height: 26,
-      borderRadius: "50%",
-      background: `rgba(${whoColor(t.who).replace("#", "").match(/../g).map(h => parseInt(h, 16)).join(",")},0.2)`,
-      color: whoColor(t.who),
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: 10,
-      fontWeight: 800,
-      flexShrink: 0
-    }
-  }, whoInitial(t.who)), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(MtgBadge, {
+    who: t.who,
+    size: 26
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
       minWidth: 0
@@ -46988,31 +47021,55 @@ function MortgageView({
       gap: 8,
       marginBottom: 10
     }
-  }, [["her", herName, totals.her || 0, herColor], ["him", himName, totals.him || 0, himColor], ["both", "Both", totals.both || 0, GRN]].map(([key, name, total, col]) => /*#__PURE__*/React.createElement("div", {
-    key: key,
-    style: {
-      flex: 1,
-      background: `rgba(${col.replace("#", "").match(/../g).map(h => parseInt(h, 16)).join(",")},0.1)`,
-      borderRadius: 10,
-      padding: "9px 10px",
-      textAlign: "center"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      fontWeight: 800,
-      color: col,
-      textTransform: "uppercase",
-      letterSpacing: ".05em"
-    }
-  }, name), /*#__PURE__*/React.createElement("div", {
-    className: numClass(),
-    style: {
-      fontSize: 16,
-      color: col,
-      marginTop: 2
-    }
-  }, total < 0 ? "−" : "+", fmtMoney(Math.abs(total)))))), onceOffTx.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, [["her", herName, totals.her || 0, herColor], ["him", himName, totals.him || 0, himColor], ["both", "Both", totals.both || 0, null]].map(([key, name, total, col]) => {
+    const isBoth = key === "both";
+    const bg = isBoth ? `linear-gradient(90deg,${herColor},${himColor})` : col;
+    return /*#__PURE__*/React.createElement("div", {
+      key: key,
+      style: {
+        flex: 1,
+        background: isBoth ? bg : undefined,
+        padding: isBoth ? "1.5px" : 0,
+        borderRadius: 12
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: isBoth ? C.card : softTint(col),
+        borderRadius: isBoth ? 11 : 12,
+        padding: "9px 10px",
+        textAlign: "center",
+        border: isBoth ? "none" : `1.5px solid ${rgbaFromHex(col, 0.3)}`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 10,
+        fontWeight: 800,
+        textTransform: "uppercase",
+        letterSpacing: ".05em",
+        ...(isBoth ? {
+          background: `linear-gradient(90deg,${herColor},${himColor})`,
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent"
+        } : {
+          color: col
+        })
+      }
+    }, name), /*#__PURE__*/React.createElement("div", {
+      className: numClass(),
+      style: {
+        fontSize: 16,
+        marginTop: 2,
+        ...(isBoth ? {
+          background: `linear-gradient(90deg,${herColor},${himColor})`,
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent"
+        } : {
+          color: col
+        })
+      }
+    }, total < 0 ? "−" : "+", fmtMoney(Math.abs(total)))));
+  })), onceOffTx.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       background: sBg,
       borderRadius: 14,
@@ -47035,21 +47092,10 @@ function MortgageView({
       textAlign: "left",
       fontFamily: "inherit"
     }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      width: 22,
-      height: 22,
-      borderRadius: "50%",
-      background: `rgba(${whoColor(t.who || "both").replace("#", "").match(/../g).map(h => parseInt(h, 16)).join(",")},0.2)`,
-      color: whoColor(t.who || "both"),
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: 9,
-      fontWeight: 800,
-      flexShrink: 0
-    }
-  }, whoInitial(t.who || "both")), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(MtgBadge, {
+    who: t.who || "both",
+    size: 22
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
       minWidth: 0
@@ -73704,7 +73750,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v668"))))), diagOpen && (() => {
+  }, "v669"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
