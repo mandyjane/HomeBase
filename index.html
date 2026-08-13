@@ -52523,7 +52523,8 @@ function StatsTab({
       position: "relative"
     }
   }, "Standings"), [["her", people.her.name, her], ["him", people.him.name, him]].map(([key, label, s]) => {
-    const pts = points[key] || 0;
+    // v663 · Use allTimePoints (ground truth) instead of stale points bucket
+    const pts = allTimePoints[key] || 0;
     const txt = C.mood === "sleek" ? C.ink : "#fff";
     const dim = C.mood === "sleek" ? C.inkMute : "rgba(255,255,255,0.7)";
     return /*#__PURE__*/React.createElement("div", {
@@ -73476,7 +73477,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v662"))))), diagOpen && (() => {
+  }, "v663"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
