@@ -3923,8 +3923,6 @@ function AssigneeBadges({
   size = "card",
   task = null
 }) {
-  // v274 · Compact card sizing. The "card" size drops to 9/2px6px to match the smaller
-  // title and tile; "row" (the dashboard agenda) is unchanged — it was already compact.
   const fs = size === "row" ? 9 : 9;
   const pad = size === "row" ? "3px 8px" : "2px 6px";
   const chip = (label, color, key) => /*#__PURE__*/React.createElement("span", {
@@ -3941,19 +3939,49 @@ function AssigneeBadges({
       whiteSpace: "nowrap"
     }
   }, label);
-  // Completed shared task awarded to ONE person -> show only that person.
-  // v501 · Same logic for UNASSIGNED tasks — once completed with a "who did it?"
-  // pick, show that person instead of the stale "Unassigned" badge.
+  // v668 · Gradient-border "Both" chip: her colour → him colour
+  const bothChip = key => {
+    const herCol = personColor(people.her.color),
+      himCol = personColor(people.him.color);
+    return /*#__PURE__*/React.createElement("span", {
+      key: key,
+      style: {
+        background: `linear-gradient(90deg,${herCol},${himCol})`,
+        padding: "1.5px",
+        borderRadius: 20,
+        display: "inline-block"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: fs,
+        fontWeight: 700,
+        letterSpacing: 0.3,
+        background: C.card,
+        display: "block",
+        padding: pad,
+        borderRadius: 18,
+        whiteSpace: "nowrap"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        background: `linear-gradient(90deg,${herCol},${himCol})`,
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent"
+      }
+    }, "Both")));
+  };
   const solo = assignee === "both" || !assignee ? awardedSolo(task) : null;
   if (solo === "her") return chip(people.her.name, personColor(people.her.color), "her");
   if (solo === "him") return chip(people.him.name, personColor(people.him.color), "him");
-  // An unassigned task completed as "Both" → show both names
   if (!assignee && task?.done && task?.award && task.award.her > 0 && task.award.him > 0) {
     return /*#__PURE__*/React.createElement(React.Fragment, null, chip(people.her.name, personColor(people.her.color), "her"), chip(people.him.name, personColor(people.him.color), "him"));
   }
   if (assignee === "both" && SHARED.named) {
     return /*#__PURE__*/React.createElement(React.Fragment, null, chip(people.her.name, personColor(people.her.color), "her"), chip(people.him.name, personColor(people.him.color), "him"));
   }
+  // v668 · "Both" gets gradient-border treatment instead of flat accent chip
+  if (assignee === "both") return bothChip("both");
   return chip(assigneeName(assignee, people), assigneeColor(assignee, people), "one");
 }
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -29362,29 +29390,13 @@ function AgendaRow({
     }, "All day") : null;
     const hasEndTime = row.endTime && row.kind === "event";
     const timeEl = showThisTime && tLabel ? /*#__PURE__*/React.createElement("span", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        gap: 3,
-        flexShrink: 0
-      }
-    }, /*#__PURE__*/React.createElement("span", {
       className: timeClass(),
       style: {
         ...TIME_STYLE,
-        color: C.inkMute
+        color: C.inkMute,
+        flexShrink: 0
       }
-    }, tLabel), hasEndTime && /*#__PURE__*/React.createElement("svg", {
-      width: "10",
-      height: "10",
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: C.inkFaint,
-      strokeWidth: "2.5",
-      strokeLinecap: "round"
-    }, /*#__PURE__*/React.createElement("polyline", {
-      points: "6 9 12 15 18 9"
-    }))) : null;
+    }, tLabel) : null;
     if (!nameEl && !amtEl && !timeEl && !allDayEl) return null;
     // v560 · Right column also expands the card on tap (date range, name badge).
     return /*#__PURE__*/React.createElement("div", {
@@ -73657,7 +73669,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v667"))))), diagOpen && (() => {
+  }, "v668"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
