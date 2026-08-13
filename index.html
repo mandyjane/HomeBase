@@ -3927,18 +3927,26 @@ function AssigneeBadges({
   const pad = size === "row" ? "3px 8px" : "2px 6px";
   const chip = (label, color, key) => /*#__PURE__*/React.createElement("span", {
     key: key,
+    style: {
+      background: color,
+      padding: "1.5px",
+      borderRadius: 20,
+      display: "inline-block"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: {
       fontSize: fs,
-      fontWeight: 600,
+      fontWeight: 700,
       letterSpacing: 0.3,
-      background: softTint(color),
-      color,
+      background: C.card,
+      display: "block",
       padding: pad,
-      borderRadius: 6,
-      whiteSpace: "nowrap"
+      borderRadius: 18,
+      whiteSpace: "nowrap",
+      color
     }
-  }, label);
+  }, label));
   // v668 · Gradient-border "Both" chip: her colour → him colour
   const bothChip = key => {
     const herCol = personColor(people.her.color),
@@ -29347,18 +29355,26 @@ function AgendaRow({
       size: "row",
       task: row.ref
     }) : /*#__PURE__*/React.createElement("span", {
+      style: {
+        background: row.pColor,
+        padding: "1.5px",
+        borderRadius: 20,
+        display: "inline-block"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
         fontSize: 10,
-        fontWeight: 600,
+        fontWeight: 700,
         letterSpacing: .3,
-        background: softTint(row.pColor),
-        color: row.pColor,
+        background: C.card,
+        display: "block",
         padding: "3px 9px",
-        borderRadius: 20,
-        whiteSpace: "nowrap"
+        borderRadius: 18,
+        whiteSpace: "nowrap",
+        color: row.pColor
       }
-    }, row.pName) : null;
+    }, row.pName)) : null;
     const rowAmt = isPlan(t) ? occAmount(t, row._occDate || row.date) : parseAmt(t.amount);
     const amtEl = bill && rowAmt > 0 ? /*#__PURE__*/React.createElement("span", {
       className: numClass(),
