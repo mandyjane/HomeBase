@@ -21574,17 +21574,26 @@ function EventCard({
       marginTop: 1
     }
   }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: whoColor,
+      padding: "1.5px",
+      borderRadius: 20,
+      display: "inline-block"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: {
       fontSize: 10,
-      fontWeight: 600,
+      fontWeight: 700,
       letterSpacing: 0.3,
-      background: softTint(whoColor),
-      color: whoColor,
+      background: C.card,
+      display: "block",
       padding: "3px 8px",
-      borderRadius: 6
+      borderRadius: 18,
+      whiteSpace: "nowrap",
+      color: whoColor
     }
-  }, who)))), open && /*#__PURE__*/React.createElement("div", {
+  }, who))))), open && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: "2px 13px 13px 53px"
     },
@@ -22052,17 +22061,27 @@ function WorkNameChip({
   whoColor
 }) {
   return /*#__PURE__*/React.createElement("span", {
+    style: {
+      background: whoColor,
+      padding: "1.5px",
+      borderRadius: 20,
+      display: "inline-block",
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: {
-      flexShrink: 0,
       fontSize: 10,
       fontWeight: 700,
-      color: whoColor,
-      background: softTint(whoColor),
+      letterSpacing: 0.3,
+      background: C.card,
+      display: "block",
       padding: "3px 9px",
-      borderRadius: 20
+      borderRadius: 18,
+      whiteSpace: "nowrap",
+      color: whoColor
     }
-  }, who);
+  }, who));
 }
 // WorkDateBadge — the leading day-number + month sub-label with its short colour-matched
 // divider. `dashed` = the striped day-off/RDO branch (dashed divider); solid otherwise.
