@@ -14120,7 +14120,10 @@ function App({
     dotColor: e.publicHoliday ? phColor || "#E5484D" : (EVENT_CATS[e.category] || EVENT_CATS.Other).color,
     catIcon: e.publicHoliday ? "flag" : (EVENT_CATS[e.category] || EVENT_CATS.Other).icon,
     phIconKey: e.publicHoliday && phSpecialIcons ? e.phIcon : undefined,
-    time: e.publicHoliday ? "" : isSpan(e) ? spanShortRange(e) : fmtRange(e.time, e.end) + (e.category === SHIFT_CAT && durLabel(e.time, e.end) ? ` · ${durLabel(e.time, e.end)}` : ""),
+    // v667 · time shows start only (endTime separate for expandable range). allDay flag added.
+    time: e.publicHoliday ? "" : isSpan(e) ? spanShortRange(e) : e.category === SHIFT_CAT ? fmtRange(e.time, e.end) + (durLabel(e.time, e.end) ? ` · ${durLabel(e.time, e.end)}` : "") : e.time && !isAllDay(e) ? fmtTime(e.time) : "",
+    endTime: !isSpan(e) && !e.publicHoliday && e.end && !isAllDay(e) && e.category !== SHIFT_CAT ? fmtTime(e.end) : null,
+    allDay: isAllDay(e) || !!e.publicHoliday,
     overdue: false,
     sub: e.publicHoliday ? "Public Holiday · All day" : isSpan(e) ? spanDateRange(e) + (e.place ? " · " + e.place : "") + " · " + assigneeName(e.assignee, people) : `${e.place ? e.place + " · " : ""}${assigneeName(e.assignee, people)}`,
     // v182 · a WORKED RDO reflects its state on the dashboard too (matches the Work-tab card):
@@ -14401,10 +14404,14 @@ function App({
       catIcon: e.publicHoliday ? "flag" : EVENT_CATS[e.category] && EVENT_CATS[e.category].icon || EVENT_CATS.Other && EVENT_CATS.Other.icon,
       phIconKey: e.publicHoliday && phSpecialIcons ? e.phIcon : undefined,
       // v561 · AgendaRow reads row.time for events (not taskTime). Set it for span events.
+      // v667 · Regular events now also set row.time (was null, so times never showed on dashboard).
+      // Added allDay flag + endTime for expandable time range. All-day events sort to top.
       done: false,
-      time: span ? spanShortRange(e) : null,
+      time: span ? spanShortRange(e) : e.time && !isAllDay(e) ? fmtTime(e.time) : null,
+      endTime: !span && e.end && !isAllDay(e) ? fmtTime(e.end) : null,
       taskTime: e.time ? fmtTime(e.time) : null,
-      _t: e.time || ""
+      allDay: isAllDay(e),
+      _t: isAllDay(e) ? "!" : e.time || ""
     };
   }), ...tomorrowTasks.map(t => ({
     kind: "task",
@@ -14419,7 +14426,13 @@ function App({
     done: false,
     taskTime: t.time ? fmtTime(t.time) : null,
     _t: t.time || ""
-  }))].sort((a, b) => (a._t ? 0 : 1) - (b._t ? 0 : 1) || a._t.localeCompare(b._t));
+  }))].sort((a, b) => {
+    // v667 · All-day events sort to top, then by time, then timeless last
+    const aAD = a.allDay ? 0 : 1,
+      bAD = b.allDay ? 0 : 1;
+    if (aAD !== bAD) return aAD - bAD;
+    return (a._t ? 0 : 1) - (b._t ? 0 : 1) || a._t.localeCompare(b._t);
+  });
   const tomorrowWorkRows = tomorrowRows.filter(isWorkRow);
   const tomorrowBillRows = tomorrowRows.filter(r => !isWorkRow(r) && r.kind === "task" && isBill(r.ref));
   const tomorrowOtherRows = tomorrowRows.filter(r => !isWorkRow(r) && !(r.kind === "task" && isBill(r.ref)));
@@ -29332,15 +29345,47 @@ function AgendaRow({
     // v487 · time label moves to the right column, BELOW the name badge.
     const showThisTime = showTimes === "all" || showTimes === "events" && row.kind === "event";
     const tLabel = row.kind === "event" ? row.time : row.taskTime;
+    // v667 · All-day pill, and expandable end-time chevron for events with end times.
+    const allDayEl = showThisTime && row.allDay && !row.time ? /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 9,
+        fontWeight: 800,
+        letterSpacing: .5,
+        textTransform: "uppercase",
+        padding: "2px 7px",
+        borderRadius: 6,
+        background: softTint(C.accent),
+        color: C.accent,
+        whiteSpace: "nowrap"
+      }
+    }, "All day") : null;
+    const hasEndTime = row.endTime && row.kind === "event";
     const timeEl = showThisTime && tLabel ? /*#__PURE__*/React.createElement("span", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 3,
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement("span", {
       className: timeClass(),
       style: {
         ...TIME_STYLE,
-        color: C.inkMute,
-        flexShrink: 0
+        color: C.inkMute
       }
-    }, tLabel) : null;
-    if (!nameEl && !amtEl && !timeEl) return null;
+    }, tLabel), hasEndTime && /*#__PURE__*/React.createElement("svg", {
+      width: "10",
+      height: "10",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: C.inkFaint,
+      strokeWidth: "2.5",
+      strokeLinecap: "round"
+    }, /*#__PURE__*/React.createElement("polyline", {
+      points: "6 9 12 15 18 9"
+    }))) : null;
+    if (!nameEl && !amtEl && !timeEl && !allDayEl) return null;
     // v560 · Right column also expands the card on tap (date range, name badge).
     return /*#__PURE__*/React.createElement("div", {
       onClick: () => setOpen(o => !o),
@@ -29355,13 +29400,41 @@ function AgendaRow({
         cursor: "pointer",
         WebkitTapHighlightColor: "transparent"
       }
-    }, amtEl, timeEl, nameEl);
+    }, amtEl, allDayEl || timeEl, nameEl);
   })()), open && /*#__PURE__*/React.createElement("div", {
     style: {
       padding: compact ? "0 0 2px" : "0 2px 14px 46px"
     },
     onClick: e => e.stopPropagation()
-  }, t.notes && /*#__PURE__*/React.createElement("p", {
+  }, row.endTime && row.time && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "13",
+    height: "13",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.accent,
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "12",
+    r: "10"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 6v6l4 2"
+  })), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      fontWeight: 600,
+      color: C.accent
+    }
+  }, row.time, " – ", row.endTime)), t.notes && /*#__PURE__*/React.createElement("p", {
     className: "sans",
     style: {
       fontSize: 13,
@@ -73584,7 +73657,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v666"))))), diagOpen && (() => {
+  }, "v667"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
