@@ -9500,7 +9500,7 @@ function App({
   // the browser can process a refresh — prevents the race where tapping Done +
   // refreshing loses the completion because the async effect hadn't fired yet.
   const _prevTasksRef = useRef(null);
-  useLayoutEffect(() => {
+  (typeof window !== "undefined" ? React.useLayoutEffect : useEffect)(() => {
     const prev = _prevTasksRef.current;
     const now = Date.now();
     const stamped = tasks.map(t => {
@@ -9614,7 +9614,7 @@ function App({
 
   // v664 · Stamp _modAt on events (same merge-by-id pattern as tasks)
   const _prevEventsRef = useRef(null);
-  useLayoutEffect(() => {
+  (typeof window !== "undefined" ? React.useLayoutEffect : useEffect)(() => {
     const prev = _prevEventsRef.current;
     const now = Date.now();
     const stamped = events.map(e => {
@@ -73584,7 +73584,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v665"))))), diagOpen && (() => {
+  }, "v666"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
