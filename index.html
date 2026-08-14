@@ -24397,7 +24397,8 @@ function BillExpansion({
   overdueDates,
   billCatchUpId,
   setBillCatchUpId,
-  onEdit
+  onEdit,
+  onSendToChat
 }) {
   const [panel, setPanel] = useState(null); // "update" | "paid" | null
   const [amt, setAmt] = useState(initAmt != null ? String(initAmt) : "");
