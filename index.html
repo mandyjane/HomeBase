@@ -3517,6 +3517,24 @@ function WeatherIcon({
 }
 
 // Pretty short date e.g. "Sun 12 Jul"
+// v672 · Linkify URLs in notes text — converts http(s) URLs to tappable <a> elements.
+function linkifyText(text) {
+  if (!text) return text;
+  const URL_RE = /(https?:\/\/[^\s<>"')\]]+)/gi;
+  const parts = text.split(URL_RE);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => URL_RE.test(part) ? React.createElement("a", {
+    key: i,
+    href: part,
+    target: "_blank",
+    rel: "noopener noreferrer",
+    style: {
+      color: C.accent,
+      textDecoration: "underline",
+      wordBreak: "break-all"
+    }
+  }, part.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")) : part);
+}
 function shortDate(ds) {
   try {
     const d = new Date(ds + "T00:00:00");
@@ -21272,7 +21290,7 @@ function EventCard({
         margin: "12px 0",
         whiteSpace: "pre-wrap"
       }
-    }, ev.notes), /*#__PURE__*/React.createElement("div", {
+    }, linkifyText(ev.notes)), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         gap: 5,
@@ -21609,7 +21627,7 @@ function EventCard({
       marginBottom: 12,
       whiteSpace: "pre-wrap"
     }
-  }, ev.notes), isSpan(ev) && hasDayNotes(ev) && (() => {
+  }, linkifyText(ev.notes)), isSpan(ev) && hasDayNotes(ev) && (() => {
     const total = spanDaysOf(ev);
     const notes = [];
     for (let i = 1; i <= total; i++) {
@@ -29541,7 +29559,7 @@ function AgendaRow({
       marginBottom: 12,
       whiteSpace: "pre-wrap"
     }
-  }, t.notes), !isTask && isSpan(t) && hasDayNotes(t) && (() => {
+  }, linkifyText(t.notes)), !isTask && isSpan(t) && hasDayNotes(t) && (() => {
     const total = spanDaysOf(t);
     const notes = [];
     for (let i = 1; i <= total; i++) {
@@ -30754,7 +30772,7 @@ function TaskCard({
         marginLeft: -14,
         whiteSpace: "pre-wrap"
       }
-    }, task.notes), task.subtasks.length > 0 && /*#__PURE__*/React.createElement("div", {
+    }, linkifyText(task.notes)), task.subtasks.length > 0 && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 12
       }
@@ -73801,7 +73819,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v671"))))), diagOpen && (() => {
+  }, "v672"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
