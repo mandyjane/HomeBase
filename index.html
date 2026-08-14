@@ -8345,15 +8345,16 @@ function App({
 
   // fireNotif for client-side (test button + bonus local alerts)
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  async function fireNotif(title, body, tag) {
+  async function fireNotif(title, body, tag, badgeIcon) {
     try {
       if ("serviceWorker" in navigator) {
         const reg = await navigator.serviceWorker.ready;
+        const badge = badgeIcon ? "./badges/badge-" + badgeIcon + ".png" : "./badge-96.png";
         const opts = {
           body,
           tag,
           icon: "./icon-192.png",
-          badge: "./badge-96.png",
+          badge,
           renotify: true
         };
         if (!isIOS) opts.vibrate = [200, 100, 200];
@@ -8414,6 +8415,7 @@ function App({
         const ft = calcFireMs(t.dueDate, t.time, a);
         if (!ft || ft <= now || ft > serverHorizon) return;
         const exUid = t.assignee && t.assignee !== "both" ? lsGet("hb_userId_" + (t.assignee === "her" ? "him" : "her"), "") : null;
+        const badgeIcon = taskMeta(t).icon || "bell";
         rows.push({
           id: "t-" + t.id + "-" + i,
           fire_at: new Date(ft).toISOString(),
@@ -8421,12 +8423,13 @@ function App({
           body: taskCatLabel(t) + " — due " + shortDate(t.dueDate),
           household_id: sbHouseholdId,
           sent: false,
-          exclude_user_id: exUid || null
+          exclude_user_id: exUid || null,
+          badge_icon: badgeIcon
         });
         if (ft <= localHorizon) {
           localCount++;
           notifTimers.current.push(setTimeout(() => {
-            fireNotif(t.title, taskCatLabel(t) + " — due " + shortDate(t.dueDate), "hb-t-" + t.id + "-" + i);
+            fireNotif(t.title, taskCatLabel(t) + " — due " + shortDate(t.dueDate), "hb-t-" + t.id + "-" + i, badgeIcon);
           }, ft - now));
         }
       });
@@ -8437,6 +8440,8 @@ function App({
         const ft = calcFireMs(e.date, e.time, a);
         if (!ft || ft <= now || ft > serverHorizon) return;
         const exUidE = e.assignee && e.assignee !== "both" ? lsGet("hb_userId_" + (e.assignee === "her" ? "him" : "her"), "") : null;
+        const ec = EVENT_CATS[e.category] || EVENT_CATS.Other;
+        const eBadge = ec ? ec.icon : "bell";
         rows.push({
           id: "e-" + e.id + "-" + i,
           fire_at: new Date(ft).toISOString(),
@@ -8444,12 +8449,13 @@ function App({
           body: (e.category || "Event") + " — " + shortDate(e.date),
           household_id: sbHouseholdId,
           sent: false,
-          exclude_user_id: exUidE || null
+          exclude_user_id: exUidE || null,
+          badge_icon: eBadge
         });
         if (ft <= localHorizon) {
           localCount++;
           notifTimers.current.push(setTimeout(() => {
-            fireNotif(e.title, (e.category || "Event") + " — " + shortDate(e.date), "hb-e-" + e.id + "-" + i);
+            fireNotif(e.title, (e.category || "Event") + " — " + shortDate(e.date), "hb-e-" + e.id + "-" + i, eBadge);
           }, ft - now));
         }
       });
@@ -73879,7 +73885,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v676"))))), diagOpen && (() => {
+  }, "v677"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
