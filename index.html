@@ -14074,7 +14074,7 @@ function App({
   // v132: `isDeadlineTask` now covers PROJECTS too, so this one filter would have swept them
   // into the "Deadlines" heading. They are the same behaviour under a different name, so they
   // are derived together and SPLIT for display — one list, two headings.
-  const homeByDate = tasks.filter(t => isDeadlineTask(t) && !t.done && !(t.startDate && today < t.startDate) && !isPrivateHidden(t)).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || b.priority - a.priority);
+  const homeByDate = tasks.filter(t => !t._deleted && isDeadlineTask(t) && !t.done && !(t.startDate && today < t.startDate) && !isPrivateHidden(t)).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || b.priority - a.priority);
   const homeDeadlines = homeByDate.filter(t => t.taskKind === "deadline");
   const homeProjects = homeByDate.filter(t => t.taskKind === "project");
 
@@ -14090,7 +14090,7 @@ function App({
   const doneTodayTasks = [];
   if (keepDone) {
     tasks.forEach(t => {
-      if (isPrivateHidden(t)) return; // v473
+      if (t._deleted || isPrivateHidden(t)) return; // v473, v681
       const recurring = t.recur && t.recur !== "none";
       if (!recurring) {
         // Same guard on the NON-RECURRING branch. A one-off task dated tomorrow and ticked
@@ -73792,7 +73792,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v681"))))), diagOpen && (() => {
+  }, "v682"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
