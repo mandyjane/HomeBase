@@ -55806,10 +55806,63 @@ function NotifSheet({
   isBill = false
 }) {
   const [local, setLocal] = useState(alerts || []);
+  const panelRef = useRef(null);
+  const dragY = useRef(0);
+  const dragging = useRef(false);
   // Sync when sheet opens with new props
   useEffect(() => {
     setLocal(alerts || []);
   }, [open]);
+  // Attach touchmove with {passive:false} so preventDefault() works on mobile.
+  // React synthetic onTouchMove registers as passive — preventDefault is a no-op.
+  useEffect(() => {
+    if (!open) return;
+    const el = panelRef.current;
+    if (!el) return;
+    function handleStart(e) {
+      if (el.scrollTop > 0) return;
+      dragY.current = e.touches[0].clientY;
+      dragging.current = true;
+      el.style.transition = "none";
+    }
+    function handleMove(e) {
+      if (!dragging.current) return;
+      const dy = e.touches[0].clientY - dragY.current;
+      if (dy > 0) {
+        el.style.transform = `translateY(${dy}px)`;
+        e.preventDefault();
+      } else {
+        dragging.current = false;
+        el.style.transform = "translateY(0)";
+      }
+    }
+    function handleEnd(e) {
+      if (!dragging.current) return;
+      dragging.current = false;
+      const dy = e.changedTouches[0].clientY - dragY.current;
+      el.style.transition = "transform 0.2s ease";
+      if (dy > 80) {
+        el.style.transform = "translateY(100%)";
+        setTimeout(onClose, 200);
+      } else {
+        el.style.transform = "translateY(0)";
+      }
+    }
+    el.addEventListener("touchstart", handleStart, {
+      passive: true
+    });
+    el.addEventListener("touchmove", handleMove, {
+      passive: false
+    });
+    el.addEventListener("touchend", handleEnd, {
+      passive: true
+    });
+    return () => {
+      el.removeEventListener("touchstart", handleStart);
+      el.removeEventListener("touchmove", handleMove);
+      el.removeEventListener("touchend", handleEnd);
+    };
+  }, [open, onClose]);
   if (!open) return null;
   const accent = isBill ? C.low : "#5EE7B4";
   return ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
@@ -55827,6 +55880,7 @@ function NotifSheet({
       paddingBottom: "calc(62px + env(safe-area-inset-bottom))"
     }
   }, /*#__PURE__*/React.createElement("div", {
+    ref: panelRef,
     style: {
       background: C.page,
       borderRadius: 20,
@@ -55837,7 +55891,8 @@ function NotifSheet({
       maxHeight: "70vh",
       overflowY: "auto",
       WebkitOverflowScrolling: "touch",
-      animation: "slideUp 0.2s ease"
+      animation: "slideUp 0.2s ease",
+      touchAction: "pan-y"
     },
     onClick: e => e.stopPropagation()
   }, /*#__PURE__*/React.createElement("div", {
@@ -73823,7 +73878,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v675"))))), diagOpen && (() => {
+  }, "v676"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
