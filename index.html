@@ -13953,7 +13953,7 @@ function App({
       });
     } else {
       // Day tasks that aren't overdue/done (Today + Upcoming already range-filtered).
-      // v683: deadline/project tasks are excluded from date buckets — they render
+      // v685: deadline/project tasks are excluded from date buckets — they render
       // in the Deadlines & Projects fold (week) or their own headings (all), so
       // including them here duplicated them in search results.
       groups.Today.forEach(t => {
@@ -14417,7 +14417,7 @@ function App({
   const nowHHMM = nowClock(); // one clock helper, shared with the On-now badge
   const shiftStarted = r => {
     const ev = r.ref;
-    if (ev.dayOff) return false; // whole-day items never roll early
+    if (ev.dayOff) return nowHHMM >= "17:00"; // v685: day-off/RDO hides after 5pm
     if (!ev.time) return false; // untimed shift: nothing to be past
     // No END time means nothing to be past yet — an open-ended shift stays all day rather
     // than vanishing at its start. Falls back to the start only when there is no end.
@@ -14696,6 +14696,7 @@ function App({
     if (e.dayOff) return false; // day off, RDO, leave, sick, TOIL
     if (e.category === SHIFT_CAT) return false; // shifts
     if (e.publicHoliday) return false; // public holidays
+    if (r.allDay) return false; // v684: all-day events (birthdays etc) — can't be "done"
     if (r.title === "Overtime") return false; // OT cards
     // Must be on today (start date = today, or span covering today)
     if (e.date === today) return true;
@@ -73797,7 +73798,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v683"))))), diagOpen && (() => {
+  }, "v684"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
