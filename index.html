@@ -28479,13 +28479,14 @@ function AmountAsk({
     onClick: onCancel,
     className: "sans",
     style: {
-      background: "none",
-      border: "none",
-      color: C.inkMute,
+      background: C.ruleSoft || "rgba(255,255,255,0.06)",
+      border: `1px solid ${C.rule}`,
+      borderRadius: 8,
+      color: C.inkSoft || C.inkMute,
       fontSize: 11.5,
       fontWeight: 600,
       cursor: "pointer",
-      padding: "9px 4px",
+      padding: "7px 12px",
       flexShrink: 0
     }
   }, "Cancel"), /*#__PURE__*/React.createElement("button", {
@@ -28836,7 +28837,16 @@ function AgendaRow({
       background: C.mood === "sleek" ? "rgba(23,26,34,0.92)" : "rgba(255,255,255,0.88)",
       fontSize: 16
     }
-  }, celebrate.phrase), amountAsk ? /*#__PURE__*/React.createElement(AmountAsk, {
+  }, celebrate.phrase), /*#__PURE__*/React.createElement(NotifSheet, {
+    open: showNotif,
+    onClose: () => setShowNotif(false),
+    title: row.title || t.title,
+    alerts: t.alerts || [],
+    onSave: a => {
+      saveItemAlerts(t, a, !isTask);
+    },
+    isBill: bill
+  }), amountAsk ? /*#__PURE__*/React.createElement(AmountAsk, {
     expected: parseAmt(t.amount ?? 0),
     dueDate: t.dueDate,
     today: today,
@@ -30079,16 +30089,7 @@ function AgendaRow({
       strokeLinecap: "round",
       strokeLinejoin: "round"
     }))), row.done || celebrate ? bill ? "Paid" : "Done" : bill ? "Pay" : "Done");
-  })()), /*#__PURE__*/React.createElement(NotifSheet, {
-    open: showNotif,
-    onClose: () => setShowNotif(false),
-    title: row.title || t.title,
-    alerts: t.alerts || [],
-    onSave: a => {
-      saveItemAlerts(t, a, !isTask);
-    },
-    isBill: bill
-  }), /*#__PURE__*/React.createElement(ConfirmDelete, {
+  })()), /*#__PURE__*/React.createElement(ConfirmDelete, {
     open: delPrompt,
     title: recurs ? "Delete which?" : isTask ? bill ? "Delete this bill?" : "Delete this task?" : "Delete this event?",
     body: recurs ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("b", {
@@ -55829,7 +55830,7 @@ function NotifSheet({
     style: {
       background: C.page,
       borderRadius: "20px 20px 0 0",
-      padding: 20,
+      padding: "20px 20px calc(20px + env(safe-area-inset-bottom)) 20px",
       width: "100%",
       maxWidth: 420,
       border: `1px solid ${C.rule}`,
@@ -73823,7 +73824,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v674"))))), diagOpen && (() => {
+  }, "v675"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
