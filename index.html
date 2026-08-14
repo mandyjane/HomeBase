@@ -27887,7 +27887,9 @@ function AmountAsk({
   billTitle = "",
   billCatLabel = "",
   billCatColor = "",
-  billRecur = ""
+  billRecur = "",
+  bill = null,
+  onNotif = null
 }) {
   const [v, setV] = useState(expected > 0 ? String(expected) : "");
   // WHO PAID, asked inline rather than as a second full-screen prompt.
@@ -28403,7 +28405,52 @@ function AmountAsk({
     cx: "12",
     cy: "7",
     r: "4"
-  }))), /*#__PURE__*/React.createElement("span", {
+  }))), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: e => {
+      e.stopPropagation();
+      if (onNotif) onNotif();
+    },
+    style: {
+      width: 38,
+      height: 38,
+      borderRadius: 9,
+      border: `1.5px solid ${bill.alerts && bill.alerts.length > 0 ? C.low : C.rule}`,
+      background: bill.alerts && bill.alerts.length > 0 ? C.lowSoft : C.page,
+      color: bill.alerts && bill.alerts.length > 0 ? C.low : C.inkMute,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+      position: "relative",
+      padding: 0
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M13.73 21a2 2 0 0 1-3.46 0"
+  })), (!bill.alerts || bill.alerts.length === 0) && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute",
+      width: 18,
+      height: 1.5,
+      background: C.inkMute,
+      transform: "rotate(-45deg)",
+      top: "50%",
+      left: "50%",
+      marginLeft: -9,
+      marginTop: -0.75
+    }
+  })), /*#__PURE__*/React.createElement("span", {
     style: {
       width: 14,
       flexShrink: 0
@@ -28784,7 +28831,9 @@ function AgendaRow({
     billTitle: bill ? t.title : "",
     billCatLabel: bill ? taskCatLabel(t) : "",
     billCatColor: bill ? taskMeta(t).grad[0] : "",
-    billRecur: t.recur || ""
+    billRecur: t.recur || "",
+    bill: t,
+    onNotif: () => setShowNotif(true)
   }) : pointsAsk ? /*#__PURE__*/React.createElement("div", {
     onClick: e => e.stopPropagation(),
     style: {
@@ -30284,7 +30333,9 @@ function TaskCard({
       billTitle: bill ? task.title : "",
       billCatLabel: bill ? taskCatLabel(task) : "",
       billCatColor: bill ? taskMeta(task).grad[0] : "",
-      billRecur: task.recur || ""
+      billRecur: task.recur || "",
+      bill: task,
+      onNotif: () => setShowNotif(true)
     })) : pointsAsk ? /*#__PURE__*/React.createElement("div", {
       onClick: e => e.stopPropagation(),
       style: {
@@ -55744,8 +55795,8 @@ function NotifSheet({
     style: {
       position: "fixed",
       inset: 0,
-      background: "rgba(0,0,0,0.82)",
-      backdropFilter: "blur(6px)",
+      background: "rgba(0,0,0,0.72)",
+      backdropFilter: "blur(5px)",
       zIndex: 240,
       display: "flex",
       alignItems: "flex-end",
@@ -73750,7 +73801,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v670"))))), diagOpen && (() => {
+  }, "v671"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
