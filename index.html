@@ -55812,7 +55812,7 @@ function NotifSheet({
   }, [open]);
   if (!open) return null;
   const accent = isBill ? C.low : "#5EE7B4";
-  return /*#__PURE__*/React.createElement("div", {
+  return ReactDOM.createPortal(/*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && onClose(),
     className: "hb-scrim",
     style: {
@@ -55820,21 +55820,20 @@ function NotifSheet({
       inset: 0,
       background: "rgba(0,0,0,0.72)",
       backdropFilter: "blur(5px)",
-      zIndex: 240,
+      zIndex: 9999,
       display: "flex",
       alignItems: "flex-end",
       justifyContent: "center",
-      padding: 0
+      paddingBottom: "calc(62px + env(safe-area-inset-bottom))"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.page,
-      borderRadius: "20px 20px 0 0",
-      padding: "20px 20px calc(20px + env(safe-area-inset-bottom)) 20px",
+      borderRadius: 20,
+      padding: 20,
       width: "100%",
       maxWidth: 420,
       border: `1px solid ${C.rule}`,
-      borderBottom: "none",
       maxHeight: "70vh",
       overflowY: "auto",
       WebkitOverflowScrolling: "touch",
@@ -55887,7 +55886,7 @@ function NotifSheet({
       cursor: "pointer",
       marginTop: 14
     }
-  }, "Done")));
+  }, "Done"))), document.body);
 }
 
 // ── NOTIFICATION ALERTS EDITOR *(v333)* ─────────────────────────────────────
