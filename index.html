@@ -8406,6 +8406,10 @@ function App({
     let localCount = 0;
     (tasks || []).forEach(t => {
       if (!t.alerts || !t.alerts.length || t.done || !t.dueDate) return;
+      // v673 · Skip if this specific occurrence is already done (recurring tasks stay
+      // t.done=false but mark individual dates via exceptions[date].done=true).
+      const occEx = t.exceptions && t.exceptions[t.dueDate];
+      if (occEx && (occEx.done || occEx.deleted)) return;
       t.alerts.forEach((a, i) => {
         const ft = calcFireMs(t.dueDate, t.time, a);
         if (!ft || ft <= now || ft > serverHorizon) return;
@@ -8453,16 +8457,21 @@ function App({
     setNotifScheduled(localCount);
 
     // Upsert to Supabase (server delivers even when app is closed)
-    if (sbClient && sbHouseholdId && rows.length > 0) {
+    // v673 · Full cleanup: delete ALL unsent task/event alerts for this household,
+    // then insert only active ones. Previously only deleted rows about to be
+    // re-inserted, leaving stale alerts for done tasks to fire.
+    if (sbClient && sbHouseholdId) {
       (async () => {
         try {
-          await sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false).in("id", rows.map(r => r.id)); // v421 · only delete rows we're about to re-insert
-          const {
-            error
-          } = await sbClient.from("alert_schedule").upsert(rows, {
-            onConflict: "id"
-          });
-          if (error) console.warn("[alert_schedule]", error.message);
+          await sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false).or("id.like.t-%,id.like.e-%"); // only task/event alerts, not chat/nag/treat
+          if (rows.length > 0) {
+            const {
+              error
+            } = await sbClient.from("alert_schedule").upsert(rows, {
+              onConflict: "id"
+            });
+            if (error) console.warn("[alert_schedule]", error.message);
+          }
         } catch (e) {
           console.warn("[alert_schedule]", e);
         }
@@ -11202,6 +11211,17 @@ function App({
       } else {
         mortgageRemoveOffset(series || occ, occDateKey);
       }
+    }
+    // v673 · Cancel scheduled alerts when task is marked done. The scheduling effect
+    // will also skip done occurrences on next run, but this eagerly removes any
+    // already-queued server-side rows so they never fire.
+    if (!wasDone && occ.alerts && occ.alerts.length > 0 && sbClient && sbHouseholdId) {
+      const alertIds = occ.alerts.map((_, i) => "t-" + seriesId + "-" + i);
+      sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false).in("id", alertIds).then(({
+        error
+      }) => {
+        if (error) console.warn("[alert cancel]", error.message);
+      });
     }
   }
   // Remove finished ONE-OFF tasks (recur==="none"). Recurring series are left
@@ -73819,7 +73839,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v672"))))), diagOpen && (() => {
+  }, "v673"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
