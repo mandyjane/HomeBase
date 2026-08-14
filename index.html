@@ -8457,13 +8457,27 @@ function App({
     setNotifScheduled(localCount);
 
     // Upsert to Supabase (server delivers even when app is closed)
-    // v673 · Full cleanup: delete ALL unsent task/event alerts for this household,
-    // then insert only active ones. Previously only deleted rows about to be
-    // re-inserted, leaving stale alerts for done tasks to fire.
+    // v673 · Full cleanup: delete all unsent task/event alerts, then insert only active ones.
+    // Build explicit ID list from all tasks/events with alerts (done or not) to ensure
+    // stale alerts for completed tasks are removed.
     if (sbClient && sbHouseholdId) {
       (async () => {
         try {
-          await sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false).or("id.like.t-%,id.like.e-%"); // only task/event alerts, not chat/nag/treat
+          const allAlertIds = [];
+          (tasks || []).forEach(t => {
+            if (!t.alerts || !t.alerts.length) return;
+            t.alerts.forEach((_, i) => allAlertIds.push("t-" + t.id + "-" + i));
+          });
+          (events || []).forEach(e => {
+            if (!e.alerts || !e.alerts.length) return;
+            e.alerts.forEach((_, i) => allAlertIds.push("e-" + e.id + "-" + i));
+          });
+          if (allAlertIds.length > 0) {
+            // Delete in batches of 100 (Supabase .in() limit)
+            for (let i = 0; i < allAlertIds.length; i += 100) {
+              await sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false).in("id", allAlertIds.slice(i, i + 100));
+            }
+          }
           if (rows.length > 0) {
             const {
               error
@@ -28411,7 +28425,7 @@ function AmountAsk({
     cx: "12",
     cy: "7",
     r: "4"
-  }))), /*#__PURE__*/React.createElement("button", {
+  }))), bill && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: e => {
       e.stopPropagation();
@@ -73809,7 +73823,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v673"))))), diagOpen && (() => {
+  }, "v674"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
