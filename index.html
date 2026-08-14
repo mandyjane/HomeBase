@@ -13636,6 +13636,7 @@ function App({
   //    plus keep any overdue occurrence so nothing is silently dropped.
   const listTasks = [];
   tasks.forEach(t => {
+    if (t._deleted) return; // v681 · skip tombstoned tasks
     // A BNPL plan has recur:"none" but is NOT a one-off — it has N baked instalments.
     if ((!t.recur || t.recur === "none") && !isPlan(t)) {
       listTasks.push(t);
@@ -14020,6 +14021,7 @@ function App({
   // OLDEST miss, carrying the count — so a task neglected for a month is still ONE row
   // and the dashboard cannot be flooded.
   const overdueTasks = tasks.map(t => {
+    if (t._deleted) return null; // v681 · skip tombstoned tasks
     if (isDeadlineTask(t)) return null; // v618: deadlines shown in Today; v626: overdue counted below
     if (isBill(t)) return null; // bills are pulled out below
     if (isPrivateHidden(t)) return null; // v471: private tasks hidden from other person
@@ -14031,7 +14033,7 @@ function App({
     return row;
   }).filter(Boolean).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   // v626 · Overdue deadlines/projects — non-recurring, so just check dueDate < today
-  const overdueDeadlines = tasks.filter(t => isDeadlineTask(t) && !t.done && t.dueDate < today && !isPrivateHidden(t));
+  const overdueDeadlines = tasks.filter(t => !t._deleted && isDeadlineTask(t) && !t.done && t.dueDate < today && !isPrivateHidden(t));
   const overdueCount = overdueTasks.length + overdueDeadlines.length;
 
   // Startup overdue banner. Fires ONCE per app open, and only once overdueCount is
