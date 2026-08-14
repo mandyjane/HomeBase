@@ -9277,7 +9277,7 @@ function App({
   const needsRolePick = !!_sbUserId && !currentUser;
   // v445 · PRIVATE — hidden from the other person, no points.
   const isPrivateHidden = t => !!(t && t.private && currentUser && t.assignee !== currentUser && t.assignee !== "both");
-  const visTasks = tasks.filter(t => !isPrivateHidden(t));
+  const visTasks = tasks.filter(t => !t._deleted && !isPrivateHidden(t));
   const visEvents = events.filter(e => !isPrivateHidden(e));
   const [phSpecialIcons, setPhSpecialIcons] = useState(() => lsGet("hb_phSpecialIcons", true));
   const [showPublicHolidays, setShowPublicHolidays] = useState(() => lsGet("hb_showPH", true));
@@ -12262,12 +12262,20 @@ function App({
           deletedAt: new Date().toISOString()
         }, ...bin]);
       }
-      setTasks(ts => ts.filter(t => t.id !== seriesId));
+      // v681 · Tombstone instead of filter: mark _deleted so mergeById propagates
+      // the deletion to the other device instead of resurrecting the task.
+      setTasks(ts => ts.map(t => t.id === seriesId ? {
+        ...t,
+        _deleted: true
+      } : t));
       showToast("Moved to Recycle Bin", "info", {
         undo: () => {
           if (victim) {
-            setTasks(ts => [...ts, victim]);
-            setRecycleBin(bin => bin.filter(b => b.data.id !== seriesId));
+            setTasks(ts => ts.map(t => t.id === seriesId ? {
+              ...t,
+              _deleted: false
+            } : t));
+            setRecycleBin(bin => bin.filter(b => b.data?.id !== seriesId));
             showToast("Task restored", "success");
           }
         }
@@ -63447,7 +63455,7 @@ function TreatApprovalCard({
 }) {
   const [showCounter, setShowCounter] = useState(false);
   const [counterText, setCounterText] = useState("");
-  const reqName = (people[req.who] || {}).name || req.who;
+  const reqName = req.who === "shared" ? (people[req.submittedBy] || {}).name || "Someone" : (people[req.who] || {}).name || req.who;
   const partnerColor = req.who === "shared" ? C.accent : personColor((people[req.who] || {}).color);
   const fromLabel = req.counterFrom ? (people[req.counterFrom] || {}).name : "";
   return /*#__PURE__*/React.createElement("div", {
@@ -67944,7 +67952,10 @@ function RecycleBinSheet({
           exceptions: ex
         };
       }));
-    } else if (item.type === "task") setTasks(ts => [...ts, item.data]);else setEvents(es => [...es, item.data]);
+    } else if (item.type === "task") setTasks(ts => ts.map(t => t.id === item.data.id ? {
+      ...t,
+      _deleted: false
+    } : t));else setEvents(es => [...es, item.data]);
     setBin(b => b.filter(x => x.id !== item.id));
   }
   function purge(item) {
@@ -73779,7 +73790,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v679"))))), diagOpen && (() => {
+  }, "v681"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
