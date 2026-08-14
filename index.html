@@ -1942,7 +1942,7 @@ const BILL_AVG_LABEL = {
 };
 
 // ── MORTGAGE *(v307)* ──────────────────────────────────────────────────────────
-const MORT_GREEN = "#34c47c";
+const MORT_GREEN = "#00D68F";
 const MORT_FREQ_LABELS = {
   once: "Once",
   daily: "Daily",
@@ -45240,7 +45240,7 @@ function MortgageView({
     return w === "her" ? herName : w === "him" ? himName : "Both";
   }
   function whoColor(w) {
-    return w === "her" ? herColor : w === "him" ? himColor : C.low || "#34c47c";
+    return w === "her" ? herColor : w === "him" ? himColor : C.low || "#00D68F";
   }
   function whoInitial(w) {
     return w === "her" ? herName.charAt(0).toUpperCase() : w === "him" ? himName.charAt(0).toUpperCase() : "HH";
@@ -45404,7 +45404,7 @@ function MortgageView({
   const sRule = C.rule;
   const sSoft = C.pageWarm || C.page;
   const GRN = MORT_GREEN;
-  const GRN_S = `rgba(52,196,124,0.13)`;
+  const GRN_S = `rgba(0,214,143,0.13)`;
 
   // ── Sub-components ──
   function CollapseRow({
@@ -45481,7 +45481,7 @@ function MortgageView({
           alignItems: "center",
           padding: "13px 15px",
           width: "100%",
-          background: on ? `rgba(52,196,124,0.06)` : "none",
+          background: on ? `rgba(0,214,143,0.06)` : "none",
           border: "none",
           cursor: "pointer",
           fontFamily: "inherit",
@@ -45500,7 +45500,7 @@ function MortgageView({
           height: 20,
           borderRadius: "50%",
           border: `2px solid ${on ? GRN : "rgba(255,255,255,0.18)"}`,
-          background: on ? "rgba(52,196,124,0.1)" : "none",
+          background: on ? "rgba(0,214,143,0.1)" : "none",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -46317,8 +46317,8 @@ function MortgageView({
   }, /*#__PURE__*/React.createElement("div", {
     onClick: () => setChartOpen(o => !o),
     style: {
-      background: `linear-gradient(135deg,rgba(52,196,124,0.1),rgba(34,195,220,0.07))`,
-      border: `1px solid ${chartOpen ? "rgba(52,196,124,0.4)" : "rgba(52,196,124,0.22)"}`,
+      background: `linear-gradient(135deg,rgba(0,214,143,0.1),rgba(34,195,220,0.07))`,
+      border: `1px solid ${chartOpen ? "rgba(0,214,143,0.4)" : "rgba(0,214,143,0.22)"}`,
       borderRadius: 16,
       padding: "14px 15px",
       marginBottom: 12,
@@ -46332,7 +46332,7 @@ function MortgageView({
       width: 38,
       height: 38,
       borderRadius: 11,
-      background: "rgba(52,196,124,0.15)",
+      background: "rgba(0,214,143,0.15)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -46592,7 +46592,7 @@ function MortgageView({
     style: {
       flex: 1,
       minWidth: "45%",
-      background: "rgba(52,196,124,0.1)",
+      background: "rgba(0,214,143,0.1)",
       borderRadius: 10,
       padding: "9px 10px"
     }
@@ -46622,7 +46622,7 @@ function MortgageView({
     style: {
       flex: 1,
       minWidth: "45%",
-      background: "rgba(52,196,124,0.08)",
+      background: "rgba(0,214,143,0.08)",
       borderRadius: 10,
       padding: "9px 10px"
     }
@@ -46652,7 +46652,7 @@ function MortgageView({
     style: {
       flex: 1,
       minWidth: "45%",
-      background: "rgba(52,196,124,0.08)",
+      background: "rgba(0,214,143,0.08)",
       borderRadius: 10,
       padding: "9px 10px"
     }
@@ -46920,7 +46920,7 @@ function MortgageView({
         fontWeight: 800,
         padding: "2px 7px",
         borderRadius: 10,
-        background: parseFloat(delta) > 0 ? "rgba(240,160,48,0.14)" : "rgba(52,196,124,0.14)",
+        background: parseFloat(delta) > 0 ? "rgba(240,160,48,0.14)" : "rgba(0,214,143,0.14)",
         color: parseFloat(delta) > 0 ? C.urgent || "#f0a030" : GRN
       }
     }, parseFloat(delta) > 0 ? "+" : "", delta, "%"));
@@ -47010,8 +47010,8 @@ function MortgageView({
       fontWeight: 700,
       padding: "5px 12px",
       borderRadius: 16,
-      background: `rgba(52,196,124,0.13)`,
-      border: `1px solid rgba(52,196,124,0.28)`,
+      background: `rgba(0,214,143,0.13)`,
+      border: `1px solid rgba(0,214,143,0.28)`,
       color: GRN,
       cursor: "pointer"
     }
@@ -47705,7 +47705,7 @@ function MortgageSettingsSheet({
       border: "none",
       fontSize: 15,
       fontWeight: 700,
-      background: `linear-gradient(135deg,rgba(52,196,124,0.8),${MORT_GREEN})`,
+      background: `linear-gradient(135deg,rgba(0,214,143,0.8),${MORT_GREEN})`,
       color: "#fff",
       cursor: "pointer",
       textAlign: "center"
@@ -55744,8 +55744,8 @@ function NotifSheet({
     style: {
       position: "fixed",
       inset: 0,
-      background: SCRIM_DIM,
-      backdropFilter: "blur(3px)",
+      background: "rgba(0,0,0,0.82)",
+      backdropFilter: "blur(6px)",
       zIndex: 240,
       display: "flex",
       alignItems: "flex-end",
@@ -55754,7 +55754,7 @@ function NotifSheet({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      background: C.card,
+      background: C.page,
       borderRadius: "20px 20px 0 0",
       padding: 20,
       width: "100%",
@@ -63639,7 +63639,7 @@ function TreatApprovalCard({
       padding: 10,
       borderRadius: 10,
       border: "none",
-      background: "#34c47c",
+      background: "#00D68F",
       color: "#fff",
       fontSize: 12,
       fontWeight: 700,
@@ -73750,7 +73750,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v669"))))), diagOpen && (() => {
+  }, "v670"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
