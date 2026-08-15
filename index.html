@@ -2733,7 +2733,16 @@ function occAmount(series, dateStr) {
     const i = series.plan.dates.indexOf(dateStr);
     if (i >= 0) return parseAmt((series.plan.amounts || [])[i] ?? parseAmt(series.plan.total) / series.plan.count);
   }
-  return parseAmt(series.amount);
+  const base = parseAmt(series.amount);
+  // v689 · When the base amount is $0 (user cleared it or set to 0 to signal
+  // "I don't know yet"), fall back to the mean of the last 3 paid amounts from
+  // history so forecast strips and totals don't show $0.00 for every future month.
+  if (!(base > 0) && series.exceptions) {
+    const paidAmts = Object.entries(series.exceptions).filter(([, e]) => e.done && parseAmt(e.amount) > 0).sort(([a], [b]) => b.localeCompare(a)) // newest-first
+    .slice(0, 3).map(([, e]) => parseAmt(e.amount));
+    if (paidAmts.length > 0) return Math.round(100 * paidAmts.reduce((s, a) => s + a, 0) / paidAmts.length) / 100;
+  }
+  return base;
 }
 // ── v484 · REPAIR: OVERLAPPING RECURRING TASK DUPLICATES ──────────────────────────────
 // A non-schedule edit (e.g. assignee change) via "This and all future" could trigger a
