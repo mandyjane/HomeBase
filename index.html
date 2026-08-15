@@ -8442,14 +8442,14 @@ function App({
     try {
       if ("serviceWorker" in navigator) {
         const reg = await navigator.serviceWorker.ready;
-        const badge = badgeIcon ? "./badges/badge-" + badgeIcon + ".png" : "./badge-96.png";
+        const catIcon = badgeIcon ? "./badges/badge-" + badgeIcon + ".png" : "./icon-192.png"; // v687: category icon → notification card
         const opts = {
           body,
           tag,
-          icon: "./icon-192.png",
-          badge,
+          icon: catIcon,
+          badge: "./badge-96.png",
           renotify: true
-        };
+        }; // v687: house stays in status bar badge
         if (!isIOS) opts.vibrate = [200, 100, 200];
         await reg.showNotification(title, opts);
         return;
