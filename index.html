@@ -9680,19 +9680,33 @@ function App({
     if (meta) meta.setAttribute("content", "width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover");
   }, []);
 
-  // v664 · Stamp _modAt on tasks that changed since last persist.
+  // v664/v690 · Stamp _modAt on tasks that changed since last persist.
   // useLayoutEffect (not useEffect) so the write completes synchronously before
   // the browser can process a refresh — prevents the race where tapping Done +
   // refreshing loses the completion because the async effect hadn't fired yet.
+  //
+  // v690 · THE SYNC REVERT FIX: on initial mount (_prevTasksRef===null) we must NOT
+  // save or push to Supabase. The problem: Device B opens before receiving Device A's
+  // push. B stamps _modAt:now on its stale tasks (which lack _modAt) and pushes them.
+  // mergeById picks B's version (newer _modAt) even though B's data is stale. The done
+  // state from A is lost. Fix: on mount, just snapshot the ref for future diffing —
+  // don't write. Only save+push when a genuine local change is detected against a
+  // known previous state.
   const _prevTasksRef = useRef(null);
   (typeof window !== "undefined" ? React.useLayoutEffect : useEffect)(() => {
     const prev = _prevTasksRef.current;
     const now = Date.now();
-    const stamped = tasks.map(t => {
-      if (!prev) return t._modAt ? t : {
+    if (!prev) {
+      // Initial mount: snapshot for future diffing, but do NOT save/push.
+      // Preserve any existing _modAt; backfill missing ones with 0 (not now!)
+      // so they lose to any remotely-stamped version in mergeById.
+      _prevTasksRef.current = tasks.map(t => t._modAt ? t : {
         ...t,
-        _modAt: now
-      };
+        _modAt: 0
+      });
+      return; // ← critical: no lsSet, no sbPush
+    }
+    const stamped = tasks.map(t => {
       const old = prev.find(p => p.id === t.id);
       // If the task is new or changed (ignoring _modAt itself), stamp it
       if (!old) return {
@@ -9797,16 +9811,20 @@ function App({
     } catch {}
   }, [tasks]);
 
-  // v664 · Stamp _modAt on events (same merge-by-id pattern as tasks)
+  // v664/v690 · Stamp _modAt on events (same merge-by-id pattern as tasks)
   const _prevEventsRef = useRef(null);
   (typeof window !== "undefined" ? React.useLayoutEffect : useEffect)(() => {
     const prev = _prevEventsRef.current;
     const now = Date.now();
-    const stamped = events.map(e => {
-      if (!prev) return e._modAt ? e : {
+    if (!prev) {
+      // v690 · Initial mount: snapshot only, no save/push (same fix as tasks)
+      _prevEventsRef.current = events.map(e => e._modAt ? e : {
         ...e,
-        _modAt: now
-      };
+        _modAt: 0
+      });
+      return;
+    }
+    const stamped = events.map(e => {
       const old = prev.find(p => p.id === e.id);
       if (!old) return {
         ...e,
