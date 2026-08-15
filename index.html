@@ -8451,14 +8451,17 @@ function App({
     try {
       if ("serviceWorker" in navigator) {
         const reg = await navigator.serviceWorker.ready;
-        const catIcon = badgeIcon ? "./badges/badge-" + badgeIcon + ".png" : "./icon-192.png"; // v687: category icon → notification card
+        // v687/v691: category icon → notification card. Only use badges that exist
+        // on GitHub Pages; unknown icons 404 and Chrome shows a letter fallback.
+        const BADGE_ICONS = new Set(["kitchen", "bathroom", "garden", "bedroom", "living", "garage", "laundry", "pup", "car", "rings", "card", "dumbbell", "bell", "calendar", "medical", "other", "bank", "repeat", "truck", "soccer", "cup", "clock", "users", "heart", "gift", "sun", "music", "dining", "cart", "shift", "star"]);
+        const catIcon = badgeIcon && BADGE_ICONS.has(badgeIcon) ? "./badges/badge-" + badgeIcon + ".png" : "./icon-192.png";
         const opts = {
           body,
           tag,
           icon: catIcon,
           badge: "./badge-96.png",
           renotify: true
-        }; // v687: house stays in status bar badge
+        };
         if (!isIOS) opts.vibrate = [200, 100, 200];
         await reg.showNotification(title, opts);
         return;
