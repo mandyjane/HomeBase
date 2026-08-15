@@ -34730,7 +34730,7 @@ function BillsTab({
     const date = missed || (recurring ? nextOccurrenceDate(b, "dueDate", today) : b.dueDate);
     const ex = recurring && date ? b.exceptions && b.exceptions[date] || {} : {};
     const paid = recurring ? !!ex.done : !!b.done;
-    return {
+    const row = {
       bill: b,
       date,
       paid,
@@ -34738,7 +34738,30 @@ function BillsTab({
       recurring,
       occ: recurring && date ? materialize(b, date, "dueDate") : b
     };
-  }).filter(r => r.date).sort((a, b) => a.paid === b.paid ? a.date.localeCompare(b.date) : a.paid ? 1 : -1);
+    // v688 · If the current occurrence is paid and the bill is recurring, also produce
+    // a row for the next unpaid occurrence so it stays visible in the upcoming list.
+    // Without this, paying today's Electricity hides all future Electricity from Upcoming.
+    if (paid && recurring && date) {
+      const horizon = addDays(today, CAL_HORIZON_DAYS);
+      let cursor = date;
+      for (let _i = 0; _i < 24; _i++) {
+        cursor = stepDate(cursor, b.recur, b.anchorDay, b);
+        if (!cursor || cursor > horizon) break;
+        const nex = b.exceptions && b.exceptions[cursor] || {};
+        if (!nex.done && !nex.deleted) {
+          return [row, {
+            bill: b,
+            date: cursor,
+            paid: false,
+            amount: occAmount(b, cursor),
+            recurring,
+            occ: materialize(b, cursor, "dueDate")
+          }];
+        }
+      }
+    }
+    return [row];
+  }).flat().filter(r => r.date).sort((a, b) => a.paid === b.paid ? a.date.localeCompare(b.date) : a.paid ? 1 : -1);
   const ym = today.slice(0, 7);
   const thisMonth = rows.filter(r => r.date.slice(0, 7) === ym);
   const owed = thisMonth.filter(r => !r.paid).reduce((s, r) => s + r.amount, 0);
