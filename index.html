@@ -74220,7 +74220,7 @@ function SettingsPage({
             if (doneDateStr !== date) {
               t.exceptions[date] = {
                 ...e,
-                doneAt: new Date(date + "T" + taskTime + ":00").toISOString()
+                doneAt: date + "T" + taskTime + ":00"
               };
               fixes++;
             }
@@ -74230,19 +74230,20 @@ function SettingsPage({
         const due = t.dueDate;
         if (due && due < todayStr) {
           let cursor = due;
-          while (cursor < todayStr) {
+          for (let _safe = 0; _safe < 400 && cursor < todayStr; _safe++) {
             if (!t.exceptions[cursor] || !t.exceptions[cursor].done) {
               t.exceptions[cursor] = {
                 ...(t.exceptions[cursor] || {}),
                 done: true,
-                doneAt: new Date(cursor + "T" + taskTime + ":00").toISOString(),
+                doneAt: cursor + "T" + taskTime + ":00",
                 completedBy: t.who || "shared"
               };
               fixes++;
             }
-            const d = new Date(cursor + "T00:00:00");
-            d.setDate(d.getDate() + 1);
-            cursor = d.toISOString().slice(0, 10);
+            // Advance cursor without UTC conversion (AEST causes toISOString date drift)
+            const [y, m, d] = [+cursor.slice(0, 4), +cursor.slice(5, 7), +cursor.slice(8, 10)];
+            const next = new Date(y, m - 1, d + 1);
+            cursor = next.getFullYear() + "-" + String(next.getMonth() + 1).padStart(2, "0") + "-" + String(next.getDate()).padStart(2, "0");
           }
         }
         t._modAt = Date.now();
