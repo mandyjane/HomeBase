@@ -70833,13 +70833,9 @@ function ChatTab({
     r.maxAlternatives = 1;
     transcriptAccRef.current = "";
     r.onresult = ev => {
-      // v694 · interimResults=false: only the final result fires, no snowball.
-      const txt = ev.results[0][0].transcript;
-      transcriptAccRef.current = txt;
-      setText(prev => {
-        const base = prev.replace(/\u200B.*$/, "");
-        return (base + (base ? " " : "") + txt).trim();
-      });
+      // v695 · With interimResults=false, this fires once with the final result.
+      // Just store it — onend will write it to the text field cleanly.
+      transcriptAccRef.current = ev.results[0][0].transcript;
     };
     r.onerror = () => setVoiceState("error");
     r.onend = () => {
@@ -74174,7 +74170,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v694"))))), diagOpen && (() => {
+  }, "v695"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
