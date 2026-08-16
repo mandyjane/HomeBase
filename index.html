@@ -70828,22 +70828,20 @@ function ChatTab({
     } catch (e) {}
     const r = new SR();
     r.lang = "en-AU";
-    r.continuous = true;
+    r.continuous = false;
     r.interimResults = true;
     r.maxAlternatives = 1;
     transcriptAccRef.current = "";
     r.onresult = ev => {
-      let final = "",
-        interim = "";
-      for (let i = 0; i < ev.results.length; i++) {
-        if (ev.results[i].isFinal) final += (final ? " " : "") + ev.results[i][0].transcript;else interim += (interim ? " " : "") + ev.results[i][0].transcript;
-      }
-      transcriptAccRef.current = final;
-      const preview = (final + (interim ? " " + interim : "")).trim();
+      // v693 · Use only the LAST result — on Samsung Chrome, continuous mode
+      // creates new final entries each containing the full text from scratch,
+      // causing snowball duplication when concatenated.
+      const last = ev.results[ev.results.length - 1];
+      const txt = last[0].transcript;
+      if (last.isFinal) transcriptAccRef.current = txt;
       setText(prev => {
-        // Replace any previous dictation preview with updated one
         const base = prev.replace(/\u200B.*$/, "");
-        return base + (base ? " " : "") + "\u200B" + preview;
+        return base + (base ? " " : "") + "\u200B" + txt;
       });
     };
     r.onerror = () => setVoiceState("error");
