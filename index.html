@@ -9923,8 +9923,14 @@ function App({
     const syncTasks = !dirty || dirty.has("hb_tasks");
     const syncEvents = !dirty || dirty.has("hb_events");
     const syncedTasks = syncTasks ? lsGet("hb_tasks", SAMPLE) || [] : tasks;
+    // v696 · Update the prev ref BEFORE setTasks so the useLayoutEffect sees no diff.
+    // Without this, sync-loaded data (especially after a cache clear) looks like a
+    // user change, gets stamped with fresh _modAt, and pushes stale data as "newest".
+    if (syncTasks) _prevTasksRef.current = syncedTasks;
     if (syncTasks) setTasks(syncedTasks);
-    if (syncEvents) setEvents(lsGet("hb_events", SAMPLE_EVENTS));
+    const syncedEvents = syncEvents ? lsGet("hb_events", SAMPLE_EVENTS) : events;
+    if (syncEvents) _prevEventsRef.current = syncedEvents;
+    if (syncEvents) setEvents(syncedEvents);
     // Lightweight keys: always refresh (low-risk, need to stay in sync)
     const syncedBonusLog = lsGet("hb_bonusLog", []);
     setPointsPeriods(lsGet("hb_pointsPeriods", {
@@ -10008,8 +10014,17 @@ function App({
         sbPullAll().then(changed => {
           if (!changed) return;
           if (changed.has("hb_treatRequests")) setTreatRequests(lsGet("hb_treatRequests", []));
-          if (changed.has("hb_tasks")) setTasks(lsGet("hb_tasks", SAMPLE) || []);
-          if (changed.has("hb_events")) setEvents(lsGet("hb_events", SAMPLE_EVENTS));
+          // v696 · Update prev refs before setTasks/setEvents to prevent stamp-and-push
+          if (changed.has("hb_tasks")) {
+            const t = lsGet("hb_tasks", SAMPLE) || [];
+            _prevTasksRef.current = t;
+            setTasks(t);
+          }
+          if (changed.has("hb_events")) {
+            const e = lsGet("hb_events", SAMPLE_EVENTS);
+            _prevEventsRef.current = e;
+            setEvents(e);
+          }
           if (changed.has("hb_rewards")) setRewards(lsGet("hb_rewards", DEFAULT_REWARDS));
         });
       }
@@ -74170,7 +74185,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v695"))))), diagOpen && (() => {
+  }, "v696"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
