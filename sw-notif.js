@@ -59,7 +59,7 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: data.body || "",
-    icon: data.badge_icon && ["kitchen","bathroom","garden","bedroom","living","garage","laundry","pup","car","rings","card","dumbbell","bell","calendar","medical","other","bank","repeat","truck","soccer","cup","clock","users","heart","gift","sun","music","dining","cart","shift","star"].includes(data.badge_icon) ? "badges/badge-"+data.badge_icon+".png" : "icon-192.png",
+    icon: data.badge_icon && ["kitchen","bathroom","garden","bedroom","living","garage","laundry","pup","car","rings","card","dumbbell","bell","calendar","medical","other","bank","repeat","truck","soccer","cup","clock","users","heart","gift","sun","music","dining","cart","shift","star","chat"].includes(data.badge_icon) ? "badges/badge-"+data.badge_icon+".png" : "icon-192.png",
     badge: "badge-96.png",
     vibrate: [200, 100, 200],
     tag: data.tag || "hb-" + Date.now(),

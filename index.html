@@ -8453,7 +8453,7 @@ function App({
         const reg = await navigator.serviceWorker.ready;
         // v687/v691: category icon → notification card. Only use badges that exist
         // on GitHub Pages; unknown icons 404 and Chrome shows a letter fallback.
-        const BADGE_ICONS = new Set(["kitchen", "bathroom", "garden", "bedroom", "living", "garage", "laundry", "pup", "car", "rings", "card", "dumbbell", "bell", "calendar", "medical", "other", "bank", "repeat", "truck", "soccer", "cup", "clock", "users", "heart", "gift", "sun", "music", "dining", "cart", "shift", "star"]);
+        const BADGE_ICONS = new Set(["kitchen", "bathroom", "garden", "bedroom", "living", "garage", "laundry", "pup", "car", "rings", "card", "dumbbell", "bell", "calendar", "medical", "other", "bank", "repeat", "truck", "soccer", "cup", "clock", "users", "heart", "gift", "sun", "music", "dining", "cart", "shift", "star", "chat"]);
         const catIcon = badgeIcon && BADGE_ICONS.has(badgeIcon) ? "./badges/badge-" + badgeIcon + ".png" : "./icon-192.png";
         const opts = {
           body,
@@ -19251,7 +19251,8 @@ function App({
             body: msg.text,
             household_id: sbHouseholdId,
             exclude_user_id: _sbUserId || null,
-            sent: false
+            sent: false,
+            badge_icon: "chat"
           }]).then(({
             error
           }) => {
