@@ -14494,7 +14494,7 @@ function App({
     const direct = visListTasks.filter(t => isBill(t) && !t.done && t.dueDate < today);
     const directIds = new Set(direct.map(t => t._seriesId || t.id));
     // Find recurring bills with overdue backlogs not already in the direct list
-    const withBacklog = tasks.filter(t => isBill(t) && t.recur && t.recur !== "none" && !directIds.has(t.id) && overdueBillDates(t, today).length > 0);
+    const withBacklog = tasks.filter(t => isBill(t) && !t._deleted && t.recur && t.recur !== "none" && !directIds.has(t.id) && overdueBillDates(t, today).length > 0);
     // Materialize each backlog bill so it has the right shape for the dashboard
     return [...direct, ...withBacklog.map(b => {
       const dates = overdueBillDates(b, today);
@@ -74185,7 +74185,63 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v696"))))), diagOpen && (() => {
+  }, "v698"), /*#__PURE__*/React.createElement("button", {
+    className: "sans",
+    style: {
+      marginTop: 12,
+      padding: "10px 16px",
+      borderRadius: 10,
+      border: "1px solid rgba(229,72,77,0.3)",
+      background: "rgba(229,72,77,0.08)",
+      color: "#E5484D",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+      width: "100%"
+    },
+    onClick: () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const leoTasks = tasks.filter(t => t.title && t.title.toLowerCase().includes("feed leo") && !t._deleted);
+      if (!leoTasks.length) {
+        alert("No Feed Leo task found");
+        return;
+      }
+      let fixes = 0;
+      const updated = tasks.map(t => {
+        if (!t.title || !t.title.toLowerCase().includes("feed leo") || t._deleted) return t;
+        const ex = {
+          ...t.exceptions
+        };
+        let changed = false;
+        Object.keys(ex).forEach(date => {
+          const e = ex[date];
+          if (e && e.done && e.doneAt && e.doneAt.slice(0, 10) === today && date < today) {
+            const taskTime = t.time || "18:00";
+            ex[date] = {
+              ...e,
+              doneAt: date + "T" + taskTime + ":00"
+            };
+            changed = true;
+            fixes++;
+          }
+        });
+        if (changed) return {
+          ...t,
+          exceptions: ex,
+          _modAt: Date.now()
+        };
+        return t;
+      });
+      if (fixes === 0) {
+        alert("No mis-dated completions found. Nothing to repair.");
+        return;
+      }
+      if (confirm("Found " + fixes + " Feed Leo completion(s) with today's timestamp on past dates. Fix them?")) {
+        setTasks(updated);
+        alert("Fixed " + fixes + " completion timestamp(s). The points should now reflect the correct dates.");
+      }
+    }
+  }, "Repair Feed Leo timestamps"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
