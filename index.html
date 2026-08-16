@@ -70829,19 +70829,16 @@ function ChatTab({
     const r = new SR();
     r.lang = "en-AU";
     r.continuous = false;
-    r.interimResults = true;
+    r.interimResults = false;
     r.maxAlternatives = 1;
     transcriptAccRef.current = "";
     r.onresult = ev => {
-      // v693 · Use only the LAST result — on Samsung Chrome, continuous mode
-      // creates new final entries each containing the full text from scratch,
-      // causing snowball duplication when concatenated.
-      const last = ev.results[ev.results.length - 1];
-      const txt = last[0].transcript;
-      if (last.isFinal) transcriptAccRef.current = txt;
+      // v694 · interimResults=false: only the final result fires, no snowball.
+      const txt = ev.results[0][0].transcript;
+      transcriptAccRef.current = txt;
       setText(prev => {
         const base = prev.replace(/\u200B.*$/, "");
-        return base + (base ? " " : "") + "\u200B" + txt;
+        return (base + (base ? " " : "") + txt).trim();
       });
     };
     r.onerror = () => setVoiceState("error");
@@ -74177,7 +74174,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v684"))))), diagOpen && (() => {
+  }, "v694"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
