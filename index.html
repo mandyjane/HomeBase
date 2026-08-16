@@ -74199,47 +74199,84 @@ function SettingsPage({
       cursor: "pointer",
       width: "100%"
     },
-    onClick: () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const leoTasks = tasks.filter(t => t.title && t.title.toLowerCase().includes("feed leo") && !t._deleted);
+    onClick: async () => {
+      const raw = JSON.parse(localStorage.getItem("hb_tasks") || "[]");
+      const leoTasks = raw.filter(t => t.title && t.title.toLowerCase().includes("feed leo") && !t._deleted);
       if (!leoTasks.length) {
         alert("No Feed Leo task found");
         return;
       }
+      const todayStr = new Date().toISOString().slice(0, 10);
       let fixes = 0;
-      const updated = tasks.map(t => {
-        if (!t.title || !t.title.toLowerCase().includes("feed leo") || t._deleted) return t;
-        const ex = {
-          ...t.exceptions
-        };
-        let changed = false;
-        Object.keys(ex).forEach(date => {
-          const e = ex[date];
-          if (e && e.done && e.doneAt && e.doneAt.slice(0, 10) !== date) {
-            const taskTime = t.time || "18:00";
-            ex[date] = {
-              ...e,
-              doneAt: date + "T" + taskTime + ":00"
-            };
-            changed = true;
-            fixes++;
+      raw.forEach(t => {
+        if (!t.title || !t.title.toLowerCase().includes("feed leo") || t._deleted) return;
+        if (!t.exceptions) t.exceptions = {};
+        const taskTime = t.time || "18:00";
+        // Fix mis-dated completions
+        Object.keys(t.exceptions).forEach(date => {
+          const e = t.exceptions[date];
+          if (e && e.done && e.doneAt) {
+            const doneDateStr = typeof e.doneAt === "string" ? e.doneAt.slice(0, 10) : new Date(e.doneAt).toISOString().slice(0, 10);
+            if (doneDateStr !== date) {
+              t.exceptions[date] = {
+                ...e,
+                doneAt: new Date(date + "T" + taskTime + ":00").toISOString()
+              };
+              fixes++;
+            }
           }
         });
-        if (changed) return {
-          ...t,
-          exceptions: ex,
-          _modAt: Date.now()
-        };
-        return t;
+        // Restore missing completions for overdue dates
+        const due = t.dueDate;
+        if (due && due < todayStr) {
+          let cursor = due;
+          while (cursor < todayStr) {
+            if (!t.exceptions[cursor] || !t.exceptions[cursor].done) {
+              t.exceptions[cursor] = {
+                ...(t.exceptions[cursor] || {}),
+                done: true,
+                doneAt: new Date(cursor + "T" + taskTime + ":00").toISOString(),
+                completedBy: t.who || "shared"
+              };
+              fixes++;
+            }
+            const d = new Date(cursor + "T00:00:00");
+            d.setDate(d.getDate() + 1);
+            cursor = d.toISOString().slice(0, 10);
+          }
+        }
+        t._modAt = Date.now();
       });
       if (fixes === 0) {
-        alert("No mis-dated completions found. Nothing to repair.");
+        alert("Nothing to repair.");
         return;
       }
-      if (confirm("Found " + fixes + " Feed Leo completion(s) with today's timestamp on past dates. Fix them?")) {
-        setTasks(updated);
-        alert("Fixed " + fixes + " completion timestamp(s). The points should now reflect the correct dates.");
+      if (!confirm("Found " + fixes + " Feed Leo fix(es). Apply and reload?")) {
+        return;
       }
+      // Write directly to localStorage
+      localStorage.setItem("hb_tasks", JSON.stringify(raw));
+      // Push to Supabase
+      try {
+        await fetch("https://cslwsardurvdlyiiatfy.supabase.co/rest/v1/sync_store", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHdzYXJkdXJ2ZGx5aWlhdGZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNzE2ODMsImV4cCI6MjEwMDk0NzY4M30.sdsuIo_-GvnVuSfu7CkD5VaHXjnkVxSeuaCI2oMdLbQ",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHdzYXJkdXJ2ZGx5aWlhdGZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNzE2ODMsImV4cCI6MjEwMDk0NzY4M30.sdsuIo_-GvnVuSfu7CkD5VaHXjnkVxSeuaCI2oMdLbQ",
+            "Prefer": "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({
+            household_id: "2db89f63-f6db-423b-8c82-c76192bd6e8e",
+            key: "hb_tasks",
+            value: raw
+          })
+        });
+      } catch (e) {
+        console.warn("push err", e);
+      }
+      // Hard reload to pick up changes
+      location.reload();
     }
   }, "Repair Feed Leo timestamps"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
