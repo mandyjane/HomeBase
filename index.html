@@ -74215,7 +74215,7 @@ function SettingsPage({
         let changed = false;
         Object.keys(ex).forEach(date => {
           const e = ex[date];
-          if (e && e.done && e.doneAt && e.doneAt.slice(0, 10) === today && date < today) {
+          if (e && e.done && e.doneAt && e.doneAt.slice(0, 10) !== date) {
             const taskTime = t.time || "18:00";
             ex[date] = {
               ...e,
