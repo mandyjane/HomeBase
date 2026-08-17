@@ -74197,7 +74197,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v705"), /*#__PURE__*/React.createElement("button", {
+  }, "v706"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
@@ -74340,13 +74340,17 @@ function SettingsPage({
       width: "100%"
     },
     onClick: () => {
-      const d = window._syncDiag || {};
-      const delTasks = tasks.filter(t => t._deleted);
-      const waterInVis = visTasks.filter(t => t.title && t.title.includes("Water garden"));
-      const leoInVis = visTasks.filter(t => t.title && t.title.includes("Feed Leo"));
-      const waterAll = tasks.filter(t => t.title && t.title.includes("Water garden"));
-      const leoAll = tasks.filter(t => t.title && t.title.includes("Feed Leo"));
-      alert("LIVE STATE:\ntasks=" + tasks.length + " deleted=" + delTasks.length + " visTasks=" + visTasks.length + "\n\nWater garden: " + waterAll.length + " total, " + waterInVis.length + " in visTasks\n" + waterAll.map(t => String(t.id).slice(0, 8) + " del=" + !!t._deleted + " mod=" + t._modAt).join("\n") + "\n\nFeed Leo: " + leoAll.length + " total, " + leoInVis.length + " in visTasks\n" + leoAll.map(t => String(t.id).slice(0, 8) + " del=" + !!t._deleted + " mod=" + t._modAt).join("\n"));
+      try {
+        const visT = tasks.filter(t => !t._deleted);
+        const delTasks = tasks.filter(t => t._deleted);
+        const waterInVis = visT.filter(t => t.title && t.title.includes("Water garden"));
+        const leoInVis = visT.filter(t => t.title && t.title.includes("Feed Leo"));
+        const waterAll = tasks.filter(t => t.title && t.title.includes("Water garden"));
+        const leoAll = tasks.filter(t => t.title && t.title.includes("Feed Leo"));
+        alert("LIVE STATE:\ntasks=" + tasks.length + " deleted=" + delTasks.length + " active=" + visT.length + "\n\nWater garden: " + waterAll.length + " total, " + waterInVis.length + " active\n" + waterAll.map(t => "id=" + String(t.id) + " del=" + !!t._deleted + " mod=" + t._modAt).join("\n") + "\n\nFeed Leo: " + leoAll.length + " total, " + leoInVis.length + " active\n" + leoAll.map(t => "id=" + String(t.id) + " del=" + !!t._deleted + " mod=" + t._modAt).join("\n"));
+      } catch (err) {
+        alert("DIAG ERROR: " + err.message);
+      }
     }
   }, "Live state diagnostic"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
