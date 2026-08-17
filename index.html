@@ -74173,7 +74173,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v701"), /*#__PURE__*/React.createElement("button", {
+  }, "v702"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
@@ -74273,50 +74273,30 @@ function SettingsPage({
       marginTop: 8,
       padding: "10px 16px",
       borderRadius: 10,
-      border: "1px solid rgba(229,72,77,0.3)",
-      background: "rgba(229,72,77,0.08)",
-      color: "#E5484D",
+      border: "1px solid rgba(100,180,255,0.3)",
+      background: "rgba(100,180,255,0.08)",
+      color: "#64B4FF",
       fontSize: 12,
       fontWeight: 700,
       cursor: "pointer",
       width: "100%"
     },
-    onClick: async () => {
+    onClick: () => {
       const raw = JSON.parse(localStorage.getItem("hb_tasks") || "[]");
-      const ghosts = raw.filter(t => t.title && t.title.toLowerCase().includes("water garden") && t.recur === "weekly" && !t._deleted);
-      if (!ghosts.length) {
-        alert("No ghost Water garden plants (weekly) found. Total Water garden tasks: " + raw.filter(t => t.title && t.title.toLowerCase().includes("water garden")).length);
+      const kw = prompt("Enter task name to search (e.g. water garden, feed leo):");
+      if (!kw) return;
+      const matches = raw.filter(t => t.title && t.title.toLowerCase().includes(kw.toLowerCase()));
+      if (!matches.length) {
+        alert("No tasks matching '" + kw + "' found.");
         return;
       }
-      if (!confirm("Found " + ghosts.length + " ghost weekly Water garden plants task(s). IDs: " + ghosts.map(g => g.id.slice(0, 8)).join(", ") + "\n\nMark as deleted?")) {
-        return;
-      }
-      ghosts.forEach(g => {
-        g._deleted = true;
-        g._modAt = Date.now();
-      });
-      localStorage.setItem("hb_tasks", JSON.stringify(raw));
-      try {
-        await fetch("https://cslwsardurvdlyiiatfy.supabase.co/rest/v1/sync_store", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHdzYXJkdXJ2ZGx5aWlhdGZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNzE2ODMsImV4cCI6MjEwMDk0NzY4M30.sdsuIo_-GvnVuSfu7CkD5VaHXjnkVxSeuaCI2oMdLbQ",
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHdzYXJkdXJ2ZGx5aWlhdGZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNzE2ODMsImV4cCI6MjEwMDk0NzY4M30.sdsuIo_-GvnVuSfu7CkD5VaHXjnkVxSeuaCI2oMdLbQ",
-            "Prefer": "resolution=merge-duplicates"
-          },
-          body: JSON.stringify({
-            household_id: "2db89f63-f6db-423b-8c82-c76192bd6e8e",
-            key: "hb_tasks",
-            value: raw
-          })
-        });
-      } catch (e) {
-        console.warn("push err", e);
-      }
-      location.reload();
+      const info = matches.map((t, i) => {
+        const exCount = Object.keys(t.exceptions || {}).length;
+        return i + 1 + ". " + t.title + "\n   id=" + t.id.slice(0, 12) + "\n   recur=" + JSON.stringify(t.recur) + "\n   who=" + JSON.stringify(t.who) + "\n   dueDate=" + t.dueDate + "\n   _deleted=" + !!t._deleted + "\n   _modAt=" + t._modAt + "\n   exceptions=" + exCount + (t.recurEnd ? " recurEnd=" + t.recurEnd : "") + (t.recurMode ? " recurMode=" + t.recurMode : "");
+      }).join("\n\n");
+      alert("Found " + matches.length + " task(s) matching '" + kw + "':\n\n" + info);
     }
-  }, "Nuke ghost Water garden (weekly)"), /*#__PURE__*/React.createElement("button", {
+  }, "Diagnose task data"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 8,
@@ -74332,21 +74312,18 @@ function SettingsPage({
     },
     onClick: async () => {
       const raw = JSON.parse(localStorage.getItem("hb_tasks") || "[]");
-      const leos = raw.filter(t => t.title && t.title.toLowerCase().includes("feed leo") && !t._deleted);
-      if (leos.length <= 1) {
-        alert("Only " + leos.length + " Feed Leo task(s) found — no duplicate to remove.");
+      const idStr = prompt("Paste task ID prefix to delete (from diagnostic above):");
+      if (!idStr) return;
+      const victim = raw.find(t => t.id.startsWith(idStr) && !t._deleted);
+      if (!victim) {
+        alert("No active task found with id starting '" + idStr + "'");
         return;
       }
-      const info = leos.map((t, i) => i + 1 + ". id=" + t.id.slice(0, 8) + " who=" + JSON.stringify(t.who) + " recur=" + t.recur + " dueDate=" + t.dueDate + " exceptions=" + Object.keys(t.exceptions || {}).length).join("\n");
-      const keep = leos.reduce((a, b) => Object.keys(a.exceptions || {}).length >= Object.keys(b.exceptions || {}).length ? a : b);
-      const dupes = leos.filter(t => t.id !== keep.id);
-      if (!confirm("Found " + leos.length + " Feed Leo tasks:\n\n" + info + "\n\nKeeping: " + keep.id.slice(0, 8) + " (" + Object.keys(keep.exceptions || {}).length + " exceptions)\nDeleting: " + dupes.map(d => d.id.slice(0, 8)).join(", "))) {
+      if (!confirm("Delete task: " + victim.title + "\nid=" + victim.id.slice(0, 12) + "\nrecur=" + victim.recur + "\n\nMark as deleted?")) {
         return;
       }
-      dupes.forEach(d => {
-        d._deleted = true;
-        d._modAt = Date.now();
-      });
+      victim._deleted = true;
+      victim._modAt = Date.now();
       localStorage.setItem("hb_tasks", JSON.stringify(raw));
       try {
         await fetch("https://cslwsardurvdlyiiatfy.supabase.co/rest/v1/sync_store", {
@@ -74368,7 +74345,7 @@ function SettingsPage({
       }
       location.reload();
     }
-  }, "Nuke duplicate Feed Leo"))))), diagOpen && (() => {
+  }, "Delete task by ID"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
