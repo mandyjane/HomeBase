@@ -9391,6 +9391,22 @@ function App({
   // v445 · PRIVATE — hidden from the other person, no points.
   const isPrivateHidden = t => !!(t && t.private && currentUser && t.assignee !== currentUser && t.assignee !== "both");
   const visTasks = tasks.filter(t => !t._deleted && !isPrivateHidden(t));
+  // v705 DIAGNOSTIC: log if _deleted tasks survive into state
+  if (typeof window !== "undefined") {
+    const _delInState = tasks.filter(t => t._deleted);
+    const _delInVis = visTasks.filter(t => t._deleted);
+    if (_delInVis.length) console.error("BUG: " + _delInVis.length + " _deleted tasks in visTasks!");
+    const _waterGhosts = visTasks.filter(t => t.title && t.title.includes("Water garden"));
+    const _leoGhosts = visTasks.filter(t => t.title && t.title.includes("Feed Leo"));
+    if (_waterGhosts.length > 1 || _leoGhosts.length > 1) console.error("DUPLICATES: water=" + _waterGhosts.length + " leo=" + _leoGhosts.length);
+    window._syncDiag = {
+      total: tasks.length,
+      deleted: _delInState.length,
+      vis: visTasks.length,
+      water: _waterGhosts.length,
+      leo: _leoGhosts.length
+    };
+  }
   const visEvents = events.filter(e => !isPrivateHidden(e));
   const [phSpecialIcons, setPhSpecialIcons] = useState(() => lsGet("hb_phSpecialIcons", true));
   const [showPublicHolidays, setShowPublicHolidays] = useState(() => lsGet("hb_showPH", true));
@@ -14104,7 +14120,7 @@ function App({
   }
 
   // Snapshot data for Home (nearest upcoming only)
-  const homeListTasks = visTasks.map(t => {
+  const homeListTasks = visTasks.filter(t => !t._deleted).map(t => {
     if (!t.recur || t.recur === "none") return t;
     const d = nextOccurrenceDate(t, "dueDate", today);
     return materialize(t, d, "dueDate");
@@ -74181,7 +74197,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v704"), /*#__PURE__*/React.createElement("button", {
+  }, "v705"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
@@ -74310,6 +74326,29 @@ function SettingsPage({
       }
     }
   }, "Diagnose task data"), /*#__PURE__*/React.createElement("button", {
+    className: "sans",
+    style: {
+      marginTop: 8,
+      padding: "10px 16px",
+      borderRadius: 10,
+      border: "1px solid rgba(100,180,255,0.3)",
+      background: "rgba(100,180,255,0.08)",
+      color: "#64B4FF",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+      width: "100%"
+    },
+    onClick: () => {
+      const d = window._syncDiag || {};
+      const delTasks = tasks.filter(t => t._deleted);
+      const waterInVis = visTasks.filter(t => t.title && t.title.includes("Water garden"));
+      const leoInVis = visTasks.filter(t => t.title && t.title.includes("Feed Leo"));
+      const waterAll = tasks.filter(t => t.title && t.title.includes("Water garden"));
+      const leoAll = tasks.filter(t => t.title && t.title.includes("Feed Leo"));
+      alert("LIVE STATE:\ntasks=" + tasks.length + " deleted=" + delTasks.length + " visTasks=" + visTasks.length + "\n\nWater garden: " + waterAll.length + " total, " + waterInVis.length + " in visTasks\n" + waterAll.map(t => String(t.id).slice(0, 8) + " del=" + !!t._deleted + " mod=" + t._modAt).join("\n") + "\n\nFeed Leo: " + leoAll.length + " total, " + leoInVis.length + " in visTasks\n" + leoAll.map(t => String(t.id).slice(0, 8) + " del=" + !!t._deleted + " mod=" + t._modAt).join("\n"));
+    }
+  }, "Live state diagnostic"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 8,
