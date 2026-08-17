@@ -12300,6 +12300,9 @@ function App({
   // deleteTask: scope "one" (skip this date) | "series" | undefined(one-off)
   function deleteTask(occ, scope) {
     const seriesId = occ && occ._seriesId || occ && occ.id || occ;
+    // v699 TEMP DIAGNOSTIC — remove after debug
+    const _matchCount = tasks.filter(t => t.id === seriesId).length;
+    showToast(`DELETE scope=${scope} id=${seriesId && seriesId.slice && seriesId.slice(0, 8)} matches=${_matchCount}`, "info");
     cancelStaleAlerts(seriesId, "t"); // v496 · cancel alerts immediately
     if ((scope === "one" || scope === "one-purge") && occ && occ._occDate) {
       const d = occ._occDate;
@@ -74166,7 +74169,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v699"), /*#__PURE__*/React.createElement("button", {
+  }, "v700"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
