@@ -14721,28 +14721,24 @@ function App({
   // v707 DIAGNOSTIC: expose Feed Leo rows from every render section
   if (typeof window !== "undefined") {
     window._agendaDiag = () => {
-      const leoAgenda = homeAgenda.filter(r => r.title && r.title.includes("Feed Leo"));
-      const leoOther = homeOtherRows.filter(r => r.title && r.title.includes("Feed Leo"));
-      const leoUrgent = homeUrgentRows.filter(r => r.title && r.title.includes("Feed Leo"));
-      const leoEvent = homeEventRows.filter(r => r.title && r.title.includes("Feed Leo"));
-      const leoTask = homeTaskRows.filter(r => r.title && r.title.includes("Feed Leo"));
+      const mk = r => ({
+        kind: r.kind,
+        id: r.ref && (r.ref._seriesId || r.ref.id),
+        occ: r.ref && r.ref._occDate,
+        del: r.ref && !!r.ref._deleted,
+        date: r.date,
+        done: r.done,
+        who: r.pName
+      });
+      const todayLeo = homeOtherRows.filter(r => r.title && r.title.includes("Feed Leo"));
+      const todayWater = homeOtherRows.filter(r => r.title && r.title.includes("Water garden"));
+      const tmrwLeo = tomorrowOtherRows.filter(r => r.title && r.title.includes("Feed Leo"));
+      const tmrwWater = tomorrowOtherRows.filter(r => r.title && r.title.includes("Water garden"));
       return {
-        agenda: leoAgenda.map(r => ({
-          kind: r.kind,
-          id: r.ref && (r.ref._seriesId || r.ref.id),
-          occ: r.ref && r.ref._occDate,
-          date: r.date,
-          overdue: r.overdue,
-          done: r.done,
-          pName: r.pName
-        })),
-        counts: {
-          agenda: leoAgenda.length,
-          taskRows: leoTask.length,
-          urgentRows: leoUrgent.length,
-          otherRows: leoOther.length,
-          eventRows: leoEvent.length
-        }
+        todayLeo: todayLeo.map(mk),
+        todayWater: todayWater.map(mk),
+        tmrwLeo: tmrwLeo.map(mk),
+        tmrwWater: tmrwWater.map(mk)
       };
     };
   }
@@ -74225,7 +74221,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v708"), /*#__PURE__*/React.createElement("button", {
+  }, "v709"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
@@ -74401,7 +74397,8 @@ function SettingsPage({
           return;
         }
         const d = window._agendaDiag();
-        alert("FEED LEO RENDER BREAKDOWN:\n\nSection counts:\n  agenda=" + d.counts.agenda + "\n  taskRows=" + d.counts.taskRows + "\n  urgentRows=" + d.counts.urgentRows + "\n  otherRows=" + d.counts.otherRows + "\n  eventRows=" + d.counts.eventRows + "\n\nAgenda rows:\n" + d.agenda.map((r, i) => i + 1 + ". kind=" + r.kind + " id=" + r.id + " occ=" + r.occ + " date=" + r.date + " overdue=" + r.overdue + " done=" + r.done + " who=" + r.pName).join("\n"));
+        const fmt = arr => arr.length ? arr.map((r, i) => "  " + (i + 1) + ". id=" + r.id + " occ=" + r.occ + " del=" + r.del + " done=" + r.done + " who=" + r.who).join("\n") : "  (none)";
+        alert("TODAY vs TOMORROW ROWS:\n\nTODAY Feed Leo:\n" + fmt(d.todayLeo) + "\n\nTODAY Water garden:\n" + fmt(d.todayWater) + "\n\nTOMORROW Feed Leo:\n" + fmt(d.tmrwLeo) + "\n\nTOMORROW Water garden:\n" + fmt(d.tmrwWater));
       } catch (err) {
         alert("AGENDA DIAG ERROR: " + err.message);
       }
