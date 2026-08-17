@@ -9282,6 +9282,7 @@ function App({
     const items = [];
     (tasks || []).forEach(t => {
       if (!t || isBill(t)) return;
+      if (t._deleted) return; // v712 · skip tombstoned tasks
       const addItem = (doneAt, date) => {
         if (!doneAt) return;
         const ex = t.exceptions && t.exceptions[date];
@@ -41147,6 +41148,7 @@ function PlanWeekSheet({
   const existingChores = useMemo(() => {
     const out = {};
     (tasks || []).forEach(t => {
+      if (t._deleted) return; // v712 · skip tombstoned tasks
       if (t.assignee !== person) return;
       if (isBill(t)) return; // v167 · bills live in their own tab now
       const dates = !t.recur || t.recur === "none" ? [t.dueDate] : seriesDates(t, "dueDate", monday, weekEnd);
@@ -52954,6 +52956,7 @@ function StatsTab({
   const openOccs = useMemo(() => {
     const out = [];
     (tasks || []).forEach(t => {
+      if (t._deleted) return; // v712 · skip tombstoned tasks
       if (isBill(t)) return;
       if (t.recur === "daily" && !dailyCounts) return; // range decides; setting overrides Monthly+
       if ((!t.recur || t.recur === "none") && !isPlan(t)) {
@@ -63830,6 +63833,7 @@ function collectCompletedTasks(tasks, who, periodStart, periodEnd, resetAfter) {
   const results = [];
   (tasks || []).forEach(t => {
     if (!t) return;
+    if (t._deleted) return; // v712 · skip tombstoned tasks — their completions were double-counting points
     // v392 · Bills award points but were excluded from activity, so the
     // household goal showed points with no matching activity. Include bills
     // for "shared" so the numbers add up. Individual activity still hides
@@ -74223,7 +74227,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v711"), /*#__PURE__*/React.createElement("button", {
+  }, "v712"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
