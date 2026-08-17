@@ -6872,6 +6872,14 @@ function mergeById(localArr, remoteArr) {
       byId.set(t.id, t);
       return;
     } // new from other device
+    // v704 · _deleted is PERMANENT: if either side deleted it, keep the deleted version.
+    // This prevents the sync loop where the other device resurrects a deleted task
+    // by pushing a non-deleted version with a newer _modAt.
+    if (existing._deleted && !t._deleted) return; // local deleted, remote not — keep local
+    if (t._deleted && !existing._deleted) {
+      byId.set(t.id, t);
+      return;
+    } // remote deleted — accept
     const lm = existing._modAt || 0,
       rm = t._modAt || 0;
     if (rm > lm) byId.set(t.id, t); // remote is newer
@@ -74173,7 +74181,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v703"), /*#__PURE__*/React.createElement("button", {
+  }, "v704"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
