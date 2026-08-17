@@ -14211,6 +14211,32 @@ function App({
     });
   }, [overdueCount, showToast]);
   const nextTasks = homeListTasks.filter(t => !t.done && !isDeadlineTask(t) && t.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || b.priority - a.priority).slice(0, 3);
+  // v707 DIAGNOSTIC: expose homeAgenda Feed Leo rows to window
+  if (typeof window !== "undefined") {
+    window._agendaDiag = () => {
+      const leoRows = homeAgenda.filter(r => r.title && r.title.includes("Feed Leo"));
+      const waterRows = homeAgenda.filter(r => r.title && r.title.includes("Water garden"));
+      return {
+        leo: leoRows.map(r => ({
+          id: r.ref && (r.ref._seriesId || r.ref.id),
+          occ: r.ref && r.ref._occDate,
+          date: r.date,
+          overdue: r.overdue,
+          done: r.done,
+          pName: r.pName
+        })),
+        water: waterRows.map(r => ({
+          id: r.ref && (r.ref._seriesId || r.ref.id),
+          occ: r.ref && r.ref._occDate,
+          date: r.date,
+          overdue: r.overdue,
+          done: r.done,
+          pName: r.pName
+        })),
+        agendaLen: homeAgenda.length
+      };
+    };
+  }
   const nextEvents = homeListEvents.filter(e => {
     if (e.date >= today) return true;
     // v557 · A span event that STARTED before today but COVERS today or later.
@@ -74197,7 +74223,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v706"), /*#__PURE__*/React.createElement("button", {
+  }, "v707"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
@@ -74353,6 +74379,32 @@ function SettingsPage({
       }
     }
   }, "Live state diagnostic"), /*#__PURE__*/React.createElement("button", {
+    className: "sans",
+    style: {
+      marginTop: 8,
+      padding: "10px 16px",
+      borderRadius: 10,
+      border: "1px solid rgba(180,120,255,0.3)",
+      background: "rgba(180,120,255,0.08)",
+      color: "#B478FF",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+      width: "100%"
+    },
+    onClick: () => {
+      try {
+        if (!window._agendaDiag) {
+          alert("Agenda diagnostic not ready — open the Home tab first, then come back.");
+          return;
+        }
+        const d = window._agendaDiag();
+        alert("DASHBOARD ROWS (what actually renders):\n\nFeed Leo rows: " + d.leo.length + "\n" + d.leo.map((r, i) => i + 1 + ". id=" + r.id + " occDate=" + r.occ + " date=" + r.date + " overdue=" + r.overdue + " done=" + r.done + " who=" + r.pName).join("\n") + "\n\nWater garden rows: " + d.water.length + "\n" + d.water.map((r, i) => i + 1 + ". id=" + r.id + " occDate=" + r.occ + " date=" + r.date + " overdue=" + r.overdue + " done=" + r.done + " who=" + r.pName).join("\n"));
+      } catch (err) {
+        alert("AGENDA DIAG ERROR: " + err.message);
+      }
+    }
+  }, "Dashboard rows diagnostic"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 8,
