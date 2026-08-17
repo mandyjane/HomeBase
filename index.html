@@ -30658,8 +30658,12 @@ function AgendaRow({
       sub: "Every occurrence, past and future · permanent"
     }] : null,
     onConfirm: scope => {
-      if (scope === "future") onEndRepeatAt && onEndRepeatAt(t._seriesId || t.id, t._occDate || (isTask ? t.dueDate : t.date));else if (scope === "end") onEndRepeat && onEndRepeat(t._seriesId || t.id);else if (scope === "one-purge") onDelete("one-purge");else onDelete(scope === true ? undefined : scope);
-      setDelPrompt(false);
+      try {
+        if (scope === "future") onEndRepeatAt && onEndRepeatAt(t._seriesId || t.id, t._occDate || (isTask ? t.dueDate : t.date));else if (scope === "end") onEndRepeat && onEndRepeat(t._seriesId || t.id);else if (scope === "one-purge") onDelete("one-purge");else onDelete(scope === true ? undefined : scope);
+        setDelPrompt(false);
+      } catch (err) {
+        window.alert("DELETE ERROR: " + err.message + "\n\nscope=" + scope + "\nonDelete=" + typeof onDelete + "\nseriesId=" + (t._seriesId || t.id));
+      }
     },
     onCancel: () => setDelPrompt(false)
   })), wet && /*#__PURE__*/React.createElement("div", {
@@ -74169,7 +74173,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v700"), /*#__PURE__*/React.createElement("button", {
+  }, "v701"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
@@ -74263,7 +74267,108 @@ function SettingsPage({
       // Hard reload to pick up changes
       location.reload();
     }
-  }, "Repair Feed Leo timestamps"))))), diagOpen && (() => {
+  }, "Repair Feed Leo timestamps"), /*#__PURE__*/React.createElement("button", {
+    className: "sans",
+    style: {
+      marginTop: 8,
+      padding: "10px 16px",
+      borderRadius: 10,
+      border: "1px solid rgba(229,72,77,0.3)",
+      background: "rgba(229,72,77,0.08)",
+      color: "#E5484D",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+      width: "100%"
+    },
+    onClick: async () => {
+      const raw = JSON.parse(localStorage.getItem("hb_tasks") || "[]");
+      const ghosts = raw.filter(t => t.title && t.title.toLowerCase().includes("water garden") && t.recur === "weekly" && !t._deleted);
+      if (!ghosts.length) {
+        alert("No ghost Water garden plants (weekly) found. Total Water garden tasks: " + raw.filter(t => t.title && t.title.toLowerCase().includes("water garden")).length);
+        return;
+      }
+      if (!confirm("Found " + ghosts.length + " ghost weekly Water garden plants task(s). IDs: " + ghosts.map(g => g.id.slice(0, 8)).join(", ") + "\n\nMark as deleted?")) {
+        return;
+      }
+      ghosts.forEach(g => {
+        g._deleted = true;
+        g._modAt = Date.now();
+      });
+      localStorage.setItem("hb_tasks", JSON.stringify(raw));
+      try {
+        await fetch("https://cslwsardurvdlyiiatfy.supabase.co/rest/v1/sync_store", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHdzYXJkdXJ2ZGx5aWlhdGZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNzE2ODMsImV4cCI6MjEwMDk0NzY4M30.sdsuIo_-GvnVuSfu7CkD5VaHXjnkVxSeuaCI2oMdLbQ",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHdzYXJkdXJ2ZGx5aWlhdGZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNzE2ODMsImV4cCI6MjEwMDk0NzY4M30.sdsuIo_-GvnVuSfu7CkD5VaHXjnkVxSeuaCI2oMdLbQ",
+            "Prefer": "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({
+            household_id: "2db89f63-f6db-423b-8c82-c76192bd6e8e",
+            key: "hb_tasks",
+            value: raw
+          })
+        });
+      } catch (e) {
+        console.warn("push err", e);
+      }
+      location.reload();
+    }
+  }, "Nuke ghost Water garden (weekly)"), /*#__PURE__*/React.createElement("button", {
+    className: "sans",
+    style: {
+      marginTop: 8,
+      padding: "10px 16px",
+      borderRadius: 10,
+      border: "1px solid rgba(229,72,77,0.3)",
+      background: "rgba(229,72,77,0.08)",
+      color: "#E5484D",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+      width: "100%"
+    },
+    onClick: async () => {
+      const raw = JSON.parse(localStorage.getItem("hb_tasks") || "[]");
+      const leos = raw.filter(t => t.title && t.title.toLowerCase().includes("feed leo") && !t._deleted);
+      if (leos.length <= 1) {
+        alert("Only " + leos.length + " Feed Leo task(s) found — no duplicate to remove.");
+        return;
+      }
+      const info = leos.map((t, i) => i + 1 + ". id=" + t.id.slice(0, 8) + " who=" + JSON.stringify(t.who) + " recur=" + t.recur + " dueDate=" + t.dueDate + " exceptions=" + Object.keys(t.exceptions || {}).length).join("\n");
+      const keep = leos.reduce((a, b) => Object.keys(a.exceptions || {}).length >= Object.keys(b.exceptions || {}).length ? a : b);
+      const dupes = leos.filter(t => t.id !== keep.id);
+      if (!confirm("Found " + leos.length + " Feed Leo tasks:\n\n" + info + "\n\nKeeping: " + keep.id.slice(0, 8) + " (" + Object.keys(keep.exceptions || {}).length + " exceptions)\nDeleting: " + dupes.map(d => d.id.slice(0, 8)).join(", "))) {
+        return;
+      }
+      dupes.forEach(d => {
+        d._deleted = true;
+        d._modAt = Date.now();
+      });
+      localStorage.setItem("hb_tasks", JSON.stringify(raw));
+      try {
+        await fetch("https://cslwsardurvdlyiiatfy.supabase.co/rest/v1/sync_store", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHdzYXJkdXJ2ZGx5aWlhdGZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNzE2ODMsImV4cCI6MjEwMDk0NzY4M30.sdsuIo_-GvnVuSfu7CkD5VaHXjnkVxSeuaCI2oMdLbQ",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHdzYXJkdXJ2ZGx5aWlhdGZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNzE2ODMsImV4cCI6MjEwMDk0NzY4M30.sdsuIo_-GvnVuSfu7CkD5VaHXjnkVxSeuaCI2oMdLbQ",
+            "Prefer": "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({
+            household_id: "2db89f63-f6db-423b-8c82-c76192bd6e8e",
+            key: "hb_tasks",
+            value: raw
+          })
+        });
+      } catch (e) {
+        console.warn("push err", e);
+      }
+      location.reload();
+    }
+  }, "Nuke duplicate Feed Leo"))))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
