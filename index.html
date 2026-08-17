@@ -74223,7 +74223,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v710"), /*#__PURE__*/React.createElement("button", {
+  }, "v711"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
@@ -74406,6 +74406,54 @@ function SettingsPage({
       }
     }
   }, "Dashboard rows diagnostic"), /*#__PURE__*/React.createElement("button", {
+    className: "sans",
+    style: {
+      marginTop: 8,
+      padding: "10px 16px",
+      borderRadius: 10,
+      border: "1px solid rgba(255,180,80,0.3)",
+      background: "rgba(255,180,80,0.08)",
+      color: "#FFB450",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+      width: "100%"
+    },
+    onClick: () => {
+      try {
+        const raw = JSON.parse(localStorage.getItem("hb_tasks") || "[]");
+        // Count completed exceptions per (title, date) across ALL tasks including deleted
+        const byDate = {};
+        raw.forEach(t => {
+          if (!t.title) return;
+          const collect = (date, fromDeleted) => {
+            const k = t.title + "|" + date;
+            if (!byDate[k]) byDate[k] = [];
+            byDate[k].push({
+              id: t.id,
+              del: !!t._deleted
+            });
+          };
+          if (t.exceptions) Object.entries(t.exceptions).forEach(([d, ex]) => {
+            if (ex && ex.done && !ex.deleted) collect(d);
+          });
+          if (t.done && t.doneAt) collect(t.dueDate);
+        });
+        const dupes = Object.entries(byDate).filter(([k, arr]) => arr.length > 1);
+        if (!dupes.length) {
+          alert("No doubled completions found! Points are clean.");
+          return;
+        }
+        const summary = dupes.slice(0, 25).map(([k, arr]) => {
+          const [title, date] = k.split("|");
+          return title + " @ " + date + ": " + arr.length + "x (" + arr.map(a => "id=" + a.id + (a.del ? "*DEL" : "")).join(", ") + ")";
+        }).join("\n");
+        alert("DOUBLED COMPLETIONS (" + dupes.length + " total" + (dupes.length > 25 ? ", showing 25" : "") + "):\n\n" + summary + "\n\n*DEL = from a deleted task (these cause the double points)");
+      } catch (err) {
+        alert("POINTS DIAG ERROR: " + err.message);
+      }
+    }
+  }, "Show doubled points"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 8,
