@@ -6749,7 +6749,7 @@ function onStorageFull(fn) {
 }
 function lsSet(key, val) {
   const ok = _lsSetOrig(key, val);
-  if (ok && key.startsWith("hb_") && !APPEARANCE_KEYS.has(key.replace(/_[0-9a-f-]+$/, ""))) sbPush(key, val);
+  if (ok && key.startsWith("hb_") && key !== "hb_tasks" && key !== "hb_events" && !APPEARANCE_KEYS.has(key.replace(/_[0-9a-f-]+$/, ""))) sbPush(key, val);
   return ok;
 }
 // Roughly how much of the store is used. Every char of a UTF-16 string is ~2 bytes, but
@@ -8895,7 +8895,7 @@ function App({
   function remapTaskCategories(renames, removed) {
     const rn = renames || {};
     const rm = new Set(removed || []);
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (rm.has(t.room)) return {
         ...t,
         room: "Other"
@@ -8934,7 +8934,7 @@ function App({
   // null cardId UNLINKS, and must delete both fields rather than leave a stale cardId
   // behind (the same strip rule the form's save path uses).
   function linkBillToCard(bill, cardId) {
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== bill.id) return t;
       if (!cardId) {
         const {
@@ -8954,7 +8954,7 @@ function App({
   function remapBillCategories(renames, removed) {
     const rn = renames || {};
     const rm = new Set(removed || []);
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (!isBill(t)) return t;
       if (rm.has(t.billCat)) return {
         ...t,
@@ -8970,7 +8970,7 @@ function App({
   function remapEventCategories(renames, removed) {
     const rn = renames || {};
     const rm = new Set(removed || []);
-    setEvents(es => es.map(e => {
+    userSetEvents(es => es.map(e => {
       if (rm.has(e.category)) return {
         ...e,
         category: "Other"
@@ -8997,7 +8997,7 @@ function App({
       delete cats[oldKey];
       setEventCats(cats);
       // Re-point affected events to "Other".
-      setEvents(es => es.map(e => e.category === oldKey ? {
+      userSetEvents(es => es.map(e => e.category === oldKey ? {
         ...e,
         category: "Other"
       } : e));
@@ -9025,7 +9025,7 @@ function App({
     };
     setEventCats(cats);
     if (key !== oldKey) {
-      setEvents(es => es.map(e => e.category === oldKey ? {
+      userSetEvents(es => es.map(e => e.category === oldKey ? {
         ...e,
         category: key
       } : e));
@@ -9683,56 +9683,44 @@ function App({
     if (meta) meta.setAttribute("content", "width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover");
   }, []);
 
-  // v664/v690 · Stamp _modAt on tasks that changed since last persist.
-  // useLayoutEffect (not useEffect) so the write completes synchronously before
-  // the browser can process a refresh — prevents the race where tapping Done +
-  // refreshing loses the completion because the async effect hadn't fired yet.
-  //
-  // v690 · THE SYNC REVERT FIX: on initial mount (_prevTasksRef===null) we must NOT
-  // save or push to Supabase. The problem: Device B opens before receiving Device A's
-  // push. B stamps _modAt:now on its stale tasks (which lack _modAt) and pushes them.
-  // mergeById picks B's version (newer _modAt) even though B's data is stale. The done
-  // state from A is lost. Fix: on mount, just snapshot the ref for future diffing —
-  // don't write. Only save+push when a genuine local change is detected against a
-  // known previous state.
-  const _prevTasksRef = useRef(null);
-  (typeof window !== "undefined" ? React.useLayoutEffect : useEffect)(() => {
-    const prev = _prevTasksRef.current;
-    const now = Date.now();
-    if (!prev) {
-      // Initial mount: snapshot for future diffing, but do NOT save/push.
-      // Preserve any existing _modAt; backfill missing ones with 0 (not now!)
-      // so they lose to any remotely-stamped version in mergeById.
-      _prevTasksRef.current = tasks.map(t => t._modAt ? t : {
-        ...t,
-        _modAt: 0
-      });
-      return; // ← critical: no lsSet, no sbPush
-    }
-    const stamped = tasks.map(t => {
-      const old = prev.find(p => p.id === t.id);
-      // If the task is new or changed (ignoring _modAt itself), stamp it
-      if (!old) return {
-        ...t,
-        _modAt: now
-      };
-      const {
-        _modAt: _a,
-        ...tClean
-      } = t;
-      const {
-        _modAt: _b,
-        ...oClean
-      } = old;
-      if (JSON.stringify(tClean) !== JSON.stringify(oClean)) return {
-        ...t,
-        _modAt: now
-      };
-      return t; // unchanged — keep existing _modAt
-    });
-    _prevTasksRef.current = stamped;
-    lsSet("hb_tasks", stamped);
+  // v699 · SYNC FIX: removed the useLayoutEffect stamp-and-push loop.
+  // Persistence is now a simple effect; push happens explicitly at mutation sites.
+  useEffect(() => {
+    _lsSetOrig("hb_tasks", tasks);
   }, [tasks]);
+  // v699 · User mutation wrapper: stamps _modAt on changed items, persists, and pushes.
+  // Sync paths use bare setTasks (no push, no stamp).
+  function userSetTasks(updater) {
+    setTasks(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (next === prev) return prev;
+      const now = Date.now();
+      const prevMap = new Map(prev.map(t => [t.id, t]));
+      const stamped = next.map(t => {
+        const old = prevMap.get(t.id);
+        if (!old) return {
+          ...t,
+          _modAt: now
+        };
+        const {
+          _modAt: _a,
+          ...tClean
+        } = t;
+        const {
+          _modAt: _b,
+          ...oClean
+        } = old;
+        if (JSON.stringify(tClean) !== JSON.stringify(oClean)) return {
+          ...t,
+          _modAt: now
+        };
+        return t;
+      });
+      _lsSetOrig("hb_tasks", stamped);
+      sbPush("hb_tasks", stamped);
+      return stamped;
+    });
+  }
 
   // ── SHRINK THE PHOTOS ALREADY IN STORE *(v142)* ────────────────────────────
   // ATT_MAX_EDGE dropped 1600 -> 1200, but that only governs photos imported from now on.
@@ -9776,7 +9764,7 @@ function App({
       if (needDocs) lsSet("hb_docFix", 1);
       const finalTasks = dm ? dm.tasks : res ? res.tasks : null;
       if (!finalTasks) return; // nothing changed — leave state alone
-      setTasks(finalTasks);
+      userSetTasks(finalTasks);
       const bits = [];
       if (res) bits.push(`${res.count} receipt${res.count === 1 ? "" : "s"} compressed`);
       if (dm && dm.moved) bits.push(`${dm.moved} moved to safe storage`);
@@ -9814,42 +9802,41 @@ function App({
     } catch {}
   }, [tasks]);
 
-  // v664/v690 · Stamp _modAt on events (same merge-by-id pattern as tasks)
-  const _prevEventsRef = useRef(null);
-  (typeof window !== "undefined" ? React.useLayoutEffect : useEffect)(() => {
-    const prev = _prevEventsRef.current;
-    const now = Date.now();
-    if (!prev) {
-      // v690 · Initial mount: snapshot only, no save/push (same fix as tasks)
-      _prevEventsRef.current = events.map(e => e._modAt ? e : {
-        ...e,
-        _modAt: 0
-      });
-      return;
-    }
-    const stamped = events.map(e => {
-      const old = prev.find(p => p.id === e.id);
-      if (!old) return {
-        ...e,
-        _modAt: now
-      };
-      const {
-        _modAt: _a,
-        ...eClean
-      } = e;
-      const {
-        _modAt: _b,
-        ...oClean
-      } = old;
-      if (JSON.stringify(eClean) !== JSON.stringify(oClean)) return {
-        ...e,
-        _modAt: now
-      };
-      return e;
-    });
-    _prevEventsRef.current = stamped;
-    lsSet("hb_events", stamped);
+  // v699 · Events persistence (no push). Push is explicit at mutation sites.
+  useEffect(() => {
+    _lsSetOrig("hb_events", events);
   }, [events]);
+  function userSetEvents(updater) {
+    setEvents(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (next === prev) return prev;
+      const now = Date.now();
+      const prevMap = new Map(prev.map(e => [e.id, e]));
+      const stamped = next.map(e => {
+        const old = prevMap.get(e.id);
+        if (!old) return {
+          ...e,
+          _modAt: now
+        };
+        const {
+          _modAt: _a,
+          ...eClean
+        } = e;
+        const {
+          _modAt: _b,
+          ...oClean
+        } = old;
+        if (JSON.stringify(eClean) !== JSON.stringify(oClean)) return {
+          ...e,
+          _modAt: now
+        };
+        return e;
+      });
+      _lsSetOrig("hb_events", stamped);
+      sbPush("hb_events", stamped);
+      return stamped;
+    });
+  }
   useEffect(() => {
     lsSet("hb_manualOT", manualOT);
   }, [manualOT]);
@@ -9857,7 +9844,7 @@ function App({
   // counter-collision bug), reassign fresh unique ids so edits/deletes target
   // only the intended item.
   useEffect(() => {
-    setEvents(es => {
+    userSetEvents(es => {
       const seen = new Set();
       let changed = false;
       const fixed = es.map(e => {
@@ -9873,7 +9860,7 @@ function App({
       });
       return changed ? fixed : es;
     });
-    setTasks(ts => {
+    userSetTasks(ts => {
       const seen = new Set();
       let changed = false;
       const fixed = ts.map(t => {
@@ -9926,10 +9913,8 @@ function App({
     // v696 · Update the prev ref BEFORE setTasks so the useLayoutEffect sees no diff.
     // Without this, sync-loaded data (especially after a cache clear) looks like a
     // user change, gets stamped with fresh _modAt, and pushes stale data as "newest".
-    if (syncTasks) _prevTasksRef.current = syncedTasks;
     if (syncTasks) setTasks(syncedTasks);
     const syncedEvents = syncEvents ? lsGet("hb_events", SAMPLE_EVENTS) : events;
-    if (syncEvents) _prevEventsRef.current = syncedEvents;
     if (syncEvents) setEvents(syncedEvents);
     // Lightweight keys: always refresh (low-risk, need to stay in sync)
     const syncedBonusLog = lsGet("hb_bonusLog", []);
@@ -10016,14 +10001,10 @@ function App({
           if (changed.has("hb_treatRequests")) setTreatRequests(lsGet("hb_treatRequests", []));
           // v696 · Update prev refs before setTasks/setEvents to prevent stamp-and-push
           if (changed.has("hb_tasks")) {
-            const t = lsGet("hb_tasks", SAMPLE) || [];
-            _prevTasksRef.current = t;
-            setTasks(t);
+            setTasks(lsGet("hb_tasks", SAMPLE) || []);
           }
           if (changed.has("hb_events")) {
-            const e = lsGet("hb_events", SAMPLE_EVENTS);
-            _prevEventsRef.current = e;
-            setEvents(e);
+            setEvents(lsGet("hb_events", SAMPLE_EVENTS));
           }
           if (changed.has("hb_rewards")) setRewards(lsGet("hb_rewards", DEFAULT_REWARDS));
         });
@@ -10715,7 +10696,7 @@ function App({
       showToast("Nothing to merge — no payments to carry across", "info");
       return;
     }
-    setTasks(next);
+    userSetTasks(next);
     showToast(`Merged ${done} split bill${done > 1 ? "s" : ""} · ${moved} payment${moved > 1 ? "s" : ""} kept`, "success");
   }
   // v484 · merge a duplicate task pair (from DataRepairSheet)
@@ -10725,7 +10706,7 @@ function App({
       showToast("Nothing to merge", "info");
       return;
     }
-    setTasks(ts => ts.filter(t => t.id !== r.removeId).map(t => t.id === r.merged.id ? r.merged : t));
+    userSetTasks(ts => ts.filter(t => t.id !== r.removeId).map(t => t.id === r.merged.id ? r.merged : t));
     showToast(`Merged — ${r.absorbed} completion${r.absorbed !== 1 ? "s" : ""} absorbed`, "success");
   }
   // v484 · set points to recounted totals
@@ -10744,11 +10725,11 @@ function App({
     showToast("Points reset", "info");
   }
   // v337 · register alert-save callbacks at module scope
-  _saveTaskAlerts = (item, alerts) => setTasks(ts => ts.map(t => t.id === item.id ? {
+  _saveTaskAlerts = (item, alerts) => userSetTasks(ts => ts.map(t => t.id === item.id ? {
     ...t,
     alerts
   } : t));
-  _saveEventAlerts = (item, alerts) => setEvents(es => es.map(e => e.id === item.id ? {
+  _saveEventAlerts = (item, alerts) => userSetEvents(es => es.map(e => e.id === item.id ? {
     ...e,
     alerts
   } : e));
@@ -10758,7 +10739,7 @@ function App({
   function clearRewardHistory() {
     const before = events.length;
     const kept = events.filter(ev => ev.category !== "Reward");
-    setEvents(kept);
+    userSetEvents(kept);
     const logBefore = (goalLog || []).length;
     setGoalLog([]);
     const removed = before - kept.length + logBefore;
@@ -10961,7 +10942,7 @@ function App({
       // every other respect — it ticks, lands in the Tasks tab, is overdue if missed.
       // NO POINTS (points:0): the reward was already EARNED by the points that unlocked it;
       // awarding more for ticking it would pay twice for the same thing.
-      setTasks(ts => [...ts, {
+      userSetTasks(ts => [...ts, {
         id: uid(),
         title: goal.treat || "Reward",
         room: "Other",
@@ -10982,7 +10963,7 @@ function App({
       showToast(`Claimed — ${goal.treat || "reward"} added as a task`, "success");
       return;
     }
-    setEvents(es => [...es, {
+    userSetEvents(es => [...es, {
       id: euid(),
       title: goal.treat || "Reward",
       category: "Reward",
@@ -11098,7 +11079,7 @@ function App({
     // Points settle OUTSIDE setTasks — the mapper can run twice under StrictMode and
     // would otherwise award twice. Exactly one occurrence is ever paid for.
     if (tickDate) awardPoints(occ.assignee, occ.rewardTask ? 0 : occ.points, pointsTo, !!occ.rewardTask);
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       const ex = {
         ...(t.exceptions || {})
@@ -11248,7 +11229,7 @@ function App({
       const stored = recurring ? occ.exceptions && occ.exceptions[d] && occ.exceptions[d].award : occ.award;
       refundPoints(stored || splitAward(occ.assignee, occ.points));
     }
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       if (recurring) {
         const ex = {
@@ -11389,13 +11370,13 @@ function App({
   function clearCompleted() {
     const removable = tasks.filter(t => t.done && (!t.recur || t.recur === "none"));
     if (!removable.length) return 0;
-    setTasks(ts => ts.filter(t => !(t.done && (!t.recur || t.recur === "none"))));
+    userSetTasks(ts => ts.filter(t => !(t.done && (!t.recur || t.recur === "none"))));
     showToast(`Cleared ${removable.length} completed task${removable.length > 1 ? "s" : ""}`, "info");
     return removable.length;
   }
   function toggleSub(occ, subId) {
     const seriesId = occ._seriesId || occ.id;
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       if (occ._isOccurrence) {
         const d = occ._occDate;
@@ -11467,7 +11448,7 @@ function App({
       });
       return;
     }
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       // Replacing an existing document must not strand the old one in storage.
       if (!recurring) {
@@ -11509,7 +11490,7 @@ function App({
   function addPastPayment(bill, date, amount, paidOn, paidBy) {
     const [y, m, d] = (paidOn || date).split("-").map(Number);
     const stamp = new Date(y, m - 1, d, 12, 0, 0, 0).toISOString();
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== bill.id) return t;
       const ex = {
         ...(t.exceptions || {})
@@ -11533,7 +11514,7 @@ function App({
     showToast(r ? r.msg : "Past payment added", r ? r.type : "success");
   }
   function quickBillUpdate(bill, occDate, updates) {
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== bill.id) return t;
       // v637 · If the due date changed, shift the series schedule
       if (updates.dueDate && updates.dueDate !== occDate) {
@@ -11612,7 +11593,7 @@ function App({
       logPoints(dH, dM);
     }
     // Update stored award
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       if (recurring) {
         const ex = {
@@ -11641,7 +11622,7 @@ function App({
   // bringing the occurrence back. Purge replaces it with {purged:true} — gone
   // from all views with no way back. For test data, duplicates, or mistakes.
   function restoreOccurrence(seriesId, occDate) {
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       const ex = {
         ...(t.exceptions || {})
@@ -11663,7 +11644,7 @@ function App({
     showToast("Occurrence restored", "success");
   }
   function purgeOccurrence(seriesId, occDate) {
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       const ex = {
         ...(t.exceptions || {})
@@ -11679,7 +11660,7 @@ function App({
     showToast("Permanently removed", "info");
   }
   function deleteDoc(seriesId, occDate) {
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       if (occDate === "series") {
         docDelete(t.photo); // free the bytes, not just the pointer
@@ -11718,7 +11699,7 @@ function App({
     const seriesId = occ._seriesId || occ.id;
     const recurring = occ.recur && occ.recur !== "none";
     const d = occ._occDate || occ.dueDate;
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       if (!recurring) return {
         ...t,
@@ -11739,7 +11720,7 @@ function App({
     showToast("Link attached", "success");
   }
   function deleteLink(seriesId, occDate) {
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       if (occDate === "series") {
         const {
@@ -11809,7 +11790,7 @@ function App({
       return new Date(y, m - 1, d, 12, 0, 0, 0).toISOString();
     })();
     let wrote = false;
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== series.id) return t;
       const recurring = t.recur && t.recur !== "none";
       // A one-off card has nowhere to put a second month; only a recurring series can
@@ -11914,7 +11895,7 @@ function App({
       // shift the payment a day (and therefore a MONTH) on a westward device.
       return new Date(y, m - 1, d, 12, 0, 0, 0).toISOString();
     })();
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== series.id) return t;
       const recurring = t.recur && t.recur !== "none";
       if (recurring) {
@@ -11981,7 +11962,7 @@ function App({
     if (!y || !mo || !d || Number.isNaN(h) || Number.isNaN(mi)) return;
     const iso = new Date(y, mo - 1, d, h, mi, 0, 0).toISOString();
     const seriesId = occ._seriesId || occ.id;
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== seriesId) return t;
       if (occ._isOccurrence) {
         const dd = occ._occDate;
@@ -12053,7 +12034,7 @@ function App({
             subtasks,
             ...fields
           } = task;
-          setTasks(ts => ts.map(t => t.id === orig.id ? {
+          userSetTasks(ts => ts.map(t => t.id === orig.id ? {
             ...t,
             exceptions: {
               ...(t.exceptions || {}),
@@ -12130,13 +12111,13 @@ function App({
               done: _dn,
               ...fields
             } = task;
-            setTasks(ts => ts.map(t => t.id === orig.id ? {
+            userSetTasks(ts => ts.map(t => t.id === orig.id ? {
               ...t,
               ...fields
             } : t));
             showToast("Bill updated", "success");
           } else {
-            setTasks(ts => {
+            userSetTasks(ts => {
               // v627 · Clean split: strip exceptions at or after the split date from the
               // old series (they belong to the new series now). This prevents the old
               // series from rendering a "ghost" completed occurrence after recurEnd.
@@ -12186,7 +12167,7 @@ function App({
           // recurrence off, collapse the series into a plain one-off (drop the
           // schedule machinery); otherwise keep the existing exceptions/recurEnd.
           const turnedOff = !fields.recur || fields.recur === "none";
-          setTasks(ts => ts.map(t => {
+          userSetTasks(ts => ts.map(t => {
             if (t.id !== orig.id) return t;
             if (turnedOff) {
               const {
@@ -12224,7 +12205,7 @@ function App({
           _isOccurrence,
           ...clean
         } = task;
-        setTasks(ts => ts.map(t => t.id === task.id ? {
+        userSetTasks(ts => ts.map(t => t.id === task.id ? {
           ...t,
           ...clean
         } : t));
@@ -12296,7 +12277,7 @@ function App({
           }));
         }
       }
-      setTasks(ts => [...ts, fresh]);
+      userSetTasks(ts => [...ts, fresh]);
       // v597 · Notify assignee(s) about the new task (not bills — they don't need alerts)
       if (!isBill(fresh) && !fresh.private) notifyNewItem("task", fresh.title, fresh.assignee, fresh.id);
       // v276 · SAY WHAT WAS ACTUALLY ADDED. This said "Task added" for every bill that
@@ -12343,7 +12324,7 @@ function App({
       const purge = scope === "one-purge";
       // v628 · Single-occurrence delete also goes to recycle bin (soft delete)
       const prevEx = tasks.find(t => t.id === seriesId)?.exceptions?.[d];
-      setTasks(ts => ts.map(t => t.id === seriesId ? {
+      userSetTasks(ts => ts.map(t => t.id === seriesId ? {
         ...t,
         exceptions: {
           ...(t.exceptions || {}),
@@ -12369,7 +12350,7 @@ function App({
         }
         showToast("Occurrence removed", "info", {
           undo: () => {
-            setTasks(ts => ts.map(t => {
+            userSetTasks(ts => ts.map(t => {
               if (t.id !== seriesId) return t;
               const ex = {
                 ...(t.exceptions || {})
@@ -12402,14 +12383,14 @@ function App({
       }
       // v681 · Tombstone instead of filter: mark _deleted so mergeById propagates
       // the deletion to the other device instead of resurrecting the task.
-      setTasks(ts => ts.map(t => t.id === seriesId ? {
+      userSetTasks(ts => ts.map(t => t.id === seriesId ? {
         ...t,
         _deleted: true
       } : t));
       showToast("Moved to Recycle Bin", "info", {
         undo: () => {
           if (victim) {
-            setTasks(ts => ts.map(t => t.id === seriesId ? {
+            userSetTasks(ts => ts.map(t => t.id === seriesId ? {
               ...t,
               _deleted: false
             } : t));
@@ -12450,13 +12431,13 @@ function App({
   }
   function endRepeat(seriesId) {
     const prev = tasks.find(t => t.id === seriesId)?.recurEnd;
-    setTasks(ts => ts.map(t => t.id === seriesId ? {
+    userSetTasks(ts => ts.map(t => t.id === seriesId ? {
       ...t,
       recurEnd: today
     } : t));
     showToast("Repeat ended from today", "info", {
       undo: () => {
-        restoreRecurEnd(setTasks, seriesId, prev);
+        restoreRecurEnd(userSetTasks, seriesId, prev);
         showToast("Repeat restored", "success");
       }
     });
@@ -12467,13 +12448,13 @@ function App({
     if (!occDate) return;
     const cut = dayBeforeYMD(occDate);
     const prev = tasks.find(t => t.id === seriesId)?.recurEnd;
-    setTasks(ts => ts.map(t => t.id === seriesId ? {
+    userSetTasks(ts => ts.map(t => t.id === seriesId ? {
       ...t,
       recurEnd: cut
     } : t));
     showToast(`Stopped from ${shortDate(occDate)} · earlier ones kept`, "info", {
       undo: () => {
-        restoreRecurEnd(setTasks, seriesId, prev);
+        restoreRecurEnd(userSetTasks, seriesId, prev);
         showToast("Repeat restored", "success");
       }
     });
@@ -12651,7 +12632,7 @@ function App({
             _isOccurrence,
             ...fields
           } = ev;
-          setEvents(es => es.map(e => e.id === orig.id ? {
+          userSetEvents(es => es.map(e => e.id === orig.id ? {
             ...e,
             exceptions: {
               ...(e.exceptions || {}),
@@ -12697,13 +12678,13 @@ function App({
               recurEnd: _re,
               ...fields
             } = ev;
-            setEvents(es => es.map(e => e.id === orig.id ? {
+            userSetEvents(es => es.map(e => e.id === orig.id ? {
               ...e,
               ...fields
             } : e));
             showToast("Updated", "success");
           } else {
-            setEvents(es => {
+            userSetEvents(es => {
               const ended = es.map(e => e.id === orig.id ? {
                 ...e,
                 recurEnd: addDays(d, -1)
@@ -12731,7 +12712,7 @@ function App({
             recurEnd,
             ...fields
           } = ev;
-          setEvents(es => es.map(e => e.id === orig.id ? {
+          userSetEvents(es => es.map(e => e.id === orig.id ? {
             ...e,
             ...fields
           } : e));
@@ -12744,7 +12725,7 @@ function App({
           _isOccurrence,
           ...clean
         } = ev;
-        setEvents(es => es.map(e => e.id === ev.id ? {
+        userSetEvents(es => es.map(e => e.id === ev.id ? {
           ...e,
           ...clean
         } : e));
@@ -12759,7 +12740,7 @@ function App({
       }
     } else {
       const newEvId = euid();
-      setEvents(es => [...es, {
+      userSetEvents(es => [...es, {
         ...ev,
         id: newEvId,
         exceptions: {}
@@ -12847,7 +12828,7 @@ function App({
     const updAdds = updRep.map(r => r.ev);
     const delSeries = new Set((ops.deletes || []).filter(x => !x.occDate).map(x => x.id));
     const delOcc = (ops.deletes || []).filter(x => x.occDate); // occurrence-only deletes (but we delete whole series per decision)
-    setEvents(es => {
+    userSetEvents(es => {
       logRotaChanges(es);
       let next = es.filter(e => !delSeries.has(e.id));
       // Recurring occurrence deletes → per decision, remove the whole series too.
@@ -12887,7 +12868,7 @@ function App({
       photo: null,
       exceptions: {}
     }));
-    setTasks(ts => [...ts, ...recs]);
+    userSetTasks(ts => [...ts, ...recs]);
     showToast(`${recs.length} chore${recs.length > 1 ? "s" : ""} planned`, "success");
   }
   // v197 · Event planner commit. Mirrors commitChorePlan: batch-add, one record per
@@ -12909,7 +12890,7 @@ function App({
       recur: "none",
       exceptions: {}
     }));
-    setEvents(es => [...es, ...recs]);
+    userSetEvents(es => [...es, ...recs]);
     showToast(`${recs.length} event${recs.length > 1 ? "s" : ""} planned`, "success");
   }
   // v164 Build E · Meal planner commit — one shared Dinner event per planned date. A date
@@ -12918,7 +12899,7 @@ function App({
   function commitMealPlan(changes) {
     const keys = Object.keys(changes || {});
     if (!keys.length) return;
-    setEvents(es => {
+    userSetEvents(es => {
       // Drop any existing planned-meal event on the touched dates, then add the new ones.
       const touched = new Set(keys);
       let next = es.filter(e => !(e.category === "Dinner" && e._meal && touched.has(e.date)));
@@ -12967,13 +12948,13 @@ function App({
       dayOffHours: meta.hours ? Number(entry.dayOffHours) || 0 : 0
     };
     if (entry.id && events.find(e => e.id === entry.id)) {
-      setEvents(es => es.map(e => e.id === entry.id ? {
+      userSetEvents(es => es.map(e => e.id === entry.id ? {
         ...e,
         ...clean
       } : e));
       showToast("Day off updated", "success");
     } else {
-      setEvents(es => [...es, {
+      userSetEvents(es => [...es, {
         ...clean,
         id: euid(),
         exceptions: {}
@@ -13042,7 +13023,7 @@ function App({
           workedFinish: prev.workedFinish
         } : {})
       } : {};
-      setEvents(es => [...es.filter(e => e.id !== entry.id), {
+      userSetEvents(es => [...es.filter(e => e.id !== entry.id), {
         ...rec,
         ...carryWorked,
         id: entry.id,
@@ -13065,7 +13046,7 @@ function App({
         } : {}),
         exceptions: {}
       };
-      setEvents(es => [...es, {
+      userSetEvents(es => [...es, {
         ...rec,
         id: euid()
       }]);
@@ -13083,7 +13064,7 @@ function App({
       id: euid(),
       exceptions: {}
     }));
-    setEvents(es => [...es, ...recs]);
+    userSetEvents(es => [...es, ...recs]);
     showToast(dates.length > 1 ? `${dates.length} ${meta.label.toLowerCase()} days added` : `${meta.label} added`, "success");
     setShowException(false);
     setEditException(null);
@@ -13124,7 +13105,7 @@ function App({
       return;
     }
     // REPLACE, don't merge — a spread-merge leaves stale keys alive (the rota-convert rule).
-    setEvents(es => [...es.filter(e => e.id !== seriesId), {
+    userSetEvents(es => [...es.filter(e => e.id !== seriesId), {
       ...ev,
       date: aligned,
       exceptions: ev.exceptions || {}
@@ -13157,7 +13138,7 @@ function App({
     cancelStaleAlerts(seriesId, "e"); // v496 · cancel alerts immediately
     if (scope === "one" && occ && occ._occDate) {
       const d = occ._occDate;
-      setEvents(es => es.map(e => e.id === seriesId ? {
+      userSetEvents(es => es.map(e => e.id === seriesId ? {
         ...e,
         exceptions: {
           ...(e.exceptions || {}),
@@ -13181,11 +13162,11 @@ function App({
           deletedAt: new Date().toISOString()
         }, ...bin]);
       }
-      setEvents(es => es.filter(e => e.id !== seriesId));
+      userSetEvents(es => es.filter(e => e.id !== seriesId));
       showToast("Moved to Recycle Bin", "info", {
         undo: () => {
           if (victim) {
-            setEvents(es => [...es, victim]);
+            userSetEvents(es => [...es, victim]);
             setRecycleBin(bin => bin.filter(b => b.data.id !== seriesId));
             showToast("Event restored", "success");
           }
@@ -13202,8 +13183,8 @@ function App({
   // plain id filter is correct here (no occurrence/exceptions path to worry about).
   function convertRewardToTask(ev) {
     if (!ev || !ev.id) return;
-    setEvents(es => es.filter(e => e.id !== ev.id));
-    setTasks(ts => [...ts, {
+    userSetEvents(es => es.filter(e => e.id !== ev.id));
+    userSetTasks(ts => [...ts, {
       id: uid(),
       title: ev.title || "Reward",
       room: "Other",
@@ -13242,7 +13223,7 @@ function App({
     const recurring = !!occ._occDate; // a materialised recurring occurrence carries _occDate
     if (recurring) {
       const d = occ._occDate;
-      setEvents(es => es.map(e => {
+      userSetEvents(es => es.map(e => {
         if (e.id !== seriesId) return e;
         const ex = {
           ...(e.exceptions || {})
@@ -13274,7 +13255,7 @@ function App({
         };
       }));
     } else {
-      setEvents(es => es.map(e => {
+      userSetEvents(es => es.map(e => {
         if (e.id !== seriesId) return e;
         const n = {
           ...e
@@ -13302,13 +13283,13 @@ function App({
   }
   function endRepeatEvent(seriesId) {
     const prev = events.find(e => e.id === seriesId)?.recurEnd;
-    setEvents(es => es.map(e => e.id === seriesId ? {
+    userSetEvents(es => es.map(e => e.id === seriesId ? {
       ...e,
       recurEnd: today
     } : e));
     showToast("Repeat ended from today", "info", {
       undo: () => {
-        restoreRecurEnd(setEvents, seriesId, prev);
+        restoreRecurEnd(userSetEvents, seriesId, prev);
         showToast("Repeat restored", "success");
       }
     });
@@ -13317,13 +13298,13 @@ function App({
     if (!occDate) return;
     const cut = dayBeforeYMD(occDate);
     const prev = events.find(e => e.id === seriesId)?.recurEnd;
-    setEvents(es => es.map(e => e.id === seriesId ? {
+    userSetEvents(es => es.map(e => e.id === seriesId ? {
       ...e,
       recurEnd: cut
     } : e));
     showToast(`Stopped from ${shortDate(occDate)} · earlier ones kept`, "info", {
       undo: () => {
-        restoreRecurEnd(setEvents, seriesId, prev);
+        restoreRecurEnd(userSetEvents, seriesId, prev);
         showToast("Repeat restored", "success");
       }
     });
@@ -13337,7 +13318,7 @@ function App({
   function saveDayNote(ev, n, text) {
     const sid = ev._seriesId || ev.id;
     if (!sid) return;
-    setEvents(es => es.map(e => {
+    userSetEvents(es => es.map(e => {
       if (e.id !== sid) return e;
       const next = setDayNote(e, n, text);
       const out = {
@@ -13424,7 +13405,7 @@ function App({
       list.push(h);
       byId.set(h.series.id, list);
     });
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       const list = byId.get(t.id);
       if (!list) return t;
       const recurring = t.recur && t.recur !== "none" || isPlan(t);
@@ -13469,7 +13450,7 @@ function App({
     const names = [...new Set(hits.map(h => h.series.title))];
     showToast(`${hits.length} ${hits.length === 1 ? "bill" : "bills"} auto-paid · ${fmtMoney(total)}`, "success", {
       undo: () => {
-        setTasks(ts => ts.map(t => {
+        userSetTasks(ts => ts.map(t => {
           if (!before.has(t.id)) return t;
           const prev = before.get(t.id);
           const recurring = t.recur && t.recur !== "none" || isPlan(t);
@@ -13560,7 +13541,7 @@ function App({
     const prevEx = bill.exceptions;
     const prevFloor = bill.autoPayFrom;
     const recurring = bill.recur && bill.recur !== "none" || isPlan(bill);
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (t.id !== bill.id) return t;
       if (!recurring) {
         const p = pays[0];
@@ -13597,7 +13578,7 @@ function App({
     const total = pays.reduce((s, p) => s + p.amount, 0);
     showToast(`${pays.length} payment${pays.length > 1 ? "s" : ""} recorded · ${fmtMoney(total)}`, "success", {
       undo: () => {
-        setTasks(ts => ts.map(t => {
+        userSetTasks(ts => ts.map(t => {
           if (t.id !== bill.id) return t;
           // Absence is a value — restore the exact prior floor and map, never an empty object
           // and never a null (see the exceptions rule in DECISIONS).
@@ -13633,7 +13614,7 @@ function App({
         showToast("Payments undone", "info");
       }
     });
-  }, [today, showToast, setTasks]);
+  }, [today, showToast, userSetTasks]);
 
   // ─── THE PINNED FLOORS *(v129)* ───────────────────────────────────────────────
   // Bills whose floor sits above their own start, so they can NEVER auto-pay. Distinct from
@@ -13667,7 +13648,7 @@ function App({
     }));
     let written = 0,
       money = 0;
-    setTasks(ts => ts.map(t => {
+    userSetTasks(ts => ts.map(t => {
       if (!ids.includes(t.id)) return t;
       const floored = {
         ...t,
@@ -13712,7 +13693,7 @@ function App({
     const msg = written ? `${targets.length} fixed · ${written} payment${written === 1 ? "" : "s"} recorded · ${fmtMoney(money)}` : `${targets.length} bill${targets.length === 1 ? "" : "s"} fixed · no payments to record`;
     showToast(msg, "success", {
       undo: () => {
-        setTasks(ts => ts.map(t => {
+        userSetTasks(ts => ts.map(t => {
           const prev = before.get(t.id);
           if (!prev) return t;
           const base = {
@@ -13749,7 +13730,7 @@ function App({
         showToast("Floors restored", "info");
       }
     });
-  }, [tasks, today, showToast, setTasks]);
+  }, [tasks, today, showToast, userSetTasks]);
   const listHorizon = addDays(today, LIST_HORIZON_DAYS);
 
   // An item is outdoor if it's explicitly flagged, or its category is.
@@ -18037,7 +18018,7 @@ function App({
           onChangeCompletedBy: row.kind === "task" && row.done && !isBill(row.ref) ? newPT => changeCompletedBy(row.ref, newPT) : null,
           onNag: row.kind === "task" && !isBill(row.ref) ? startNag : null,
           onNextDry: adv && adv.wet && adv.nextDry && row.kind === "task" ? () => {
-            setTasks(ts => ts.map(t => t.id === row.ref.id ? {
+            userSetTasks(ts => ts.map(t => t.id === row.ref.id ? {
               ...t,
               dueDate: adv.nextDry
             } : t));
@@ -20182,8 +20163,8 @@ function App({
       onClose: () => setRecycleBinOpen(false),
       bin: recycleBin,
       setBin: setRecycleBin,
-      setTasks: setTasks,
-      setEvents: setEvents
+      setTasks: userSetTasks,
+      setEvents: userSetEvents
     }), showWorkStats && /*#__PURE__*/React.createElement(WorkStatsSheet, {
       people: people,
       events: events,
@@ -20492,7 +20473,7 @@ function App({
         // owns the dropped photo is untouched — only the image goes.
         const [sid, occ] = String(ref).slice(4).split(":");
         docDelete(ref);
-        setTasks(ts => ts.map(t => {
+        userSetTasks(ts => ts.map(t => {
           if (String(t.id) !== String(sid)) return t;
           if (occ === "series") {
             const {
@@ -20520,7 +20501,7 @@ function App({
         }));
         const gotIt = docWrite(docFull.seriesId, docFull.occDate, docFull.photo);
         if (gotIt) {
-          setTasks(ts => ts.map(t => {
+          userSetTasks(ts => ts.map(t => {
             if (String(t.id) !== String(docFull.seriesId)) return t;
             if (docFull.occDate === "series") return {
               ...t,
@@ -74185,7 +74166,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v698"), /*#__PURE__*/React.createElement("button", {
+  }, "v699"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
