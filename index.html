@@ -71771,7 +71771,9 @@ function SettingsPage({
   const [diagHealthy, setDiagHealthy] = useState(false); // healthy bills collapsed by default
   const [diagCopied, setDiagCopied] = useState(false);
   const [diagText, setDiagText] = useState(null); // set only when the clipboard is refused
-
+  // v713 · consolidated Data & Tools sheet + collapsible developer tools
+  const [dataToolsOpen, setDataToolsOpen] = useState(false);
+  const [devToolsOpen, setDevToolsOpen] = useState(false);
   function submitPaste() {
     const t = pasteTxt.trim();
     if (!t) {
@@ -73957,103 +73959,14 @@ function SettingsPage({
     }
   }, dupTaskCount, " found"), /*#__PURE__*/React.createElement(Chev, null)))), /*#__PURE__*/React.createElement(SGroup, {
     q: q,
-    label: "Testing",
+    label: "Data & Tools",
     GroupLabel: GroupLabel
   }, /*#__PURE__*/React.createElement(SRow, {
-    hb: "diagnostics direct debit autopay sweep why not ticking bills engine leave sick annual hours audit missing hrs"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setDiagOpen(true),
-    style: {
-      ...rowBase,
-      cursor: "pointer"
-    }
-  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
-    width: "18",
-    height: "18",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("circle", {
-    cx: "11",
-    cy: "11",
-    r: "7"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "m20 20-3.5-3.5"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M11 8v3"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M11 14h.01"
-  }))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0,
-      textAlign: "left"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "block",
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Diagnostics"), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 11.5,
-      color: C.inkMute
-    }
-  }, "Leave, sick & bill sweep checks")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
-    hb: "export data download copy share json backup snapshot"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: openExport,
-    style: {
-      ...rowBase,
-      cursor: "pointer"
-    }
-  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
-    width: "18",
-    height: "18",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: "1.8",
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M12 3v12"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "m7 10 5 5 5-5"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
-  }))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0,
-      textAlign: "left"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: "block",
-      fontSize: 14.5,
-      fontWeight: 600,
-      color: C.ink
-    }
-  }, "Export data"), /*#__PURE__*/React.createElement("span", {
-    className: "sans",
-    style: {
-      fontSize: 11.5,
-      color: C.inkMute
-    }
-  }, "Copy it, share it, or download a .json")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement(SRow, {
-    hb: "import data restore json replace device backup paste clipboard"
+    hb: "data tools export import backup json diagnostics leave sick bill sweep developer repair task ghost points"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: () => {
-      setPasteOpen(true);
-      setPasteTxt("");
-      setPasteErr(null);
+      setDataToolsOpen(true);
+      setDevToolsOpen(false);
     },
     style: {
       ...rowBase,
@@ -74069,11 +73982,7 @@ function SettingsPage({
     strokeLinecap: "round",
     strokeLinejoin: "round"
   }, /*#__PURE__*/React.createElement("path", {
-    d: "M12 15V3"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "m7 8 5-5 5 5"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+    d: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
   }))), /*#__PURE__*/React.createElement("span", {
     style: {
       flex: 1,
@@ -74087,13 +73996,13 @@ function SettingsPage({
       fontWeight: 600,
       color: C.ink
     }
-  }, "Import data"), /*#__PURE__*/React.createElement("span", {
+  }, "Data & Tools"), /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: {
       fontSize: 11.5,
       color: C.inkMute
     }
-  }, "Paste a backup, or pick a .json file")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement("input", {
+  }, "Backups, diagnostics & maintenance")), /*#__PURE__*/React.createElement(Chev, null))), /*#__PURE__*/React.createElement("input", {
     ref: fileRef,
     type: "file",
     accept: "application/json,.json",
@@ -74227,101 +74136,373 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v712"), /*#__PURE__*/React.createElement("button", {
+  }, "v713"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
+    className: "hb-scrim",
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: SCRIM_DIM,
+      backdropFilter: "blur(3px)",
+      zIndex: 240,
+      display: "flex",
+      alignItems: "flex-end",
+      justifyContent: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: C.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      borderTop: `1px solid ${C.rule}`,
+      width: "100%",
+      maxWidth: 480,
+      maxHeight: "86vh",
+      overflowY: "auto",
+      padding: "8px 18px 26px",
+      boxShadow: C.shadowLg
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 38,
+      height: 4,
+      borderRadius: 2,
+      background: C.inkFaint,
+      margin: "8px auto 16px",
+      opacity: 0.5
+    }
+  }), /*#__PURE__*/React.createElement("h3", {
+    className: "serif",
+    style: {
+      fontSize: 22,
+      fontStyle: "italic",
+      fontWeight: 600,
+      color: C.ink,
+      textAlign: "center",
+      marginBottom: 4
+    }
+  }, "Data & Tools"), /*#__PURE__*/React.createElement("p", {
     className: "sans",
     style: {
-      marginTop: 12,
-      padding: "10px 16px",
-      borderRadius: 10,
-      border: "1px solid rgba(229,72,77,0.3)",
-      background: "rgba(229,72,77,0.08)",
-      color: "#E5484D",
       fontSize: 12,
-      fontWeight: 700,
-      cursor: "pointer",
-      width: "100%"
-    },
-    onClick: async () => {
-      const raw = JSON.parse(localStorage.getItem("hb_tasks") || "[]");
-      const leoTasks = raw.filter(t => t.title && t.title.toLowerCase().includes("feed leo") && !t._deleted);
-      if (!leoTasks.length) {
-        alert("No Feed Leo task found");
-        return;
-      }
-      const todayStr = new Date().toISOString().slice(0, 10);
-      let fixes = 0;
-      raw.forEach(t => {
-        if (!t.title || !t.title.toLowerCase().includes("feed leo") || t._deleted) return;
-        if (!t.exceptions) t.exceptions = {};
-        const taskTime = t.time || "18:00";
-        // Fix mis-dated completions
-        Object.keys(t.exceptions).forEach(date => {
-          const e = t.exceptions[date];
-          if (e && e.done && e.doneAt) {
-            const doneDateStr = typeof e.doneAt === "string" ? e.doneAt.slice(0, 10) : new Date(e.doneAt).toISOString().slice(0, 10);
-            if (doneDateStr !== date) {
-              t.exceptions[date] = {
-                ...e,
-                doneAt: date + "T" + taskTime + ":00"
-              };
-              fixes++;
-            }
-          }
-        });
-        // Restore missing completions for overdue dates
-        const due = t.dueDate;
-        if (due && due < todayStr) {
-          let cursor = due;
-          for (let _safe = 0; _safe < 400 && cursor < todayStr; _safe++) {
-            if (!t.exceptions[cursor] || !t.exceptions[cursor].done) {
-              t.exceptions[cursor] = {
-                ...(t.exceptions[cursor] || {}),
-                done: true,
-                doneAt: cursor + "T" + taskTime + ":00",
-                completedBy: t.who || "shared"
-              };
-              fixes++;
-            }
-            // Advance cursor without UTC conversion (AEST causes toISOString date drift)
-            const [y, m, d] = [+cursor.slice(0, 4), +cursor.slice(5, 7), +cursor.slice(8, 10)];
-            const next = new Date(y, m - 1, d + 1);
-            cursor = next.getFullYear() + "-" + String(next.getMonth() + 1).padStart(2, "0") + "-" + String(next.getDate()).padStart(2, "0");
-          }
-        }
-        t._modAt = Date.now();
-      });
-      if (fixes === 0) {
-        alert("Nothing to repair.");
-        return;
-      }
-      if (!confirm("Found " + fixes + " Feed Leo fix(es). Apply and reload?")) {
-        return;
-      }
-      // Write directly to localStorage
-      localStorage.setItem("hb_tasks", JSON.stringify(raw));
-      // Push to Supabase
-      try {
-        await fetch("https://cslwsardurvdlyiiatfy.supabase.co/rest/v1/sync_store", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHdzYXJkdXJ2ZGx5aWlhdGZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNzE2ODMsImV4cCI6MjEwMDk0NzY4M30.sdsuIo_-GvnVuSfu7CkD5VaHXjnkVxSeuaCI2oMdLbQ",
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzbHdzYXJkdXJ2ZGx5aWlhdGZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNzE2ODMsImV4cCI6MjEwMDk0NzY4M30.sdsuIo_-GvnVuSfu7CkD5VaHXjnkVxSeuaCI2oMdLbQ",
-            "Prefer": "resolution=merge-duplicates"
-          },
-          body: JSON.stringify({
-            household_id: "2db89f63-f6db-423b-8c82-c76192bd6e8e",
-            key: "hb_tasks",
-            value: raw
-          })
-        });
-      } catch (e) {
-        console.warn("push err", e);
-      }
-      // Hard reload to pick up changes
-      location.reload();
+      color: C.inkMute,
+      textAlign: "center",
+      marginBottom: 20
     }
-  }, "Repair Feed Leo timestamps"), /*#__PURE__*/React.createElement("button", {
+  }, "Backups, diagnostics & maintenance"), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      color: C.inkFaint,
+      margin: "6px 4px 8px"
+    }
+  }, "Backup"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setDataToolsOpen(false);
+      openExport();
+    },
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 13,
+      padding: "13px 12px",
+      borderRadius: 14,
+      background: C.cardRaise,
+      marginBottom: 8,
+      cursor: "pointer",
+      border: `1px solid ${C.ruleSoft}`,
+      width: "100%",
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.accentSoft,
+      color: C.accent
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M12 3v12"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "m7 10 5 5 5-5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Export data"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, "Copy, share, or download a .json"))), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setDataToolsOpen(false);
+      setPasteOpen(true);
+      setPasteTxt("");
+      setPasteErr(null);
+    },
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 13,
+      padding: "13px 12px",
+      borderRadius: 14,
+      background: C.cardRaise,
+      marginBottom: 8,
+      cursor: "pointer",
+      border: `1px solid ${C.ruleSoft}`,
+      width: "100%",
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: C.accentSoft,
+      color: C.accent
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M12 15V3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "m7 8 5-5 5 5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Import data"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, "Paste a backup, or pick a .json file"))), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      color: C.inkFaint,
+      margin: "18px 4px 8px"
+    }
+  }, "Diagnostics"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      setDataToolsOpen(false);
+      setDiagOpen(true);
+    },
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 13,
+      padding: "13px 12px",
+      borderRadius: 14,
+      background: C.cardRaise,
+      marginBottom: 8,
+      cursor: "pointer",
+      border: `1px solid ${C.ruleSoft}`,
+      width: "100%",
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(74,208,224,0.12)",
+      color: C.accent2
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "11",
+    cy: "11",
+    r: "7"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "m20 20-3.5-3.5"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M11 8v3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M11 14h.01"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Sweep diagnostics"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, "Leave, sick & bill sweep checks"))), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      textTransform: "uppercase",
+      color: C.inkFaint,
+      margin: "18px 4px 8px"
+    }
+  }, "Maintenance"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setDevToolsOpen(v => !v),
+    className: "sans",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "13px 12px",
+      borderRadius: 14,
+      background: "transparent",
+      border: `1px ${devToolsOpen ? "solid" : "dashed"} ${C.rule}`,
+      cursor: "pointer",
+      width: "100%",
+      color: C.inkMute,
+      marginBottom: devToolsOpen ? 4 : 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      flexShrink: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(138,147,168,0.10)",
+      color: C.inkMute
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.inkMute
+    }
+  }, "Developer tools"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkFaint
+    }
+  }, "Data repair & ghost-task fixes")), /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    style: {
+      flexShrink: 0
+    }
+  }, devToolsOpen ? /*#__PURE__*/React.createElement("path", {
+    d: "m18 15-6-6-6 6"
+  }) : /*#__PURE__*/React.createElement("path", {
+    d: "m6 9 6 6 6-6"
+  }))), devToolsOpen && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkFaint,
+      background: "rgba(229,72,77,0.06)",
+      border: "1px solid rgba(229,72,77,0.15)",
+      borderRadius: 10,
+      padding: "9px 11px",
+      marginBottom: 10,
+      lineHeight: 1.5
+    }
+  }, "These are diagnostic & repair tools. Some can permanently change data — use only when fixing a known issue."), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 8,
@@ -74506,7 +74687,7 @@ function SettingsPage({
       }
       location.reload();
     }
-  }, "Delete task by ID"))))), diagOpen && (() => {
+  }, "Delete task by ID")))), diagOpen && (() => {
     // v211 · LEAVE AUDIT. Mandy's overview read 11h against a single 7h sick day and
     // no findable annual-leave record. Rather than keep theorising about which record
     // it might be, this lists EVERY record the leave sum actually counts, with its id
