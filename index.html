@@ -74173,7 +74173,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v702"), /*#__PURE__*/React.createElement("button", {
+  }, "v703"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
     style: {
       marginTop: 12,
@@ -74282,19 +74282,24 @@ function SettingsPage({
       width: "100%"
     },
     onClick: () => {
-      const raw = JSON.parse(localStorage.getItem("hb_tasks") || "[]");
-      const kw = prompt("Enter task name to search (e.g. water garden, feed leo):");
-      if (!kw) return;
-      const matches = raw.filter(t => t.title && t.title.toLowerCase().includes(kw.toLowerCase()));
-      if (!matches.length) {
-        alert("No tasks matching '" + kw + "' found.");
-        return;
+      try {
+        const raw = JSON.parse(localStorage.getItem("hb_tasks") || "[]");
+        const kw = prompt("Enter task name to search (e.g. water garden, feed leo):");
+        if (!kw) return;
+        const matches = raw.filter(t => t.title && t.title.toLowerCase().includes(kw.toLowerCase()));
+        if (!matches.length) {
+          alert("No tasks matching '" + kw + "' found. Total tasks: " + raw.length);
+          return;
+        }
+        const info = matches.map((t, i) => {
+          const tid = String(t.id || "?").slice(0, 12);
+          const exCount = Object.keys(t.exceptions || {}).length;
+          return i + 1 + ". " + t.title + "\n   id=" + tid + "\n   recur=" + JSON.stringify(t.recur) + "\n   who=" + JSON.stringify(t.who) + "\n   dueDate=" + t.dueDate + "\n   _deleted=" + !!t._deleted + "\n   _modAt=" + t._modAt + "\n   exceptions=" + exCount + (t.recurEnd ? " recurEnd=" + t.recurEnd : "") + (t.recurMode ? " recurMode=" + t.recurMode : "");
+        }).join("\n\n");
+        alert("Found " + matches.length + " task(s) matching '" + kw + "':\n\n" + info);
+      } catch (err) {
+        alert("ERROR: " + err.message);
       }
-      const info = matches.map((t, i) => {
-        const exCount = Object.keys(t.exceptions || {}).length;
-        return i + 1 + ". " + t.title + "\n   id=" + t.id.slice(0, 12) + "\n   recur=" + JSON.stringify(t.recur) + "\n   who=" + JSON.stringify(t.who) + "\n   dueDate=" + t.dueDate + "\n   _deleted=" + !!t._deleted + "\n   _modAt=" + t._modAt + "\n   exceptions=" + exCount + (t.recurEnd ? " recurEnd=" + t.recurEnd : "") + (t.recurMode ? " recurMode=" + t.recurMode : "");
-      }).join("\n\n");
-      alert("Found " + matches.length + " task(s) matching '" + kw + "':\n\n" + info);
     }
   }, "Diagnose task data"), /*#__PURE__*/React.createElement("button", {
     className: "sans",
@@ -74314,7 +74319,7 @@ function SettingsPage({
       const raw = JSON.parse(localStorage.getItem("hb_tasks") || "[]");
       const idStr = prompt("Paste task ID prefix to delete (from diagnostic above):");
       if (!idStr) return;
-      const victim = raw.find(t => t.id.startsWith(idStr) && !t._deleted);
+      const victim = raw.find(t => String(t.id).startsWith(idStr) && !t._deleted);
       if (!victim) {
         alert("No active task found with id starting '" + idStr + "'");
         return;
