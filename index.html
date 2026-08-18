@@ -14626,7 +14626,9 @@ function App({
   // Tasks and bills due tomorrow. A DONE occurrence is excluded — it is not something
   // coming up. v618: Deadlines/projects due tomorrow now included (previously excluded).
   const tomorrowTasks = tasks.filter(t => !t._deleted) // v710 · skip tombstoned series (was missing — deleted tasks showed under Tomorrow)
-  .map(t => occursOnDay(t, "dueDate", tomorrowYMD)).filter(Boolean).filter(t => !isPrivateHidden(t)).filter(t => !(t.exceptions && t.exceptions[tomorrowYMD] && (t.exceptions[tomorrowYMD].done || t.exceptions[tomorrowYMD].deleted || t.exceptions[tomorrowYMD].purged)) && !t.done)
+  .map(t => occursOnDay(t, "dueDate", tomorrowYMD)).filter(Boolean).filter(t => !isPrivateHidden(t))
+  // v714 · keep DONE tomorrow occurrences (render struck-through like Today); still drop deleted/purged
+  .filter(t => !(t.exceptions && t.exceptions[tomorrowYMD] && (t.exceptions[tomorrowYMD].deleted || t.exceptions[tomorrowYMD].purged)))
   // v256 · A SERIES STILL OUTSTANDING TODAY DOES NOT ALSO PREVIEW TOMORROW.
   // A daily task is due today AND tomorrow, so it drew two rows reading exactly
   // "Feed Leo · 6:00 PM · Fur Baby · Both" with nothing to tell them apart. Mandy ticked
@@ -14674,6 +14676,8 @@ function App({
       _t: isAllDay(e) ? "!" : e.time || ""
     };
   }), ...tomorrowTasks.map(t => ({
+    // v714 · materialize() already resolved t.done for this occurrence — use it so
+    // completed-ahead tasks render struck-through under Tomorrow (like Today) instead of vanishing.
     kind: "task",
     ref: t,
     title: t.title,
@@ -14683,10 +14687,14 @@ function App({
     pName: assigneeName(t.done ? completedByKey(t) : t.assignee, people),
     pColor: assigneeColor(t.done ? completedByKey(t) : t.assignee, people),
     dotColor: taskMeta(t).grad[0],
-    done: false,
+    done: !!t.done,
     taskTime: t.time ? fmtTime(t.time) : null,
     _t: t.time || ""
   }))].sort((a, b) => {
+    // v714 · completed-ahead tasks sink to the bottom (matches Today's done-last ordering)
+    const aD = a.done ? 1 : 0,
+      bD = b.done ? 1 : 0;
+    if (aD !== bD) return aD - bD;
     // v667 · All-day events sort to top, then by time, then timeless last
     const aAD = a.allDay ? 0 : 1,
       bAD = b.allDay ? 0 : 1;
@@ -74136,7 +74144,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v713"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v714"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
