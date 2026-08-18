@@ -9869,10 +9869,19 @@ function App({
   // counter-collision bug), reassign fresh unique ids so edits/deletes target
   // only the intended item.
   useEffect(() => {
+    // v715 · This one-time repair reassigns fresh ids to true id-collisions so edits/deletes
+    // target only the intended item. TWO guards prevent it from resurrecting ghosts:
+    //   1. _deleted items are skipped — a tombstoned duplicate must STAY dead, never get a
+    //      fresh live id (that was the "deleted task keeps coming back" bug).
+    //   2. When a live item collides, the reassigned copy inherits _deleted:false but keeps
+    //      its own data, so we never fork a tombstone into a live twin.
     userSetEvents(es => {
       const seen = new Set();
       let changed = false;
       const fixed = es.map(e => {
+        if (e._deleted) {
+          return e;
+        } // leave tombstones untouched
         if (seen.has(e.id)) {
           changed = true;
           return {
@@ -9889,6 +9898,9 @@ function App({
       const seen = new Set();
       let changed = false;
       const fixed = ts.map(t => {
+        if (t._deleted) {
+          return t;
+        } // leave tombstones untouched
         if (seen.has(t.id)) {
           changed = true;
           return {
@@ -62934,14 +62946,19 @@ function PersonSheet({
     sheetRef
   } = useSwipeToClose(onClose);
   const prog = goalProgress(g, who, points, fp, goalLog);
-  // v608 · For the shared/household goal, override prog.current with ground truth
-  // from collectCompletedTasks — pointsPeriods buckets drift and show stale totals.
-  // Same fix the dashboard header got in v497.
-  if (who === "shared") {
+  // v715 · GROUND-TRUTH OVERRIDE FOR ALL GOALS (was shared-only in v608).
+  // pointsPeriods buckets are incremental and drift whenever a task is deleted or a
+  // duplicate is merged — the Goal tab showed a stale total (e.g. 101/150) while the
+  // Activity tab, which reads collectCompletedTasks, showed the correct 170. Both now
+  // derive from the same source so they always agree.
+  {
     const _bk = periodBucket(migratePeriod(g.period), fp);
     const _pStart = _bk && _bk.key ? _bk.key.slice(0, 10) : null;
-    const _acts = collectCompletedTasks(tasks, "shared", _pStart, null, null);
-    const _bActs = collectBonusActivity(bonusLog, "shared", _pStart, null, null);
+    // shared uses no reset filter (household period IS the boundary); personal goals
+    // use pointsResetAt, exactly like the Activity tab below.
+    const _resetF = who === "shared" ? null : pointsResetAt;
+    const _acts = collectCompletedTasks(tasks, who, _pStart, null, _resetF);
+    const _bActs = collectBonusActivity(bonusLog, who, _pStart, null, _resetF);
     const groundTruth = [..._acts, ..._bActs].reduce((s, t) => s + (t.points || 0), 0);
     prog.current = groundTruth;
     prog.pct = Math.max(0, Math.min(1, groundTruth / (prog.target || 1)));
@@ -74144,7 +74161,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v714"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v715"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
