@@ -14749,7 +14749,7 @@ function App({
   // v633 · Urgent deadlines/projects get their own section above regular tasks
   // v636 · Urgent deadlines/projects — from homeByDate which already excludes done
   // v648 · Urgent section includes priority>=5 AND overdue tasks (deadlines, projects, regular)
-  const homeUrgentRows = homeByDate.filter(t => t.priority >= 5 || t.dueDate && t.dueDate < today).sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "")).map(t => ({
+  const _urgentFromByDate = homeByDate.filter(t => t.priority >= 5 || t.dueDate && t.dueDate < today).sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "")).map(t => ({
     kind: "task",
     ref: t,
     title: t.title,
@@ -14764,6 +14764,11 @@ function App({
     done: false,
     taskTime: t.time ? fmtTime(t.time) : null
   }));
+  // v719 · Overdue recurring tasks (from homeAgenda) also belong in the Urgent section
+  // instead of appearing under Tasks · Today.
+  const _urgentByDateIds = new Set(_urgentFromByDate.map(r => r.ref._seriesId || r.ref.id));
+  const _urgentFromAgenda = homeTaskRows.filter(r => r.overdue && !_urgentByDateIds.has(r.ref._seriesId || r.ref.id));
+  const homeUrgentRows = [..._urgentFromByDate, ..._urgentFromAgenda];
   const _urgentIds = new Set(homeUrgentRows.map(r => r.ref._seriesId || r.ref.id));
   const homeOtherRows = homeTaskRows.filter(r => !_urgentIds.has(r.ref._seriesId || r.ref.id));
   // v707 DIAGNOSTIC: expose Feed Leo rows from every render section
