@@ -8777,6 +8777,7 @@ function App({
   const [showCountdowns, setShowCountdowns] = useState(() => lsGet(userKey("hb_showCountdowns"), false));
   const [showForecast, setShowForecast] = useState(() => lsGet(userKey("hb_showForecast"), true));
   const [showQuickAdd, setShowQuickAdd] = useState(() => lsGet(userKey("hb_showQuickAdd"), true));
+  const [showTomorrowDaily, setShowTomorrowDaily] = useState(() => lsGet(userKey("hb_showTomorrowDaily"), false));
   // v596 · Household goal placement: "home" | "tasks" | "both"
   const [goalPlace, setGoalPlace] = useState(() => lsGet("hb_goalPlace", "home"));
   // v617 · Voice chat auto-send toggle
@@ -8845,6 +8846,9 @@ function App({
   useEffect(() => {
     lsSet(userKey("hb_showQuickAdd"), showQuickAdd);
   }, [showQuickAdd]);
+  useEffect(() => {
+    lsSet(userKey("hb_showTomorrowDaily"), showTomorrowDaily);
+  }, [showTomorrowDaily]);
   useEffect(() => {
     lsSet("hb_goalPlace", goalPlace);
   }, [goalPlace]);
@@ -14673,7 +14677,9 @@ function App({
   // a daily task. A weekly bin night due tomorrow has no copy due today, so nothing is
   // hidden and it can still be ticked ahead from here. The row returns under Tomorrow the
   // moment today's is ticked, so nothing is lost - only deferred.
-  .filter(t => !outstandingTodaySeriesIds.has(t._seriesId || t.id));
+  // v718 · When showTomorrowDaily is ON, skip the outstanding-today suppression for daily
+  // tasks — they always appear under Tomorrow regardless of today's completion state.
+  .filter(t => showTomorrowDaily ? !outstandingTodaySeriesIds.has(t._seriesId || t.id) || t.recur === "daily" : !outstandingTodaySeriesIds.has(t._seriesId || t.id));
   // ONE list, sorted by time, so tomorrow reads chronologically rather than by type —
   // the whole point is a glance at the shape of the day.
   const tomorrowRows = [...tomorrowEvents.map(e => {
@@ -19495,6 +19501,8 @@ function App({
       onOpenRecycleBin: () => setRecycleBinOpen(true),
       voiceChatAutoSend: voiceChatAutoSend,
       setVoiceChatAutoSend: setVoiceChatAutoSend,
+      showTomorrowDaily: showTomorrowDaily,
+      setShowTomorrowDaily: setShowTomorrowDaily,
       onChangePin: () => setChangePinSheet(true)
     })), /*#__PURE__*/React.createElement("div", {
       style: {
@@ -71772,7 +71780,9 @@ function SettingsPage({
   recycleBinCount = 0,
   onOpenRecycleBin,
   voiceChatAutoSend = false,
-  setVoiceChatAutoSend
+  setVoiceChatAutoSend,
+  showTomorrowDaily = false,
+  setShowTomorrowDaily
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClearRewards, setConfirmClearRewards] = useState(false);
@@ -72759,6 +72769,68 @@ function SettingsPage({
     }
   }, "Keep done items visible")), /*#__PURE__*/React.createElement(Toggle, {
     on: keepDone
+  }))), /*#__PURE__*/React.createElement(SRow, {
+    hb: "tomorrow daily tasks always show preview dashboard"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowTomorrowDaily(!showTomorrowDaily),
+    style: {
+      ...rowBase
+    }
+  }, /*#__PURE__*/React.createElement(IconTile, null, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "4",
+    width: "18",
+    height: "18",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "16",
+    y1: "2",
+    x2: "16",
+    y2: "6"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "8",
+    y1: "2",
+    x2: "8",
+    y2: "6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M3 10h18"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M8 14h.01"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 14h.01"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M16 14h.01"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M8 18h.01"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14.5,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Always show tomorrow's dailies"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11.5,
+      color: C.inkMute
+    }
+  }, "Show daily tasks under Tomorrow even when today's is undone")), /*#__PURE__*/React.createElement(Toggle, {
+    on: showTomorrowDaily
   }))), showPoints && /*#__PURE__*/React.createElement(SRow, {
     hb: "goal card placement home tasks both household reward"
   }, /*#__PURE__*/React.createElement("div", {
@@ -74180,7 +74252,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v717"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v718"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
