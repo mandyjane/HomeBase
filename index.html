@@ -2752,7 +2752,7 @@ function occAmount(series, dateStr) {
 // copies were ticked. This detector finds such pairs across ALL recurring tasks (not just
 // bills), and the merge absorbs the dead series' completions into the live one.
 function findDuplicateTasks(tasks) {
-  const recurring = tasks.filter(t => t && t.recur && t.recur !== "none" && !t.done);
+  const recurring = tasks.filter(t => t && t.recur && t.recur !== "none" && !t.done && !t._deleted);
   const byTitle = {};
   recurring.forEach(t => {
     const key = (t.title || "").trim().toLowerCase();
@@ -74180,7 +74180,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v716"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v717"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
