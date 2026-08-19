@@ -2866,7 +2866,7 @@ function mergeDuplicateTask(tasks, pair) {
 // Pairs are only matched when the boundary is EXACT and cadence/category agree. Anything
 // ambiguous is left alone — a repair that guesses is worse than no repair.
 function findSplitPairs(tasks) {
-  const bills = tasks.filter(t => isBill(t) && !t.done);
+  const bills = tasks.filter(t => isBill(t) && !t.done && !t._deleted); // v716 · skip tombstones
   const pairs = [];
   bills.forEach(a => {
     if (!a.recurEnd || a.recur === "none") return;
@@ -10722,10 +10722,16 @@ function App({
     let next = tasks,
       done = 0,
       moved = 0;
+    const now = Date.now();
     pairs.forEach(p => {
       const r = mergeSplitSeries(next, p);
       if (!r) return;
-      next = next.filter(t => t.id !== r.removeId).map(t => t.id === r.merged.id ? r.merged : t);
+      // v716 · tombstone the removed half (don't hard-filter) so the merge sticks across sync
+      next = next.map(t => t.id === r.removeId ? {
+        ...t,
+        _deleted: true,
+        _modAt: now
+      } : t.id === r.merged.id ? r.merged : t);
       done++;
       moved += r.moved.length;
     });
@@ -10743,7 +10749,20 @@ function App({
       showToast("Nothing to merge", "info");
       return;
     }
-    userSetTasks(ts => ts.filter(t => t.id !== r.removeId).map(t => t.id === r.merged.id ? r.merged : t));
+    // v716 · TOMBSTONE the dead series (don't hard-filter it). A filtered task has no
+    // _deleted flag, so the other device re-adds it on next sync — that was the
+    // "merged duplicates keep coming back" bug. mergeById makes _deleted permanent
+    // and cross-device, so tombstoning kills it everywhere for good.
+    const now = Date.now();
+    userSetTasks(ts => ts.map(t => {
+      if (t.id === r.removeId) return {
+        ...t,
+        _deleted: true,
+        _modAt: now
+      };
+      if (t.id === r.merged.id) return r.merged;
+      return t;
+    }));
     showToast(`Merged — ${r.absorbed} completion${r.absorbed !== 1 ? "s" : ""} absorbed`, "success");
   }
   // v484 · set points to recounted totals
@@ -74161,7 +74180,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v715"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v716"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
