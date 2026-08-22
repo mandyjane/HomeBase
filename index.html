@@ -9458,6 +9458,30 @@ function App({
   useEffect(() => {
     lsSet("hb_goalLog", goalLog);
   }, [goalLog]);
+  // v719 · One-time rescore: past record entries used stale pointsPeriods buckets.
+  // Recompute every entry's score from collectCompletedTasks ground truth.
+  useEffect(() => {
+    if (lsGet("hb_goalLogRescore719")) return;
+    if (!goalLog || !goalLog.length || !tasks || !tasks.length) return;
+    const fixed = goalLog.map(e => {
+      const pStart = e.key ? e.key.slice(0, 10) : null;
+      if (!pStart) return e;
+      const pEndDate = periodEnd(e.period, e.key);
+      const pEndStr = toLocalYMD(pEndDate);
+      const resetF = e.who === "shared" ? null : pointsResetAt;
+      const cT = collectCompletedTasks(tasks, e.who, pStart, pEndStr, resetF);
+      const cB = collectBonusActivity(bonusLog, e.who, pStart, pEndStr, resetF);
+      const scored = [...cT, ...cB].reduce((s, t) => s + (t.points || 0), 0);
+      if (scored === e.score) return e;
+      return {
+        ...e,
+        score: scored,
+        met: scored >= e.target
+      };
+    });
+    setGoalLog(fixed);
+    lsSet("hb_goalLogRescore719", true);
+  }, []);
   const [levelCfg, setLevelCfg] = useState(() => lsGet("hb_levelCfg", {
     base: 60,
     grow: 0
@@ -10093,7 +10117,14 @@ function App({
       const newB = periodBucket(period, newP);
       if (!oldB || !oldB.key) continue; // nothing stored — nothing closed
       if (oldB.key === newB.key) continue; // still the same period; not closed yet
-      const scored = who === "shared" ? (oldB.her || 0) + (oldB.him || 0) : oldB[who] || 0;
+      // v719 · Ground-truth scoring: derive from collectCompletedTasks + collectBonusActivity
+      // instead of the incremental pointsPeriods bucket, which is known to drift.
+      const pStart = oldB.key.slice(0, 10);
+      const pEnd = toLocalYMD(periodEnd(period, oldB.key));
+      const resetF = who === "shared" ? null : pointsResetAt;
+      const cTasks = collectCompletedTasks(tasks, who, pStart, pEnd, resetF);
+      const cBonus = collectBonusActivity(bonusLog, who, pStart, pEnd, resetF);
+      const scored = [...cTasks, ...cBonus].reduce((s, t) => s + (t.points || 0), 0);
       add.push(makeEntry(who, goal, oldB.key, scored));
     }
     if (!add.length) return;
