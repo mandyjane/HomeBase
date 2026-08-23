@@ -6832,7 +6832,7 @@ function notifyNewItem(kind, title, assignee, itemId) {
   // Use exclude_user_id to send only to the target (exclude everyone ELSE)
   // Since we only have 2 users, exclude_user_id = creator's ID sends to the partner
   sbClient.from("alert_schedule").insert([{
-    id: "item-" + itemId + "-" + Date.now(),
+    id: "item-" + itemId,
     fire_at: new Date().toISOString(),
     title: "HomeBase",
     body,
@@ -10702,7 +10702,7 @@ function App({
       const pushTitle = n > 0 ? "Bonus points!" : "Points deducted";
       const pushBody = (awarderName || "Someone") + " " + verb + " " + absN + " point" + (absN > 1 ? "s" : "") + " " + (n > 0 ? "to " : "from ") + recipientName + (reasonStr ? " — " + reasonStr : "");
       sbClient.from("alert_schedule").insert([{
-        id: "bonus-" + Date.now(),
+        id: "bonus-" + entry.id,
         fire_at: new Date().toISOString(),
         title: pushTitle,
         body: pushBody,
@@ -10867,8 +10867,9 @@ function App({
     if (newTreat === prev) return;
     // Remove any existing pending request for this person
     const next = treatRequests.filter(r => !(r.who === who && r.status === "pending"));
+    const reqTs = Date.now();
     next.push({
-      id: Date.now(),
+      id: reqTs,
       who,
       treat: newTreat,
       previousTreat: prev,
@@ -10883,7 +10884,7 @@ function App({
     if (sbClient && sbHouseholdId) {
       const requesterName = who === "her" ? people.her.name : who === "him" ? people.him.name : "Someone";
       const treatRow = {
-        id: "treat-req-" + Date.now(),
+        id: "treat-req-" + reqTs,
         fire_at: new Date().toISOString(),
         title: "Treat request",
         body: requesterName + " wants to set a new treat: " + newTreat,
@@ -10915,7 +10916,7 @@ function App({
       if (sbClient && sbHouseholdId) {
         const approverName = currentUser === "her" ? people.her.name : people.him.name;
         sbClient.from("alert_schedule").upsert([{
-          id: "treat-appr-" + Date.now(),
+          id: "treat-appr-" + reqId,
           fire_at: new Date().toISOString(),
           title: "Treat approved!",
           body: approverName + " approved the treat: " + r.treat,
@@ -10974,7 +10975,7 @@ function App({
         const denierName = currentUser === "her" ? people.her.name : people.him.name;
         const denied = updated.find(r2 => r2.id === reqId);
         sbClient.from("alert_schedule").upsert([{
-          id: "treat-deny-" + Date.now(),
+          id: "treat-deny-" + reqId,
           fire_at: new Date().toISOString(),
           title: counterProposal ? "Counter-proposal" : "Treat denied",
           body: denierName + (counterProposal ? " counter-proposed: " + counterProposal : " denied the treat" + (denied ? " - " + denied.treat : "")),
@@ -34826,7 +34827,13 @@ function BillsTab({
   const [docCat, setDocCat] = useState(null); // category filter on the Documents view
   const [docOpenId, setDocOpenId] = useState(null);
   const [catFilter, setCatFilter] = useState(null); // legend drill-down (show ONLY this)
-  const [catHidden, setCatHidden] = useState(() => new Set()); // legend hide (show all EXCEPT these)
+  const [catHidden, setCatHidden] = useState(() => {
+    const stored = lsGet("hb_chartCatHidden", null);
+    return stored ? new Set(stored) : new Set();
+  }); // legend hide (show all EXCEPT these)
+  useEffect(() => {
+    lsSet("hb_chartCatHidden", [...catHidden]);
+  }, [catHidden]);
   // ── THE GRAPH'S DETAIL FOLDS AWAY *(v288)* ──────────────────────────────────
   // Legend, hidden-category line, the card-netting note and the smoothing toggle had
   // grown to fill most of a screen below a graph that is itself the point. They are
@@ -36117,9 +36124,15 @@ function BillsTab({
   // setting would fight the user. So the setting seeds the set ONCE (and re-seeds if
   // the dominant category actually changes), and after that the taps own it.
   const seeded = useRef(null);
+  const hadStored = useRef(!!lsGet("hb_chartCatHidden", null));
   useEffect(() => {
     if (seeded.current === bigCat) return;
     seeded.current = bigCat;
+    // v719 · On first mount, respect persisted hide state instead of overwriting it.
+    if (hadStored.current) {
+      hadStored.current = false;
+      return;
+    }
     setCatHidden(bigCat ? new Set([bigCat]) : new Set());
   }, [bigCat]);
   const spend = monthlySpend(bills, today, 6, billSmooth, catFilter, catHidden);
@@ -74314,7 +74327,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v719"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v720"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
