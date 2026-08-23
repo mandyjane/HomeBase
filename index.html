@@ -8518,14 +8518,19 @@ function App({
       localHorizon = now + 24 * 60 * 60 * 1000;
     const rows = [];
     let localCount = 0;
+    const _today = todayStr();
     (tasks || []).forEach(t => {
       if (!t.alerts || !t.alerts.length || t.done || !t.dueDate) return;
+      // v719 · For recurring tasks/bills, compute the NEXT occurrence date instead of
+      // using the series start date — which may be months in the past.
+      const effectiveDate = t.recur && t.recur !== "none" ? nextOccurrenceDate(t, "dueDate", _today) : t.dueDate;
+      if (!effectiveDate) return;
       // v673 · Skip if this specific occurrence is already done (recurring tasks stay
       // t.done=false but mark individual dates via exceptions[date].done=true).
-      const occEx = t.exceptions && t.exceptions[t.dueDate];
+      const occEx = t.exceptions && t.exceptions[effectiveDate];
       if (occEx && (occEx.done || occEx.deleted)) return;
       t.alerts.forEach((a, i) => {
-        const ft = calcFireMs(t.dueDate, t.time, a);
+        const ft = calcFireMs(effectiveDate, t.time, a);
         if (!ft || ft <= now || ft > serverHorizon) return;
         const exUid = t.assignee && t.assignee !== "both" ? lsGet("hb_userId_" + (t.assignee === "her" ? "him" : "her"), "") : null;
         const badgeIcon = taskMeta(t).icon || "bell";
@@ -8533,7 +8538,7 @@ function App({
           id: "t-" + t.id + "-" + i,
           fire_at: new Date(ft).toISOString(),
           title: t.title,
-          body: taskCatLabel(t) + " — due " + shortDate(t.dueDate),
+          body: taskCatLabel(t) + " — due " + shortDate(effectiveDate),
           household_id: sbHouseholdId,
           sent: false,
           exclude_user_id: exUid || null,
@@ -8542,15 +8547,18 @@ function App({
         if (ft <= localHorizon) {
           localCount++;
           notifTimers.current.push(setTimeout(() => {
-            fireNotif(t.title, taskCatLabel(t) + " — due " + shortDate(t.dueDate), "hb-t-" + t.id + "-" + i, badgeIcon);
+            fireNotif(t.title, taskCatLabel(t) + " — due " + shortDate(effectiveDate), "hb-t-" + t.id + "-" + i, badgeIcon);
           }, ft - now));
         }
       });
     });
     (events || []).forEach(e => {
       if (!e.alerts || !e.alerts.length || !e.date) return;
+      // v719 · Same fix for recurring events
+      const effectiveDateE = e.recur && e.recur !== "none" ? nextOccurrenceDate(e, "date", _today) : e.date;
+      if (!effectiveDateE) return;
       e.alerts.forEach((a, i) => {
-        const ft = calcFireMs(e.date, e.time, a);
+        const ft = calcFireMs(effectiveDateE, e.time, a);
         if (!ft || ft <= now || ft > serverHorizon) return;
         const exUidE = e.assignee && e.assignee !== "both" ? lsGet("hb_userId_" + (e.assignee === "her" ? "him" : "her"), "") : null;
         const ec = EVENT_CATS[e.category] || EVENT_CATS.Other;
@@ -8559,7 +8567,7 @@ function App({
           id: "e-" + e.id + "-" + i,
           fire_at: new Date(ft).toISOString(),
           title: e.title,
-          body: (e.category || "Event") + " — " + shortDate(e.date),
+          body: (e.category || "Event") + " — " + shortDate(effectiveDateE),
           household_id: sbHouseholdId,
           sent: false,
           exclude_user_id: exUidE || null,
@@ -8568,7 +8576,7 @@ function App({
         if (ft <= localHorizon) {
           localCount++;
           notifTimers.current.push(setTimeout(() => {
-            fireNotif(e.title, (e.category || "Event") + " — " + shortDate(e.date), "hb-e-" + e.id + "-" + i, eBadge);
+            fireNotif(e.title, (e.category || "Event") + " — " + shortDate(effectiveDateE), "hb-e-" + e.id + "-" + i, eBadge);
           }, ft - now));
         }
       });
