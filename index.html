@@ -57392,6 +57392,16 @@ function TaskModal({
           return;
         }
       }
+      // v719 · If the form says "Does not repeat", skip the scope dialog entirely.
+      // This covers two cases:
+      //   (a) User just changed recurrence from something to "none" — intent is clear.
+      //   (b) A previous edit already set recur:"none" via exception, but _isOccurrence
+      //       is still true (computed from the SERIES recur). The dialog makes no sense
+      //       because the occurrence is already non-recurring.
+      if (!form.recur || form.recur === "none") {
+        onSave(normalizeForm(form), "all");
+        return;
+      }
       setScopeAsk(true);
       return;
     }
