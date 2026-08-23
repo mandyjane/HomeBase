@@ -12269,15 +12269,26 @@ function App({
           userSetTasks(ts => ts.map(t => {
             if (t.id !== orig.id) return t;
             if (turnedOff) {
+              // v719 · Preserve exceptions that carry payment/completion data
+              // (done, paidAt, amount) — only strip scheduling metadata (recurEnd).
+              // Previously this destructured away ALL exceptions, wiping bill history.
+              const kept = {};
+              if (t.exceptions) {
+                Object.entries(t.exceptions).forEach(([k, ex]) => {
+                  if (ex && (ex.done || ex.paidAt || ex.amount != null)) kept[k] = {
+                    ...ex
+                  };
+                });
+              }
               const {
-                exceptions: _ex,
                 recurEnd: _re,
                 ...rest
               } = t;
               return {
                 ...rest,
                 ...fields,
-                recur: "none"
+                recur: "none",
+                exceptions: Object.keys(kept).length ? kept : {}
               };
             }
             // THE SCHEDULE MAY HAVE MOVED. Exceptions are keyed by occurrence DATE, so
@@ -57392,13 +57403,10 @@ function TaskModal({
           return;
         }
       }
-      // v719 · If the form says "Does not repeat", skip the scope dialog entirely.
-      // This covers two cases:
-      //   (a) User just changed recurrence from something to "none" — intent is clear.
-      //   (b) A previous edit already set recur:"none" via exception, but _isOccurrence
-      //       is still true (computed from the SERIES recur). The dialog makes no sense
-      //       because the occurrence is already non-recurring.
-      if (!form.recur || form.recur === "none") {
+      // v719 · If the form says "Does not repeat", skip the scope dialog entirely
+      // for NON-BILL tasks. For bills, always show the dialog because scope "all"
+      // can strip payment history — the user needs to choose deliberately.
+      if ((!form.recur || form.recur === "none") && !billForm) {
         onSave(normalizeForm(form), "all");
         return;
       }
@@ -74306,7 +74314,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v718"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v719"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
