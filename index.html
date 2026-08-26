@@ -8362,6 +8362,19 @@ function App({
   // Supabase. When alerts change, fire times are upserted into `alert_schedule`.
   // A Supabase Edge Function (cron every minute) sends push for due alerts.
   // Client-side setTimeout is kept as a BONUS for when the app is open.
+  // v720 · Immediately cancel scheduled alerts for a task/event when it's marked done.
+  // Without this, stale alerts can fire between the done-tick and the next effect run.
+  function cancelScheduledAlerts(entityId, prefix) {
+    if (!sbClient || !sbHouseholdId) return;
+    // Build all possible alert IDs for this entity (up to 5 alerts)
+    const ids = [];
+    for (let i = 0; i < 5; i++) ids.push((prefix || "t") + "-" + entityId + "-" + i);
+    sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false).in("id", ids).then(({
+      error
+    }) => {
+      if (error) console.warn("[cancel alerts]", error.message);
+    });
+  }
   const VAPID_PUBLIC = "BG9-5FVxgYGTxkSTHWpxQ-NTKnOQFU6oL1mD7jJxyOijAajvW11G_PDZXAhr-Ry4ti63Uk-QSursRvVo84GhJxM";
   const [notifEnabled, setNotifEnabled] = useState(() => lsGet("hb_notifEnabled", false));
   const [notifPerm, setNotifPerm] = useState(() => {
@@ -8520,7 +8533,7 @@ function App({
     let localCount = 0;
     const _today = todayStr();
     (tasks || []).forEach(t => {
-      if (!t.alerts || !t.alerts.length || t.done || !t.dueDate) return;
+      if (!t.alerts || !t.alerts.length || t.done || t._deleted || !t.dueDate) return;
       // v719 · For recurring tasks/bills, compute the NEXT occurrence date instead of
       // using the series start date — which may be months in the past.
       const effectiveDate = t.recur && t.recur !== "none" ? nextOccurrenceDate(t, "dueDate", _today) : t.dueDate;
@@ -8584,27 +8597,36 @@ function App({
     setNotifScheduled(localCount);
 
     // Upsert to Supabase (server delivers even when app is closed)
-    // v673 · Full cleanup: delete all unsent task/event alerts, then insert only active ones.
-    // Build explicit ID list from all tasks/events with alerts (done or not) to ensure
-    // stale alerts for completed tasks are removed.
+    // v720 · Switched from delete-all-then-insert to upsert-only.
+    // The old delete-then-insert had a race: pg_cron could check between the delete
+    // and the insert, finding nothing to fire. Now we only upsert active alerts,
+    // and explicitly delete stale ones (done/past tasks) by ID.
     if (sbClient && sbHouseholdId) {
       (async () => {
         try {
-          const allAlertIds = [];
+          // Build IDs for alerts that SHOULD NOT exist (task done, deleted, or past)
+          const staleIds = [];
           (tasks || []).forEach(t => {
             if (!t.alerts || !t.alerts.length) return;
-            t.alerts.forEach((_, i) => allAlertIds.push("t-" + t.id + "-" + i));
+            const dominated = t.done || t._deleted;
+            const effectiveD = t.recur && t.recur !== "none" ? nextOccurrenceDate(t, "dueDate", _today) : t.dueDate;
+            const occDone = effectiveD && t.exceptions && t.exceptions[effectiveD] && (t.exceptions[effectiveD].done || t.exceptions[effectiveD].deleted);
+            if (dominated || occDone || !effectiveD) {
+              t.alerts.forEach((_, i) => staleIds.push("t-" + t.id + "-" + i));
+            }
           });
           (events || []).forEach(e => {
             if (!e.alerts || !e.alerts.length) return;
-            e.alerts.forEach((_, i) => allAlertIds.push("e-" + e.id + "-" + i));
+            e.alerts.forEach((_, i) => staleIds.push("e-" + e.id + "-" + i));
+            // Events that didn't make it into rows are stale
           });
-          if (allAlertIds.length > 0) {
-            // Delete in batches of 100 (Supabase .in() limit)
-            for (let i = 0; i < allAlertIds.length; i += 100) {
-              await sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false).in("id", allAlertIds.slice(i, i + 100));
+          // Delete stale unsent alerts
+          if (staleIds.length > 0) {
+            for (let i = 0; i < staleIds.length; i += 100) {
+              await sbClient.from("alert_schedule").delete().eq("household_id", sbHouseholdId).eq("sent", false).in("id", staleIds.slice(i, i + 100));
             }
           }
+          // Upsert active alerts
           if (rows.length > 0) {
             const {
               error
@@ -11322,6 +11344,9 @@ function App({
       // the ??10 default in awardPoints. Belt-and-braces: force 0 for any rewardTask.
       const pts = occ.rewardTask ? 0 : occ.points;
       award = awardPoints(occ.assignee, pts, pointsTo, !!occ.rewardTask);
+      // v720 · Immediately cancel any pending alerts for this task so they
+      // don't fire after the task is already done.
+      cancelScheduledAlerts(seriesId, "t");
     } else {
       // Refund exactly what was paid. Tasks completed BEFORE this feature carry no
       // stored award, so fall back to re-deriving from the assignee — the best guess
