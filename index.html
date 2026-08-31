@@ -52125,6 +52125,7 @@ function SecondmentCard({
   logOpen = false,
   onToggleLog
 }) {
+  const [showAddMenu, setShowAddMenu] = React.useState(false);
   if (!sec || !sec.active) return null;
   const today = new Date();
   today.setHours(12, 0, 0, 0);
@@ -52187,7 +52188,8 @@ function SecondmentCard({
   }
   return /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: 12
+      marginBottom: 12,
+      position: "relative"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -52228,7 +52230,41 @@ function SecondmentCard({
       color: "#9a8cb8",
       marginTop: 2
     }
-  }, "Week ", st.weekNum, " of 5 · ", st.daysLeft, " working days left"))), /*#__PURE__*/React.createElement("div", {
+  }, "Week ", st.weekNum, " of 5 · ", st.daysLeft, " working days left")), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowAddMenu(true),
+    className: "sans",
+    style: {
+      background: "rgba(192,132,252,0.2)",
+      color: "#c084fc",
+      border: "1px solid rgba(192,132,252,0.3)",
+      borderRadius: 10,
+      padding: "6px 12px",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: 4
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "12",
+    height: "12",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: "12",
+    y1: "5",
+    x2: "12",
+    y2: "19"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "5",
+    y1: "12",
+    x2: "19",
+    y2: "12"
+  })), "Add")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6
@@ -52246,7 +52282,7 @@ function SecondmentCard({
   }, {
     n: st.flexUsed.toFixed(1),
     l: "Flex −",
-    c: "#FBBF24"
+    c: "#8b8b9e"
   }, {
     n: st.alDays,
     l: "AL",
@@ -52277,120 +52313,83 @@ function SecondmentCard({
       fontWeight: 600,
       marginTop: 1
     }
-  }, s.l))))), /*#__PURE__*/React.createElement("div", {
+  }, s.l))))), showAddMenu && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    onClick: () => setShowAddMenu(false),
     style: {
-      display: "flex",
-      gap: 6,
-      marginBottom: 12
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 99
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      right: 0,
+      top: 60,
+      zIndex: 100,
+      background: C.sheet || "#1e1730",
+      borderRadius: 14,
+      padding: 10,
+      boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+      border: "1px solid " + (C.rule || "#3d2a5c"),
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 8,
+      width: 220
     }
   }, [{
-    l: "\u23f1 Log",
-    fn: () => onLog(),
-    bg: "#c084fc",
-    c: "#fff",
-    bd: "none"
+    l: "\u23f1 Log Hours",
+    fn: () => {
+      setShowAddMenu(false);
+      onLog();
+    },
+    bg: C.accent || "#c084fc",
+    c: "#fff"
   }, {
     l: "\u26a1 Flex Off",
-    fn: () => onQuick("flex_off"),
+    fn: () => {
+      setShowAddMenu(false);
+      onQuick("flex_off");
+    },
     bg: "transparent",
     c: "#8b8b9e",
-    bd: "1px solid #4a3f60"
+    bd: true
   }, {
     l: "\ud83c\udfd6 AL",
-    fn: () => onQuick("al"),
+    fn: () => {
+      setShowAddMenu(false);
+      onQuick("al");
+    },
     bg: "transparent",
     c: "#60a5fa",
-    bd: "1px solid #4a3f60"
+    bd: true
   }, {
     l: "\ud83e\udd12 Sick",
-    fn: () => onQuick("sick"),
+    fn: () => {
+      setShowAddMenu(false);
+      onQuick("sick");
+    },
     bg: "transparent",
     c: "#f87171",
-    bd: "1px solid #4a3f60"
+    bd: true
   }].map((b, i) => /*#__PURE__*/React.createElement("button", {
     key: i,
     onClick: b.fn,
     className: "sans",
     style: {
-      flex: 1,
       background: b.bg,
       color: b.c,
-      border: b.bd,
+      border: b.bd ? "1px solid " + (C.rule || "#4a3f60") : "none",
       borderRadius: 10,
-      padding: "11px 4px",
-      fontSize: 11,
+      padding: "12px 8px",
+      fontSize: 12,
       fontWeight: 700,
-      cursor: "pointer"
+      cursor: "pointer",
+      textAlign: "center"
     }
-  }, b.l))), st.flexBalance !== 0 && (() => {
-    const abs = Math.abs(st.flexBalance);
-    const perDay = st.daysLeft > 0 ? abs / st.daysLeft : 0;
-    const suggestion = st.flexBalance > 0 ? perDay >= 1 ? `~${fmtHrsShort(perDay)} early per remaining day` : `~${Math.round(perDay * 60)}m early per remaining day` : perDay >= 1 ? `~${fmtHrsShort(perDay)} extra per remaining day` : `~${Math.round(perDay * 60)}m extra per remaining day`;
-    return /*#__PURE__*/React.createElement("div", {
-      style: {
-        background: C.surface,
-        borderRadius: 12,
-        padding: "12px 14px",
-        marginBottom: 10
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 8
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "sans",
-      style: {
-        fontSize: 11,
-        fontWeight: 700,
-        color: C.inkMute,
-        textTransform: "uppercase",
-        letterSpacing: 0.8
-      }
-    }, "Target: 0h by 2 Oct"), /*#__PURE__*/React.createElement("span", {
-      className: "serif",
-      style: {
-        fontSize: 13,
-        fontWeight: 700,
-        color: st.flexBalance > 0 ? "#5EE7B4" : "#EF4444"
-      }
-    }, fmtFlex(st.flexBalance), " to ", st.flexBalance > 0 ? "use" : "earn")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: 8,
-        background: C.rule,
-        borderRadius: 4,
-        overflow: "hidden",
-        position: "relative"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        height: "100%",
-        borderRadius: 4,
-        width: Math.min(100, Math.abs(st.flexBalance) / sec.requiredHours * 100) + "%",
-        background: "linear-gradient(90deg,#5EE7B4,#c084fc)"
-      }
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: "absolute",
-        right: 0,
-        top: -3,
-        bottom: -3,
-        width: 2,
-        background: C.ink,
-        borderRadius: 1
-      }
-    })), /*#__PURE__*/React.createElement("div", {
-      className: "sans",
-      style: {
-        fontSize: 10,
-        color: C.inkFaint,
-        marginTop: 6,
-        textAlign: "center"
-      }
-    }, suggestion, " would zero out"));
-  })(), (() => {
+  }, b.l)))), (() => {
     const sorted = (sec.entries || []).slice().sort((a, b) => a.date.localeCompare(b.date));
     if (sorted.length === 0) return null;
     let running = 0;
@@ -75541,7 +75540,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v723"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v724"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
