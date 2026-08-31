@@ -8681,6 +8681,23 @@ function App({
   useEffect(() => {
     lsSet("hb_workCardTint", workCardTint);
   }, [workCardTint]);
+  // v721 · Secondment flex tracker
+  const [secondment, setSecondment] = useState(() => lsGet("hb_secondment", {
+    active: true,
+    person: "her",
+    start: "2026-08-31",
+    end: "2026-10-02",
+    requiredHours: 7.25,
+    breakMins: 30,
+    shiftStart: "07:00",
+    shiftEnd: "14:45",
+    entries: [] // [{date,type:"worked"|"flex_off"|"al"|"sick",start?,end?,hours?}]
+  }));
+  useEffect(() => {
+    lsSet("hb_secondment", secondment);
+  }, [secondment]);
+  const [showFlexLog, setShowFlexLog] = useState(false);
+  const [flexLogDate, setFlexLogDate] = useState(null);
   // The pending "worked hours" prompt: {occ} when open (opt-in) or when editing worked hrs.
   const [rdoWorkedPrompt, setRdoWorkedPrompt] = useState(null);
   // v157 Build 1 · per-person work mode + regular-hours pattern (shift | regular).
@@ -19201,7 +19218,50 @@ function App({
       }),
       onChangeType: ev => setRetype(ev),
       onHistory: ev => setHistFor(ev),
-      workHist: workHist
+      workHist: workHist,
+      secondment: secondment,
+      onSecondmentLog: () => {
+        setFlexLogDate(today);
+        setShowFlexLog(true);
+      },
+      onSecondmentQuick: type => {
+        setSecondment(s => {
+          const es = (s.entries || []).filter(e => e.date !== today);
+          es.push({
+            date: today,
+            type
+          });
+          return {
+            ...s,
+            entries: es
+          };
+        });
+      },
+      onSecondmentDelete: date => {
+        setSecondment(s => ({
+          ...s,
+          entries: (s.entries || []).filter(e => e.date !== date)
+        }));
+      }
+    }), showFlexLog && /*#__PURE__*/React.createElement(FlexLogSheet, {
+      open: showFlexLog,
+      onClose: () => setShowFlexLog(false),
+      date: flexLogDate || today,
+      requiredHours: secondment.requiredHours,
+      breakMins: secondment.breakMins,
+      defaultStart: secondment.shiftStart,
+      defaultEnd: secondment.shiftEnd,
+      onSave: entry => {
+        setSecondment(s => {
+          const es = (s.entries || []).filter(e => e.date !== entry.date);
+          es.push(entry);
+          return {
+            ...s,
+            entries: es
+          };
+        });
+        setShowFlexLog(false);
+      }
     }), tab === "calendar" && /*#__PURE__*/React.createElement(CalendarTab, {
       billPayer: billPayer,
       billQuickPay: billQuickPay,
@@ -51785,6 +51845,632 @@ function WorkStatsSheet({
     }
   }, "Same ordinary / overtime / total the OT card computes. Weeks use the Sat–Fri overtime week."))));
 }
+
+// ── v721 · SECONDMENT FLEX TRACKER ──────────────────────────────────────────
+function secondmentStats(sec) {
+  if (!sec || !sec.active) return null;
+  const entries = sec.entries || [];
+  let worked = 0,
+    flexEarned = 0,
+    flexUsed = 0,
+    alDays = 0,
+    sickDays = 0,
+    flexOffDays = 0,
+    loggedDays = 0;
+  entries.forEach(e => {
+    if (e.type === "worked") {
+      worked += e.hours || 0;
+      loggedDays++;
+      const d = (e.hours || 0) - sec.requiredHours;
+      if (d > 0) flexEarned += d;else flexUsed += Math.abs(d);
+    } else if (e.type === "flex_off") {
+      flexUsed += sec.requiredHours;
+      flexOffDays++;
+    } else if (e.type === "al") {
+      alDays++;
+    } else if (e.type === "sick") {
+      sickDays++;
+    }
+  });
+  const flexBalance = flexEarned - flexUsed;
+  const start = new Date(sec.start + "T12:00:00"),
+    end2 = new Date(sec.end + "T12:00:00");
+  const today2 = new Date();
+  today2.setHours(12, 0, 0, 0);
+  let daysLeft = 0;
+  for (let d = new Date(Math.max(today2.getTime(), start.getTime())); d <= end2; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay();
+    if (dow >= 1 && dow <= 5) daysLeft++;
+  }
+  const daysSinceStart = Math.max(0, Math.floor((today2 - start) / 86400000));
+  const weekNum = Math.min(5, Math.floor(daysSinceStart / 7) + 1);
+  return {
+    worked,
+    flexEarned,
+    flexUsed,
+    flexBalance,
+    alDays,
+    sickDays,
+    flexOffDays,
+    loggedDays,
+    requiredTotal: (loggedDays + flexOffDays) * sec.requiredHours,
+    daysLeft,
+    weekNum
+  };
+}
+function fmtFlex(hrs) {
+  const neg = hrs < 0;
+  const a = Math.abs(hrs);
+  const h = Math.floor(a);
+  const m = Math.round((a - h) * 60);
+  return (neg ? "\u2212" : "+") + h + "h" + (m ? " " + m + "m" : "");
+}
+function fmtHrsShort(hrs) {
+  const h = Math.floor(hrs);
+  const m = Math.round((hrs - h) * 60);
+  return h + "h" + (m ? " " + m + "m" : "");
+}
+function SecondmentCard({
+  sec,
+  people,
+  onLog,
+  onQuick,
+  onDelete
+}) {
+  if (!sec || !sec.active) return null;
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const end = new Date(sec.end + "T12:00:00");
+  if (today > end) return null;
+  const st = secondmentStats(sec);
+  if (!st) return null;
+  const entries = (sec.entries || []).slice().sort((a, b) => b.date.localeCompare(a.date));
+  const start = new Date(sec.start + "T12:00:00");
+  const weeks = {};
+  entries.forEach(e => {
+    const d = new Date(e.date + "T12:00:00");
+    const ds = Math.floor((d - start) / 86400000);
+    const wk = Math.max(1, Math.floor(ds / 7) + 1);
+    if (!weeks[wk]) weeks[wk] = [];
+    weeks[wk].push(e);
+  });
+  const tagColors = {
+    earn: "rgba(94,231,180,0.15)",
+    target: "rgba(192,132,252,0.15)",
+    use: "rgba(251,191,36,0.15)",
+    flexOff: "rgba(239,68,68,0.15)",
+    al: "rgba(96,165,250,0.15)",
+    sick: "rgba(248,113,113,0.15)"
+  };
+  const tagText = {
+    earn: "#5EE7B4",
+    target: "#c084fc",
+    use: "#FBBF24",
+    flexOff: "#EF4444",
+    al: "#60a5fa",
+    sick: "#f87171"
+  };
+  function tagFor(e) {
+    if (e.type === "al") return {
+      label: "\ud83c\udfd6 Annual Leave",
+      cls: "al"
+    };
+    if (e.type === "sick") return {
+      label: "\ud83e\udd12 Sick day",
+      cls: "sick"
+    };
+    if (e.type === "flex_off") return {
+      label: "\u26a1 Flex day off",
+      cls: "flexOff"
+    };
+    const diff = (e.hours || 0) - sec.requiredHours;
+    if (Math.abs(diff) < 0.01) return {
+      label: "On target",
+      cls: "target"
+    };
+    if (diff > 0) return {
+      label: fmtFlex(diff) + " flex",
+      cls: "earn"
+    };
+    return {
+      label: fmtFlex(diff) + " flex",
+      cls: "use"
+    };
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "linear-gradient(135deg,#2d1f4e 0%,#1a2a3e 100%)",
+      borderRadius: 18,
+      padding: 16,
+      border: "1px solid #3d2a5c",
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      color: "#9a8cb8",
+      fontWeight: 700
+    }
+  }, "Flex Balance"), /*#__PURE__*/React.createElement("div", {
+    className: "serif",
+    style: {
+      fontSize: 28,
+      fontWeight: 700,
+      fontStyle: "italic",
+      color: st.flexBalance >= 0 ? "#5EE7B4" : "#EF4444"
+    }
+  }, fmtFlex(st.flexBalance)), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      color: "#9a8cb8",
+      marginTop: 2
+    }
+  }, "Week ", st.weekNum, " of 5 \\u00b7 ", st.daysLeft, " working days left"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, [{
+    n: st.worked.toFixed(1),
+    l: "Worked"
+  }, {
+    n: st.requiredTotal.toFixed(1),
+    l: "Required"
+  }, {
+    n: "+" + st.flexEarned.toFixed(1),
+    l: "Flex +",
+    c: "#5EE7B4"
+  }, {
+    n: st.flexUsed.toFixed(1),
+    l: "Flex \u2212",
+    c: "#FBBF24"
+  }, {
+    n: st.alDays,
+    l: "AL",
+    c: "#60a5fa"
+  }].map((s, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      flex: 1,
+      background: "rgba(255,255,255,0.05)",
+      borderRadius: 8,
+      padding: "8px 4px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "serif",
+    style: {
+      fontSize: 14,
+      fontWeight: 700
+    }
+  }, s.n), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.7,
+      color: s.c || "#9a8cb8",
+      fontWeight: 600,
+      marginTop: 1
+    }
+  }, s.l))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      marginBottom: 12
+    }
+  }, [{
+    l: "\u23f1 Log",
+    fn: () => onLog(),
+    bg: "#c084fc",
+    c: "#fff",
+    bd: "none"
+  }, {
+    l: "\u26a1 Flex Off",
+    fn: () => onQuick("flex_off"),
+    bg: "transparent",
+    c: "#FBBF24",
+    bd: "1px solid #4a3f60"
+  }, {
+    l: "\ud83c\udfd6 AL",
+    fn: () => onQuick("al"),
+    bg: "transparent",
+    c: "#60a5fa",
+    bd: "1px solid #4a3f60"
+  }, {
+    l: "\ud83e\udd12 Sick",
+    fn: () => onQuick("sick"),
+    bg: "transparent",
+    c: "#f87171",
+    bd: "1px solid #4a3f60"
+  }].map((b, i) => /*#__PURE__*/React.createElement("button", {
+    key: i,
+    onClick: b.fn,
+    className: "sans",
+    style: {
+      flex: 1,
+      background: b.bg,
+      color: b.c,
+      border: b.bd,
+      borderRadius: 10,
+      padding: "11px 4px",
+      fontSize: 11,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, b.l))), Object.keys(weeks).sort((a, b) => b - a).map(wk => /*#__PURE__*/React.createElement("div", {
+    key: wk
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 1.2,
+      textTransform: "uppercase",
+      color: "#9a8cb8",
+      margin: "14px 0 6px"
+    }
+  }, "Week ", wk), weeks[wk].map(e => {
+    const tg = tagFor(e);
+    const dn = new Date(e.date + "T12:00:00").toLocaleDateString("en-AU", {
+      weekday: "short",
+      day: "numeric",
+      month: "short"
+    });
+    return /*#__PURE__*/React.createElement("div", {
+      key: e.date,
+      style: {
+        background: "#251f35",
+        borderRadius: 14,
+        padding: "12px 14px",
+        marginBottom: 6
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 13,
+        fontWeight: 700
+      }
+    }, dn), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 9,
+        fontWeight: 700,
+        padding: "3px 8px",
+        borderRadius: 6,
+        background: tagColors[tg.cls],
+        color: tagText[tg.cls]
+      }
+    }, tg.label)), e.type === "worked" && /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 11.5,
+        color: "#9a8cb8",
+        marginTop: 4
+      }
+    }, e.start, " \\u2192 ", e.end, " \\u00b7 ", sec.breakMins, "m break \\u00b7 ", fmtHrsShort(e.hours), " worked"), e.type === "flex_off" && /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 11.5,
+        color: "#9a8cb8",
+        marginTop: 4
+      }
+    }, "Full day off \\u00b7 \\u2212", fmtHrsShort(sec.requiredHours), " flex used"), (e.type === "al" || e.type === "sick") && /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 11.5,
+        color: "#9a8cb8",
+        marginTop: 4
+      }
+    }, "Full day off \\u00b7 no flex impact"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        justifyContent: "flex-end",
+        marginTop: 4
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => onDelete(e.date),
+      className: "sans",
+      style: {
+        fontSize: 10,
+        color: "#6b5f80",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: "2px 6px"
+      }
+    }, "Remove")));
+  }))), entries.length === 0 && /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      fontStyle: "italic",
+      color: "#9a8cb8",
+      padding: "12px 0",
+      textAlign: "center"
+    }
+  }, "No entries yet \\u2014 tap Log to start"));
+}
+function FlexLogSheet({
+  open,
+  onClose,
+  onSave,
+  date,
+  requiredHours,
+  breakMins,
+  defaultStart,
+  defaultEnd
+}) {
+  const [start, setStart] = React.useState(defaultStart || "07:00");
+  const [end, setEnd] = React.useState(defaultEnd || "14:45");
+  const [brk, setBrk] = React.useState(breakMins || 30);
+  React.useEffect(() => {
+    if (open) {
+      setStart(defaultStart || "07:00");
+      setEnd(defaultEnd || "14:45");
+      setBrk(breakMins || 30);
+    }
+  }, [open]);
+  if (!open) return null;
+  const [sh, sm] = (start || "07:00").split(":").map(Number);
+  const [eh, em] = (end || "14:45").split(":").map(Number);
+  const totalMins = eh * 60 + em - (sh * 60 + sm) - brk;
+  const hours = Math.max(0, totalMins / 60);
+  const flex = hours - requiredHours;
+  const dayName = date ? new Date(date + "T12:00:00").toLocaleDateString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "short"
+  }) : "Today";
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      zIndex: 9999,
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "flex-end"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: onClose,
+    style: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0,0,0,0.6)"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      background: "#1e1730",
+      borderTopLeftRadius: 22,
+      borderTopRightRadius: 22,
+      padding: "20px 20px 32px",
+      maxHeight: "85vh",
+      overflowY: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      background: "#342d48",
+      margin: "0 auto 16px"
+    }
+  }), /*#__PURE__*/React.createElement("h3", {
+    className: "serif",
+    style: {
+      fontSize: 19,
+      fontStyle: "italic",
+      marginBottom: 4
+    }
+  }, "Log Hours"), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      color: "#9a8cb8",
+      marginBottom: 16
+    }
+  }, dayName), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 1,
+      textTransform: "uppercase",
+      color: "#9a8cb8",
+      marginBottom: 4
+    }
+  }, "Start"), /*#__PURE__*/React.createElement("input", {
+    type: "time",
+    value: start,
+    onChange: e => setStart(e.target.value),
+    style: {
+      width: "100%",
+      background: "#251f35",
+      border: "1px solid #4a3f60",
+      borderRadius: 10,
+      padding: "12px 14px",
+      fontSize: 16,
+      color: "#e8e0f0",
+      fontWeight: 500
+    }
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#9a8cb8",
+      marginTop: 20
+    }
+  }, "\\u2192"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 1,
+      textTransform: "uppercase",
+      color: "#9a8cb8",
+      marginBottom: 4
+    }
+  }, "End"), /*#__PURE__*/React.createElement("input", {
+    type: "time",
+    value: end,
+    onChange: e => setEnd(e.target.value),
+    style: {
+      width: "100%",
+      background: "#251f35",
+      border: "1px solid #4a3f60",
+      borderRadius: 10,
+      padding: "12px 14px",
+      fontSize: 16,
+      color: "#e8e0f0",
+      fontWeight: 500
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      color: "#9a8cb8"
+    }
+  }, "Break:"), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 14,
+      fontWeight: 600
+    }
+  }, brk, "m"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 12,
+      color: "#9a8cb8"
+    }
+  }, "Worked:"), /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: hours >= requiredHours ? "#5EE7B4" : "#e8e0f0"
+    }
+  }, fmtHrsShort(hours))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#251f35",
+      borderRadius: 12,
+      padding: "12px 14px",
+      marginBottom: 20,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 13,
+      color: "#9a8cb8"
+    }
+  }, "Flex:"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 18,
+      fontWeight: 700,
+      color: flex >= 0 ? "#5EE7B4" : "#FBBF24"
+    }
+  }, fmtFlex(flex)), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: "#6b5f80"
+    }
+  }, "(", hours.toFixed(2), " \\u2212 ", requiredHours, " = ", flex >= 0 ? "+" : "", flex.toFixed(2), "h)")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "sans",
+    style: {
+      flex: 1,
+      background: "#251f35",
+      color: "#e8e0f0",
+      border: "1px solid #4a3f60",
+      borderRadius: 14,
+      padding: 14,
+      fontSize: 15,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onSave({
+      date,
+      type: "worked",
+      start,
+      end,
+      hours: Math.round(hours * 100) / 100
+    }),
+    className: "sans",
+    style: {
+      flex: 2,
+      background: "#c084fc",
+      color: "#fff",
+      border: "none",
+      borderRadius: 14,
+      padding: 14,
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "Save"))));
+}
 function WorkTab({
   q = "",
   events,
@@ -51818,7 +52504,11 @@ function WorkTab({
   onDayTap,
   onChangeType,
   onHistory,
-  workHist = {}
+  workHist = {},
+  secondment,
+  onSecondmentLog,
+  onSecondmentQuick,
+  onSecondmentDelete
 }) {
   // v224 · REMEMBERED. This was plain useState("month"), so every visit to the Work tab
   // threw away the period you had chosen and snapped back to Month. Same shape as
@@ -52530,7 +53220,29 @@ function WorkTab({
   };
   return /*#__PURE__*/React.createElement("div", {
     className: "fade"
-  }, /*#__PURE__*/React.createElement("div", {
+  }, secondment && secondment.active && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 1.2,
+      textTransform: "uppercase",
+      color: C.inkMute,
+      margin: "0 0 8px"
+    }
+  }, secondment.person === "her" ? people.her.name : people.him.name, " — Secondment"), /*#__PURE__*/React.createElement(SecondmentCard, {
+    sec: secondment,
+    people: people,
+    onLog: onSecondmentLog,
+    onQuick: onSecondmentQuick,
+    onDelete: onSecondmentDelete
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 1,
+      background: C.rule,
+      margin: "8px 0 14px"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       background: C.card,
       borderRadius: otCollapsed ? 16 : 18,
@@ -74352,7 +75064,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v720"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v721"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
