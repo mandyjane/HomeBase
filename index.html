@@ -19262,7 +19262,7 @@ function App({
         sick: "Sick Day"
       };
       const colors = {
-        flex_off: "#FBBF24",
+        flex_off: "#8b8b9e",
         al: "#60a5fa",
         sick: "#f87171"
       };
@@ -21172,7 +21172,7 @@ function EventCard({
       // v173 · striped family: every RDO (worked OR unworked, all blue now) and plain
       // day off. A worked RDO looks like the unworked one — only the amber WORKED pill
       // and +OT figure below mark it as worked.
-      const striped = isRdo || isOff;
+      const striped = isRdo || isOff || ev.dayOff === "leave";
       const subTxt = rdoWorked ? ev.workedStart ? `${fmtTime(ev.workedStart)}–${fmtTime(ev.workedFinish)}${ev.notes ? ` · ${ev.notes}` : ""}` : ev.notes || "" : rdoUnworked || isOff ? ev.notes || "" : meta.hours && ev.dayOffHours > 0 ? `${Number.isInteger(ev.dayOffHours) ? ev.dayOffHours : Math.round(ev.dayOffHours * 10) / 10}h${ev.notes ? ` · ${ev.notes}` : ""}` : ev.notes || "No shift";
       const rdoTitle = isRdo ? "RDO" : isOff && ev.dayOff === "off" ? "Day off" : titleTxt;
       const offTag = isRdo ? "RDO" : isOff ? "OFF" : null;
@@ -21841,7 +21841,7 @@ function EventCard({
     })), "WFH"), isSec && (() => {
       const diff = ev._secDiff || 0;
       const lbl = ev._secFlexLabel || "";
-      const col = secEntry.type === "al" ? "#60a5fa" : secEntry.type === "sick" ? "#f87171" : diff >= 0 ? "#5EE7B4" : "#FBBF24";
+      const col = secEntry.type === "al" ? "#60a5fa" : secEntry.type === "sick" ? "#f87171" : diff >= 0 ? "#5EE7B4" : "#8b8b9e";
       return /*#__PURE__*/React.createElement("span", {
         className: "sans",
         style: {
@@ -52113,7 +52113,7 @@ function SecondmentCard({
   const tagText = {
     earn: "#5EE7B4",
     target: "#c084fc",
-    use: "#FBBF24",
+    use: "#8b8b9e",
     flexOff: "#EF4444",
     al: "#60a5fa",
     sick: "#f87171"
@@ -52253,7 +52253,7 @@ function SecondmentCard({
     l: "\u26a1 Flex Off",
     fn: () => onQuick("flex_off"),
     bg: "transparent",
-    c: "#FBBF24",
+    c: "#8b8b9e",
     bd: "1px solid #4a3f60"
   }, {
     l: "\ud83c\udfd6 AL",
@@ -52529,7 +52529,7 @@ function FlexLogSheet({
     style: {
       fontSize: 18,
       fontWeight: 700,
-      color: flex >= 0 ? "#5EE7B4" : "#FBBF24"
+      color: flex >= 0 ? "#5EE7B4" : "#8b8b9e"
     }
   }, fmtFlex(flex)), /*#__PURE__*/React.createElement("span", {
     className: "sans",
@@ -52677,7 +52677,20 @@ function WorkTab({
   // v157 Build 1 · a regular-hours person's baseline hours count toward OT too. They're
   // generated on the fly (no stored shifts) and merged with the shift occurrences before
   // the OT engine runs, so the person card and tallies read real hours, never 0.
-  const otOccs = [...shiftOccurrences(events, otWin.from, otWin.to), ...regularOccurrencesResolved(workPatterns, events, otWin.from, otWin.to)];
+  // v722 · Secondment period bounds — used for OT exclusion and shift suppression
+  const _secActive = secondment && secondment.active;
+  const _secPerson = _secActive ? secondment.person : null;
+  const _secStart = _secActive ? secondment.start : null;
+  const _secEnd = _secActive ? secondment.end : null;
+  const otOccsRaw = [...shiftOccurrences(events, otWin.from, otWin.to), ...regularOccurrencesResolved(workPatterns, events, otWin.from, otWin.to)];
+  // v722 · Exclude the secondment person's shifts from OT during the secondment period.
+  // Secondment hours are flex-tracked, not OT-tracked.
+  const otOccs = _secActive ? otOccsRaw.filter(e => {
+    const who = e.assignee || "both";
+    if (who !== _secPerson) return true;
+    const d = e._occDate || e.date;
+    return !d || d < _secStart || d > _secEnd;
+  }) : otOccsRaw;
   // v205 · derived cap (see effectiveCaps) — the stored 36.25 invented OT every 5-day week.
   const effCaps = effectiveCaps(otCaps, workPatterns, events, otCapOverride);
   const ot = computeOvertime(otOccs, effCaps);
@@ -52923,10 +52936,6 @@ function WorkTab({
   // "grouped" (option C) keeps both people; the per-person split happens in render.
   const personHit = e => !swipe || e.assignee === swipePerson;
   // v721 · Suppress the secondment person's shifts/day-offs during the secondment period
-  const _secActive = secondment && secondment.active;
-  const _secPerson = _secActive ? secondment.person : null;
-  const _secStart = _secActive ? secondment.start : null;
-  const _secEnd = _secActive ? secondment.end : null;
   function isSecondmentSuppressed(e) {
     if (!_secActive) return false;
     const who = e.assignee || "both";
@@ -52964,11 +52973,15 @@ function WorkTab({
         assignee: secondment.person,
         date: entry.date,
         _occDate: entry.date,
-        time: timeStr,
-        end: endStr,
+        time: entry.type === "worked" ? timeStr : null,
+        end: entry.type === "worked" ? endStr : null,
         _secondment: true,
         _secEntry: entry,
         _secDiff: diff,
+        ...(entry.type !== "worked" ? {
+          dayOff: entry.type === "al" ? "leave" : entry.type === "sick" ? "sick" : "off",
+          dayOffHours: entry.type === "flex_off" ? secondment.requiredHours : 0
+        } : {}),
         _secFlexLabel: flexLabel,
         _secHoursLabel: hoursLabel,
         notes: entry.type === "worked" ? entry.start + " → " + entry.end + " · " + secondment.breakMins + "m break · " + hoursLabel : hoursLabel
