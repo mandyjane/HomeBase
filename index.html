@@ -52812,7 +52812,22 @@ function WorkTab({
   // query, so the week groups and their hour totals reflect only the shown person.
   // "grouped" (option C) keeps both people; the per-person split happens in render.
   const personHit = e => !swipe || e.assignee === swipePerson;
-  const shownOccs = shiftOccs.filter(e => wHit(e) && personHit(e));
+  // v721 · Suppress the secondment person's shifts/day-offs during the secondment period
+  const _secActive = secondment && secondment.active;
+  const _secPerson = _secActive ? secondment.person : null;
+  const _secStart = _secActive ? secondment.start : null;
+  const _secEnd = _secActive ? secondment.end : null;
+  function isSecondmentSuppressed(e) {
+    if (!_secActive) return false;
+    const who = e.assignee || "both";
+    if (who !== _secPerson && who !== "both") return false;
+    // Only suppress the secondment person's cards, not "both"
+    if (who === "both") return false;
+    const d = e._occDate || e.date;
+    if (!d) return false;
+    return d >= _secStart && d <= _secEnd;
+  }
+  const shownOccs = shiftOccs.filter(e => wHit(e) && personHit(e) && !isSecondmentSuppressed(e));
   const grp = {
     Today: [],
     Upcoming: [],
