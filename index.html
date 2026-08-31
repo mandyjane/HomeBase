@@ -19157,6 +19157,16 @@ function App({
         edit: true
       }),
       onEditEvent: e => {
+        if (e._secondment) {
+          const se = e._secEntry;
+          if (se && se.type === "worked") {
+            setFlexLogDate(se.date);
+            setShowFlexLog(true);
+          } else if (se) {
+            setFlexQuickType(se.type);
+          }
+          return;
+        }
         if (e.workEx) {
           setEditException({
             workEx: e.workEx,
@@ -19234,28 +19244,31 @@ function App({
           entries: (s.entries || []).filter(e => e.date !== date)
         }));
       }
-    }), showFlexLog && /*#__PURE__*/React.createElement(FlexLogSheet, {
-      open: showFlexLog,
-      onClose: () => setShowFlexLog(false),
-      date: flexLogDate || today,
-      requiredHours: secondment.requiredHours,
-      breakMins: secondment.breakMins,
-      defaultStart: secondment.shiftStart,
-      defaultEnd: secondment.shiftEnd,
-      secStart: secondment.start,
-      secEnd: secondment.end,
-      onSave: entry => {
-        setSecondment(s => {
-          const es = (s.entries || []).filter(e => e.date !== entry.date);
-          es.push(entry);
-          return {
-            ...s,
-            entries: es
-          };
-        });
-        setShowFlexLog(false);
-      }
-    }), flexQuickType && (() => {
+    }), showFlexLog && (() => {
+      const existingEntry = (secondment.entries || []).find(e => e.date === (flexLogDate || today));
+      return /*#__PURE__*/React.createElement(FlexLogSheet, {
+        open: showFlexLog,
+        onClose: () => setShowFlexLog(false),
+        date: flexLogDate || today,
+        requiredHours: secondment.requiredHours,
+        breakMins: secondment.breakMins,
+        defaultStart: existingEntry && existingEntry.start ? existingEntry.start : secondment.shiftStart,
+        defaultEnd: existingEntry && existingEntry.end ? existingEntry.end : secondment.shiftEnd,
+        secStart: secondment.start,
+        secEnd: secondment.end,
+        onSave: entry => {
+          setSecondment(s => {
+            const es = (s.entries || []).filter(e => e.date !== entry.date);
+            es.push(entry);
+            return {
+              ...s,
+              entries: es
+            };
+          });
+          setShowFlexLog(false);
+        }
+      });
+    })(), flexQuickType && (() => {
       const labels = {
         flex_off: "Flex Day Off",
         al: "Annual Leave",
