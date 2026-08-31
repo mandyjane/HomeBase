@@ -21165,7 +21165,7 @@ function EventCard({
       // family uses; told apart by its icon + RDO tag, not colour. RDO_OT → the one OT_COLOR.
       const RDO_EDGE = WORK_TOKENS.rdo.color,
         RDO_OT = OT_COLOR;
-      const oc = isRdo ? RDO_EDGE : meta.color;
+      const oc = ev._secDayOffColor || (isRdo ? RDO_EDGE : meta.color);
       const dd = new Date(ev.date + "T00:00:00");
       const odow = dd.toLocaleDateString("en-AU", {
         weekday: "short"
@@ -21346,7 +21346,29 @@ function EventCard({
       }, /*#__PURE__*/React.createElement(WorkNameChip, {
         who: who,
         whoColor: whoColor
-      }), rdoWorked && wH > 0 && /*#__PURE__*/React.createElement("span", {
+      }), ev._secondment && ev._secFlexLabel && (() => {
+        const diff = ev._secDiff || 0;
+        const col = ev._secEntry && (ev._secEntry.type === "al" || ev._secEntry.type === "sick") ? "#60a5fa" : diff >= 0 ? "#5EE7B4" : "#8b8b9e";
+        return /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 3,
+            fontSize: 11,
+            fontWeight: 800,
+            color: col,
+            whiteSpace: "nowrap"
+          }
+        }, /*#__PURE__*/React.createElement("svg", {
+          width: "11",
+          height: "11",
+          viewBox: "0 0 24 24",
+          fill: col
+        }, /*#__PURE__*/React.createElement("path", {
+          d: "M13 2 L3 14 h7 l-1 8 L19 10 h-7 z"
+        })), ev._secFlexLabel);
+      })(), rdoWorked && wH > 0 && /*#__PURE__*/React.createElement("span", {
         className: "sans",
         style: {
           display: "inline-flex",
@@ -52962,7 +52984,7 @@ function WorkTab({
   // v722 · Exclude the secondment person's shifts from OT during the secondment period.
   // Secondment hours are flex-tracked, not OT-tracked.
   const otOccs = _secActive ? otOccsRaw.filter(e => {
-    const who = e.assignee || "both";
+    const who = e.assignee || e.person || "both";
     if (who !== _secPerson) return true;
     const d = e._occDate || e.date;
     return !d || d < _secStart || d > _secEnd;
@@ -53239,7 +53261,7 @@ function WorkTab({
       const timeStr = entry.type === "worked" ? entry.start : null;
       const endStr = entry.type === "worked" ? entry.end : null;
       const diff = entry.type === "worked" ? (entry.hours || 0) - secondment.requiredHours : entry.type === "flex_off" ? -secondment.requiredHours : 0;
-      const flexLabel = entry.type === "worked" || entry.type === "flex_off" ? (diff >= 0 ? "+" : "") + fmtFlex(diff) + " flex" : "No flex impact";
+      const flexLabel = entry.type === "worked" || entry.type === "flex_off" ? fmtFlex(diff) + " flex" : "No flex impact";
       const hoursLabel = entry.type === "worked" ? fmtHrsShort(entry.hours) + " worked" : entry.type === "flex_off" ? "Flex leave" : "Leave";
       const synth = {
         id: "sec-" + entry.date,
@@ -53256,7 +53278,8 @@ function WorkTab({
         _secDiff: diff,
         ...(entry.type !== "worked" ? {
           dayOff: entry.type === "al" ? "leave" : entry.type === "sick" ? "sick" : "off",
-          dayOffHours: entry.type === "flex_off" ? secondment.requiredHours : 0
+          dayOffHours: entry.type === "flex_off" ? secondment.requiredHours : 0,
+          _secDayOffColor: pColor // v723 · force person color on stripes
         } : {}),
         _secFlexLabel: flexLabel,
         _secHoursLabel: hoursLabel,
