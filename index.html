@@ -8699,6 +8699,7 @@ function App({
   const [showFlexLog, setShowFlexLog] = useState(false);
   const [flexLogDate, setFlexLogDate] = useState(null);
   const [flexQuickType, setFlexQuickType] = useState(null); // "flex_off"|"al"|"sick" — triggers date picker
+  const [flexLogOpen, setFlexLogOpen] = useState(false);
   // The pending "worked hours" prompt: {occ} when open (opt-in) or when editing worked hrs.
   const [rdoWorkedPrompt, setRdoWorkedPrompt] = useState(null);
   // v157 Build 1 · per-person work mode + regular-hours pattern (shift | regular).
@@ -19243,7 +19244,9 @@ function App({
           ...s,
           entries: (s.entries || []).filter(e => e.date !== date)
         }));
-      }
+      },
+      flexLogOpen: flexLogOpen,
+      setFlexLogOpen: setFlexLogOpen
     }), showFlexLog && (() => {
       const existingEntry = (secondment.entries || []).find(e => e.date === (flexLogDate || today));
       return /*#__PURE__*/React.createElement(FlexLogSheet, {
@@ -52096,7 +52099,9 @@ function SecondmentCard({
   people,
   onLog,
   onQuick,
-  onDelete
+  onDelete,
+  logOpen = false,
+  onToggleLog
 }) {
   if (!sec || !sec.active) return null;
   const today = new Date();
@@ -52295,7 +52300,263 @@ function SecondmentCard({
       fontWeight: 700,
       cursor: "pointer"
     }
-  }, b.l))));
+  }, b.l))), st.flexBalance !== 0 && (() => {
+    const abs = Math.abs(st.flexBalance);
+    const perDay = st.daysLeft > 0 ? abs / st.daysLeft : 0;
+    const suggestion = st.flexBalance > 0 ? perDay >= 1 ? `~${fmtHrsShort(perDay)} early per remaining day` : `~${Math.round(perDay * 60)}m early per remaining day` : perDay >= 1 ? `~${fmtHrsShort(perDay)} extra per remaining day` : `~${Math.round(perDay * 60)}m extra per remaining day`;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.surface,
+        borderRadius: 12,
+        padding: "12px 14px",
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 8
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        color: C.inkMute,
+        textTransform: "uppercase",
+        letterSpacing: 0.8
+      }
+    }, "Target: 0h by 2 Oct"), /*#__PURE__*/React.createElement("span", {
+      className: "serif",
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: st.flexBalance > 0 ? "#5EE7B4" : "#EF4444"
+      }
+    }, fmtFlex(st.flexBalance), " to ", st.flexBalance > 0 ? "use" : "earn")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: 8,
+        background: C.rule,
+        borderRadius: 4,
+        overflow: "hidden",
+        position: "relative"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: "100%",
+        borderRadius: 4,
+        width: Math.min(100, Math.abs(st.flexBalance) / sec.requiredHours * 100) + "%",
+        background: "linear-gradient(90deg,#5EE7B4,#c084fc)"
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute",
+        right: 0,
+        top: -3,
+        bottom: -3,
+        width: 2,
+        background: C.ink,
+        borderRadius: 1
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 10,
+        color: C.inkFaint,
+        marginTop: 6,
+        textAlign: "center"
+      }
+    }, suggestion, " would zero out"));
+  })(), (() => {
+    const sorted = (sec.entries || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+    if (sorted.length === 0) return null;
+    let running = 0;
+    const rows = sorted.map(e => {
+      let change = 0;
+      if (e.type === "worked") change = (e.hours || 0) - sec.requiredHours;else if (e.type === "flex_off") change = -sec.requiredHours;
+      running += change;
+      const secStart = new Date(sec.start + "T12:00:00");
+      const eDate = new Date(e.date + "T12:00:00");
+      const wk = Math.max(1, Math.floor((eDate - secStart) / 604800000) + 1);
+      return {
+        date: e.date,
+        type: e.type,
+        hours: e.hours,
+        change,
+        running,
+        wk
+      };
+    });
+    const today2 = new Date();
+    const todayStr2 = [today2.getFullYear(), String(today2.getMonth() + 1).padStart(2, "0"), String(today2.getDate()).padStart(2, "0")].join("-");
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginBottom: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: () => onToggleLog && onToggleLog(),
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 14px",
+        background: C.surface,
+        borderRadius: logOpen ? "12px 12px 0 0" : 12,
+        cursor: "pointer"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: C.accent,
+        letterSpacing: 0.5
+      }
+    }, "Flex Time Log"), /*#__PURE__*/React.createElement("svg", {
+      width: "16",
+      height: "16",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: C.accent,
+      strokeWidth: "2.2",
+      strokeLinecap: "round",
+      style: {
+        transform: logOpen ? "rotate(180deg)" : "none",
+        transition: "transform 0.15s"
+      }
+    }, /*#__PURE__*/React.createElement("polyline", {
+      points: "6 9 12 15 18 9"
+    }))), logOpen && /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: C.surface,
+        borderRadius: "0 0 12px 12px",
+        padding: "0 2px 6px"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "grid",
+        gridTemplateColumns: "70px 1fr 55px 60px",
+        gap: 4,
+        padding: "8px 12px 6px",
+        borderBottom: "1px solid " + C.rule
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 8,
+        fontWeight: 700,
+        letterSpacing: 1,
+        textTransform: "uppercase",
+        color: C.inkFaint
+      }
+    }, "Date"), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 8,
+        fontWeight: 700,
+        letterSpacing: 1,
+        textTransform: "uppercase",
+        color: C.inkFaint
+      }
+    }, "Detail"), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 8,
+        fontWeight: 700,
+        letterSpacing: 1,
+        textTransform: "uppercase",
+        color: C.inkFaint,
+        textAlign: "right"
+      }
+    }, "Flex"), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 8,
+        fontWeight: 700,
+        letterSpacing: 1,
+        textTransform: "uppercase",
+        color: C.inkFaint,
+        textAlign: "right"
+      }
+    }, "Balance")), (() => {
+      let lastWk = 0;
+      return rows.map((r, i) => {
+        const d = new Date(r.date + "T12:00:00");
+        const dlbl = d.toLocaleDateString("en-AU", {
+          weekday: "short",
+          day: "numeric",
+          month: "numeric"
+        }).replace(",", "");
+        const isToday = r.date === todayStr2;
+        const wkDiv = r.wk !== lastWk;
+        lastWk = r.wk;
+        const changeLbl = r.type === "al" || r.type === "sick" ? "\u2014" : Math.abs(r.change) < 0.01 ? "0" : fmtFlex(r.change);
+        const changeCol = r.type === "al" || r.type === "sick" ? "#60a5fa" : Math.abs(r.change) < 0.01 ? C.inkFaint : r.change > 0 ? "#5EE7B4" : "#8b8b9e";
+        const balCol = Math.abs(r.running) < 0.01 ? C.inkMute : r.running > 0 ? "#5EE7B4" : "#EF4444";
+        const balLbl = Math.abs(r.running) < 0.01 ? "0" : fmtFlex(r.running);
+        const detail = r.type === "worked" ? fmtHrsShort(r.hours) + " worked" : r.type === "flex_off" ? "\u26a1 Flex Off" : r.type === "al" ? "\ud83c\udfd6 AL" : "\ud83e\udd12 Sick";
+        return /*#__PURE__*/React.createElement(React.Fragment, {
+          key: r.date
+        }, wkDiv && /*#__PURE__*/React.createElement("div", {
+          style: {
+            gridColumn: "1/-1",
+            padding: "8px 12px 2px"
+          }
+        }, /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: 1,
+            textTransform: "uppercase",
+            color: C.inkFaint
+          }
+        }, "Week ", r.wk, isToday ? " (current)" : "")), /*#__PURE__*/React.createElement("div", {
+          style: {
+            display: "grid",
+            gridTemplateColumns: "70px 1fr 55px 60px",
+            gap: 4,
+            padding: "7px 12px",
+            alignItems: "center",
+            borderBottom: "1px solid rgba(52,45,72,0.3)",
+            ...(isToday ? {
+              background: "rgba(192,132,252,0.06)"
+            } : {})
+          }
+        }, /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            fontSize: 11,
+            fontWeight: 600,
+            color: isToday ? C.accent : C.inkMute
+          }
+        }, isToday ? "Today" : dlbl), /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            fontSize: 11,
+            color: r.type === "al" || r.type === "sick" ? "#60a5fa" : C.inkMute
+          }
+        }, detail), /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            fontSize: 11.5,
+            fontWeight: 700,
+            textAlign: "right",
+            color: changeCol
+          }
+        }, changeLbl), /*#__PURE__*/React.createElement("span", {
+          className: "sans",
+          style: {
+            fontSize: 11.5,
+            fontWeight: 700,
+            textAlign: "right",
+            color: balCol
+          }
+        }, balLbl)));
+      });
+    })()));
+  })());
 }
 function FlexLogSheet({
   open,
@@ -52631,7 +52892,9 @@ function WorkTab({
   secondment,
   onSecondmentLog,
   onSecondmentQuick,
-  onSecondmentDelete
+  onSecondmentDelete,
+  flexLogOpen = false,
+  setFlexLogOpen
 }) {
   // v224 · REMEMBERED. This was plain useState("month"), so every visit to the Work tab
   // threw away the period you had chosen and snapped back to Month. Same shape as
@@ -53424,7 +53687,9 @@ function WorkTab({
     people: people,
     onLog: onSecondmentLog,
     onQuick: onSecondmentQuick,
-    onDelete: onSecondmentDelete
+    onDelete: onSecondmentDelete,
+    logOpen: flexLogOpen,
+    onToggleLog: () => setFlexLogOpen && setFlexLogOpen(p => !p)
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 1,
@@ -75253,7 +75518,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v722"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v723"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
