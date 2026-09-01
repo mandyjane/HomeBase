@@ -19526,6 +19526,7 @@ function App({
       onNag: startNag,
       phColor: phColor,
       phSpecialIcons: phSpecialIcons,
+      secondment: secondment,
       onChangeType: ev => setRetype(ev),
       onHistory: ev => setHistFor(ev),
       workHist: workHist,
@@ -33203,10 +33204,21 @@ function CalendarTab({
   workHist = {},
   onToggleWfh,
   phColor = "#E5484D",
-  phSpecialIcons = false
+  phSpecialIcons = false,
+  secondment
 }) {
   const year = calDate.getFullYear(),
     month = calDate.getMonth();
+
+  // v726 · Suppress secondment person's shifts/day-offs on calendar (mirrors dashboard filter)
+  const _calSecFilter = e => {
+    if (!secondment || !secondment.active) return true;
+    if (e.category !== SHIFT_CAT && !e.dayOff) return true;
+    const who = e.assignee || "both";
+    if (who !== secondment.person || who === "both") return true;
+    const d = e._occDate || e.date;
+    return !d || d < secondment.start || d > secondment.end;
+  };
 
   // v230 · which day-note is open, or null. Lives HERE, not in DaySheet: the sheet must
   // survive the day sheet's own re-render and sit above it in the stack.
@@ -33336,7 +33348,7 @@ function CalendarTab({
   const allTaskOccsRaw = showTasks ? expandTasks() : [];
   const allTaskOccs = dailyTasksCal === "hide" ? allTaskOccsRaw.filter(t => !isDaily(t)) : allTaskOccsRaw;
   const cellTaskOccs = dailyTasksCal === "show" ? allTaskOccs : allTaskOccs.filter(t => !isDaily(t));
-  const allEventOccs = showEvents ? expandEvents() : [];
+  const allEventOccs = showEvents ? expandEvents().filter(_calSecFilter) : [];
 
   // cell chips per date — events first (time-sorted), then tasks. Same source of
   // truth as the day sheet, so the cell can never disagree with the panel.
