@@ -52260,15 +52260,15 @@ function SecondmentCard({
   };
   function tagFor(e) {
     if (e.type === "al") return {
-      label: "🏖 Annual Leave",
+      label: "\ud83c\udfd6 Annual Leave",
       cls: "al"
     };
     if (e.type === "sick") return {
-      label: "🤒 Sick day",
+      label: "\ud83e\udd12 Sick day",
       cls: "sick"
     };
     if (e.type === "flex_off") return {
-      label: "⚡ Flex day off",
+      label: "\u26a1 Flex day off",
       cls: "flexOff"
     };
     const diff = (e.hours || 0) - sec.requiredHours;
@@ -52285,6 +52285,22 @@ function SecondmentCard({
       cls: "use"
     };
   }
+  // v726 · to-date tracker: total working days in the secondment
+  const totalWorkingDays = (() => {
+    const s2 = new Date(start);
+    let n = 0;
+    while (s2 <= end) {
+      const dow = s2.getDay();
+      if (dow >= 1 && dow <= 5) n++;
+      s2.setDate(s2.getDate() + 1);
+    }
+    return n;
+  })();
+  const loggedDays = st.loggedDays + st.flexOffDays + st.alDays + st.sickDays;
+  const pctDone = totalWorkingDays > 0 ? Math.min(100, Math.round(loggedDays / totalWorkingDays * 100)) : 0;
+  const balCol = st.flexBalance >= 0 ? "#5EE7B4" : "#EF4444";
+  const addBtnBg = softTint(C.accent, 0.12);
+  const addBtnBd = softTint(C.accent, 0.25);
   return /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 12,
@@ -52293,10 +52309,11 @@ function SecondmentCard({
   }, /*#__PURE__*/React.createElement("div", {
     onClick: collapsed ? onToggleCollapse : undefined,
     style: {
-      background: "linear-gradient(135deg,#2d1f4e 0%,#1a2a3e 100%)",
+      background: C.card,
       borderRadius: collapsed ? 16 : 18,
       padding: collapsed ? "0" : "16",
-      border: "1px solid #3d2a5c",
+      border: "1px solid " + C.rule,
+      boxShadow: C.shadowMd,
       marginBottom: 10,
       cursor: collapsed ? "pointer" : "default",
       transition: "padding 0.15s"
@@ -52313,7 +52330,7 @@ function SecondmentCard({
       width: 22,
       height: 22,
       borderRadius: 7,
-      background: "rgba(94,231,180,0.16)",
+      background: softTint("#5EE7B4", 0.12),
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -52338,7 +52355,7 @@ function SecondmentCard({
     style: {
       fontSize: 12,
       fontWeight: 700,
-      color: "#5EE7B4"
+      color: balCol
     }
   }, "Flex"), /*#__PURE__*/React.createElement("span", {
     className: "serif",
@@ -52346,21 +52363,21 @@ function SecondmentCard({
       fontSize: 17,
       fontWeight: 700,
       fontStyle: "italic",
-      color: st.flexBalance >= 0 ? "#5EE7B4" : "#EF4444"
+      color: balCol
     }
   }, fmtFlex(st.flexBalance)), /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: {
       fontSize: 11,
-      color: "#9a8cb8"
+      color: C.inkFaint
     }
-  }, "·"), /*#__PURE__*/React.createElement("span", {
+  }, "\\u00b7"), /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: {
       fontSize: 11,
-      color: "#9a8cb8"
+      color: C.inkFaint
     }
-  }, fmtHrsShort(st.worked), " worked"), /*#__PURE__*/React.createElement("span", {
+  }, loggedDays, "/", totalWorkingDays, " days"), /*#__PURE__*/React.createElement("span", {
     style: {
       marginLeft: "auto",
       display: "flex",
@@ -52374,9 +52391,9 @@ function SecondmentCard({
     },
     className: "sans",
     style: {
-      background: "rgba(192,132,252,0.2)",
-      color: "#c084fc",
-      border: "1px solid rgba(192,132,252,0.3)",
+      background: addBtnBg,
+      color: C.accent,
+      border: "1px solid " + addBtnBd,
       borderRadius: 8,
       padding: "4px 10px",
       fontSize: 11,
@@ -52388,7 +52405,7 @@ function SecondmentCard({
     height: "16",
     viewBox: "0 0 24 24",
     fill: "none",
-    stroke: "#9a8cb8",
+    stroke: C.inkFaint,
     strokeWidth: "2.2",
     strokeLinecap: "round"
   }, /*#__PURE__*/React.createElement("polyline", {
@@ -52410,25 +52427,31 @@ function SecondmentCard({
       fontSize: 10,
       letterSpacing: 1.5,
       textTransform: "uppercase",
-      color: "#9a8cb8",
+      color: C.inkFaint,
       fontWeight: 700
     }
-  }, "Flex Balance"), /*#__PURE__*/React.createElement("div", {
+  }, "Secondment \\u00b7 to date"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "baseline",
+      gap: 8,
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
     className: "serif",
     style: {
       fontSize: 28,
       fontWeight: 700,
       fontStyle: "italic",
-      color: st.flexBalance >= 0 ? "#5EE7B4" : "#EF4444"
+      color: balCol
     }
-  }, fmtFlex(st.flexBalance)), /*#__PURE__*/React.createElement("div", {
+  }, fmtFlex(st.flexBalance)), /*#__PURE__*/React.createElement("span", {
     className: "sans",
     style: {
-      fontSize: 10,
-      color: "#9a8cb8",
-      marginTop: 2
+      fontSize: 11,
+      color: C.inkFaint
     }
-  }, "Week ", st.weekNum, " of 5 · ", st.daysLeft, " working days left")), /*#__PURE__*/React.createElement("div", {
+  }, "balance"))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -52438,9 +52461,9 @@ function SecondmentCard({
     onClick: () => setShowAddMenu(true),
     className: "sans",
     style: {
-      background: "rgba(192,132,252,0.2)",
-      color: "#c084fc",
-      border: "1px solid rgba(192,132,252,0.3)",
+      background: addBtnBg,
+      color: C.accent,
+      border: "1px solid " + addBtnBd,
       borderRadius: 10,
       padding: "6px 12px",
       fontSize: 12,
@@ -52481,7 +52504,7 @@ function SecondmentCard({
     height: "16",
     viewBox: "0 0 24 24",
     fill: "none",
-    stroke: "#9a8cb8",
+    stroke: C.inkFaint,
     strokeWidth: "2.2",
     strokeLinecap: "round",
     style: {
@@ -52490,6 +52513,45 @@ function SecondmentCard({
   }, /*#__PURE__*/React.createElement("polyline", {
     points: "6 9 12 15 18 9"
   }))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "space-between",
+      marginBottom: 5
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      fontWeight: 600,
+      color: C.inkFaint
+    }
+  }, "Week ", st.weekNum, " of 5"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      fontSize: 10,
+      fontWeight: 600,
+      color: C.inkFaint
+    }
+  }, loggedDays, " of ", totalWorkingDays, " days logged")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 6,
+      background: C.ruleSoft || C.rule,
+      borderRadius: 3,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: pctDone + "%",
+      height: "100%",
+      background: "linear-gradient(90deg," + C.accent + "," + mixHex(C.accent, "#ffffff", 0.3) + ")",
+      borderRadius: 3,
+      transition: "width 0.3s"
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 6
@@ -52503,11 +52565,13 @@ function SecondmentCard({
   }, {
     n: "+" + st.flexEarned.toFixed(1),
     l: "Flex +",
-    c: "#5EE7B4"
+    c: "#5EE7B4",
+    nc: "#5EE7B4"
   }, {
-    n: st.flexUsed.toFixed(1),
-    l: "Flex −",
-    c: "#8b8b9e"
+    n: "\u2212" + st.flexUsed.toFixed(1),
+    l: "Flex \u2212",
+    c: "#8b8b9e",
+    nc: "#8b8b9e"
   }, {
     n: st.alDays,
     l: "AL",
@@ -52516,7 +52580,7 @@ function SecondmentCard({
     key: i,
     style: {
       flex: 1,
-      background: "rgba(255,255,255,0.05)",
+      background: s.c ? softTint(s.c, 0.08) : C.ruleSoft || "rgba(0,0,0,0.03)",
       borderRadius: 8,
       padding: "8px 4px",
       textAlign: "center"
@@ -52526,7 +52590,7 @@ function SecondmentCard({
     style: {
       fontSize: 14,
       fontWeight: 700,
-      color: "#e8e0f0"
+      color: s.nc || C.ink
     }
   }, s.n), /*#__PURE__*/React.createElement("div", {
     className: "sans",
@@ -52534,7 +52598,7 @@ function SecondmentCard({
       fontSize: 8,
       textTransform: "uppercase",
       letterSpacing: 0.7,
-      color: s.c || "#9a8cb8",
+      color: s.c || C.inkFaint,
       fontWeight: 600,
       marginTop: 1
     }
@@ -52554,11 +52618,11 @@ function SecondmentCard({
       right: 0,
       top: 60,
       zIndex: 100,
-      background: C.sheet || "#1e1730",
+      background: C.sheet || C.card,
       borderRadius: 14,
       padding: 10,
-      boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-      border: "1px solid " + (C.rule || "#3d2a5c"),
+      boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+      border: "1px solid " + C.rule,
       display: "grid",
       gridTemplateColumns: "1fr 1fr",
       gap: 8,
@@ -52570,8 +52634,8 @@ function SecondmentCard({
       setShowAddMenu(false);
       onLog();
     },
-    bg: C.accent || "#c084fc",
-    c: "#fff"
+    bg: C.accent,
+    c: C.onAccent || "#fff"
   }, {
     l: "\u26a1 Flex Off",
     fn: () => {
@@ -52606,7 +52670,7 @@ function SecondmentCard({
     style: {
       background: b.bg,
       color: b.c,
-      border: b.bd ? "1px solid " + (C.rule || "#4a3f60") : "none",
+      border: b.bd ? "1px solid " + C.rule : "none",
       borderRadius: 10,
       padding: "12px 8px",
       fontSize: 12,
