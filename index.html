@@ -14413,6 +14413,16 @@ function App({
 
   // Blend-B agenda: one ruled column mixing overdue + today's tasks + next events.
   // Each entry: {kind, ref, title, sub, date, dotColor, badge, overdue, done}.
+  // v726 · Suppress secondment person's shift/day-off cards on dashboard (mirrors WorkTab filter)
+  const _dashSecActive = secondment && secondment.active;
+  const _dashSecFilter = e => {
+    if (!_dashSecActive) return true;
+    if (e.category !== SHIFT_CAT && !e.dayOff) return true;
+    const who = e.assignee || "both";
+    if (who !== secondment.person || who === "both") return true;
+    const d = e._occDate || e.date;
+    return !d || d < secondment.start || d > secondment.end;
+  };
   const homeAgenda = [];
   overdueTasks.filter(t => !isPrivateHidden(t)).forEach(t => homeAgenda.push({
     kind: "task",
@@ -14500,7 +14510,7 @@ function App({
     doneAt: t.doneAt,
     taskTime: t.time ? fmtTime(t.time) : null
   }));
-  nextEvents.filter(e => (e.date === today || isSpan(e) && e.date < today && spanEndFor(e, e.date) >= today) && !isPrivateHidden(e)).forEach(e => homeAgenda.push({
+  nextEvents.filter(e => (e.date === today || isSpan(e) && e.date < today && spanEndFor(e, e.date) >= today) && !isPrivateHidden(e) && _dashSecFilter(e)).forEach(e => homeAgenda.push({
     kind: "event",
     ref: e,
     title: dayOffTitle(e),
@@ -14539,7 +14549,7 @@ function App({
       done: t.done,
       taskTime: t.time ? fmtTime(t.time) : null
     }));
-    nextEvents.forEach(e => homeAgenda.push({
+    nextEvents.filter(_dashSecFilter).forEach(e => homeAgenda.push({
       kind: "event",
       ref: e,
       title: dayOffTitle(e),
@@ -14756,7 +14766,7 @@ function App({
   }
   // Events (work AND plain) falling tomorrow.
   const tomorrowEvents = events.filter(e => !e._deleted) // v710 · skip tombstoned events too
-  .map(e => occursOnDay(e, "date", tomorrowYMD)).filter(Boolean).filter(e => !e.deleted && !e.purged).filter(e => !isPrivateHidden(e)).filter(e => !(hideDaysOff && isPureDayOff(e)));
+  .map(e => occursOnDay(e, "date", tomorrowYMD)).filter(Boolean).filter(e => !e.deleted && !e.purged).filter(e => !isPrivateHidden(e)).filter(e => !(hideDaysOff && isPureDayOff(e))).filter(_dashSecFilter);
   // Tasks and bills due tomorrow. A DONE occurrence is excluded — it is not something
   // coming up. v618: Deadlines/projects due tomorrow now included (previously excluded).
   const tomorrowTasks = tasks.filter(t => !t._deleted) // v710 · skip tombstoned series (was missing — deleted tasks showed under Tomorrow)
