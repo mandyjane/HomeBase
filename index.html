@@ -14285,6 +14285,38 @@ function App({
     const d = nextOccurrenceDate(e, "date", today);
     return materialize(e, d, "date");
   }).filter(e => !(hideDaysOff && isPureDayOff(e)));
+
+  // v726 · Inject secondment AL/sick/flex-off entries into dashboard event list
+  // so they appear on Home (today + tomorrow). Worked shifts stay Work-tab-only.
+  const _secSynthEvents = [];
+  if (secondment && secondment.active && secondment.entries) {
+    const secLabels = {
+      flex_off: "Flex Day Off",
+      al: "Annual Leave",
+      sick: "Sick Day"
+    };
+    secondment.entries.forEach(entry => {
+      if (entry.type === "worked") return;
+      _secSynthEvents.push({
+        id: "sec-" + entry.date,
+        _seriesId: "sec-" + entry.date,
+        title: secLabels[entry.type] || "Day Off",
+        category: SHIFT_CAT,
+        assignee: secondment.person,
+        date: entry.date,
+        _occDate: entry.date,
+        time: null,
+        end: null,
+        recur: "none",
+        _secondment: true,
+        _secEntry: entry,
+        dayOff: entry.type === "al" ? "leave" : entry.type === "sick" ? "sick" : "off",
+        dayOffHours: entry.type === "flex_off" ? secondment.requiredHours : 0
+      });
+    });
+    _secSynthEvents.forEach(s => homeListEvents.push(s));
+  }
+
   // Deadlines are pulled OUT of the normal agenda (they'd otherwise show as plain
   // overdue/today tasks) and rendered in their own dashboard section below.
   // isDeadlineTask is module-scope — see above. StatsTab needs it too.
@@ -14413,11 +14445,13 @@ function App({
 
   // Blend-B agenda: one ruled column mixing overdue + today's tasks + next events.
   // Each entry: {kind, ref, title, sub, date, dotColor, badge, overdue, done}.
-  // v726 · Suppress secondment person's shift/day-off cards on dashboard (mirrors WorkTab filter)
+  // v726 · Suppress secondment person's WORKED SHIFT cards on dashboard (mirrors WorkTab)
+  // Leave, sick, flex off, RDO days still show — only regular roster shifts hidden.
   const _dashSecActive = secondment && secondment.active;
   const _dashSecFilter = e => {
     if (!_dashSecActive) return true;
-    if (e.category !== SHIFT_CAT && !e.dayOff) return true;
+    if (e.dayOff) return true;
+    if (e.category !== SHIFT_CAT) return true;
     const who = e.assignee || "both";
     if (who !== secondment.person || who === "both") return true;
     const d = e._occDate || e.date;
@@ -14767,6 +14801,8 @@ function App({
   // Events (work AND plain) falling tomorrow.
   const tomorrowEvents = events.filter(e => !e._deleted) // v710 · skip tombstoned events too
   .map(e => occursOnDay(e, "date", tomorrowYMD)).filter(Boolean).filter(e => !e.deleted && !e.purged).filter(e => !isPrivateHidden(e)).filter(e => !(hideDaysOff && isPureDayOff(e))).filter(_dashSecFilter);
+  // v726 · inject secondment day-off entries for tomorrow
+  _secSynthEvents.filter(s => s.date === tomorrowYMD).forEach(s => tomorrowEvents.push(s));
   // Tasks and bills due tomorrow. A DONE occurrence is excluded — it is not something
   // coming up. v618: Deadlines/projects due tomorrow now included (previously excluded).
   const tomorrowTasks = tasks.filter(t => !t._deleted) // v710 · skip tombstoned series (was missing — deleted tasks showed under Tomorrow)
@@ -33210,10 +33246,12 @@ function CalendarTab({
   const year = calDate.getFullYear(),
     month = calDate.getMonth();
 
-  // v726 · Suppress secondment person's shifts/day-offs on calendar (mirrors dashboard filter)
+  // v726 · Suppress secondment person's WORKED SHIFT cards on calendar (mirrors dashboard)
+  // Leave, sick, flex off, RDO days still show — only regular roster shifts hidden.
   const _calSecFilter = e => {
     if (!secondment || !secondment.active) return true;
-    if (e.category !== SHIFT_CAT && !e.dayOff) return true;
+    if (e.dayOff) return true;
+    if (e.category !== SHIFT_CAT) return true;
     const who = e.assignee || "both";
     if (who !== secondment.person || who === "both") return true;
     const d = e._occDate || e.date;
@@ -33349,6 +33387,36 @@ function CalendarTab({
   const allTaskOccs = dailyTasksCal === "hide" ? allTaskOccsRaw.filter(t => !isDaily(t)) : allTaskOccsRaw;
   const cellTaskOccs = dailyTasksCal === "show" ? allTaskOccs : allTaskOccs.filter(t => !isDaily(t));
   const allEventOccs = showEvents ? expandEvents().filter(_calSecFilter) : [];
+
+  // v726 · Inject secondment AL/sick/flex-off entries into calendar as synthetic events
+  // (mirrors WorkTab injection). Only non-worked entries — worked shifts stay Work-only.
+  if (secondment && secondment.active && secondment.entries) {
+    secondment.entries.forEach(entry => {
+      if (entry.type === "worked") return; // worked shifts don't appear on calendar
+      const labels = {
+        flex_off: "Flex Day Off",
+        al: "Annual Leave",
+        sick: "Sick Day"
+      };
+      const synth = {
+        id: "sec-" + entry.date,
+        _seriesId: "sec-" + entry.date,
+        title: labels[entry.type] || "Day Off",
+        category: SHIFT_CAT,
+        assignee: secondment.person,
+        date: entry.date,
+        _occDate: entry.date,
+        time: null,
+        end: null,
+        recur: "none",
+        _secondment: true,
+        _secEntry: entry,
+        dayOff: entry.type === "al" ? "leave" : entry.type === "sick" ? "sick" : "off",
+        dayOffHours: entry.type === "flex_off" ? secondment.requiredHours : 0
+      };
+      allEventOccs.push(synth);
+    });
+  }
 
   // cell chips per date — events first (time-sorted), then tasks. Same source of
   // truth as the day sheet, so the cell can never disagree with the panel.
