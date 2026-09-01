@@ -52152,7 +52152,14 @@ function WorkStatsSheet({
 // ── v721 · SECONDMENT FLEX TRACKER ──────────────────────────────────────────
 function secondmentStats(sec) {
   if (!sec || !sec.active) return null;
-  const entries = sec.entries || [];
+  const allEntries = sec.entries || [];
+  const start = new Date(sec.start + "T12:00:00"),
+    end2 = new Date(sec.end + "T12:00:00");
+  const today2 = new Date();
+  today2.setHours(12, 0, 0, 0);
+  const todayStr = [today2.getFullYear(), String(today2.getMonth() + 1).padStart(2, "0"), String(today2.getDate()).padStart(2, "0")].join("-");
+  // v726 · "to date" — only count entries up to and including today
+  const entries = allEntries.filter(e => e.date <= todayStr);
   let worked = 0,
     flexEarned = 0,
     flexUsed = 0,
@@ -52176,10 +52183,6 @@ function secondmentStats(sec) {
     }
   });
   const flexBalance = flexEarned - flexUsed;
-  const start = new Date(sec.start + "T12:00:00"),
-    end2 = new Date(sec.end + "T12:00:00");
-  const today2 = new Date();
-  today2.setHours(12, 0, 0, 0);
   let daysLeft = 0;
   for (let d = new Date(Math.max(today2.getTime(), start.getTime())); d <= end2; d.setDate(d.getDate() + 1)) {
     const dow = d.getDay();
@@ -52187,6 +52190,15 @@ function secondmentStats(sec) {
   }
   const daysSinceStart = Math.max(0, Math.floor((today2 - start) / 86400000));
   const weekNum = Math.min(5, Math.floor(daysSinceStart / 7) + 1);
+  // Total working days in secondment + calendar day number (elapsed working days)
+  let totalWorkingDays = 0;
+  for (let d2 = new Date(start); d2 <= end2; d2.setDate(d2.getDate() + 1)) {
+    if (d2.getDay() >= 1 && d2.getDay() <= 5) totalWorkingDays++;
+  }
+  let calendarDay = 0;
+  for (let d3 = new Date(start); d3 <= today2 && d3 <= end2; d3.setDate(d3.getDate() + 1)) {
+    if (d3.getDay() >= 1 && d3.getDay() <= 5) calendarDay++;
+  }
   return {
     worked,
     flexEarned,
@@ -52198,7 +52210,9 @@ function secondmentStats(sec) {
     loggedDays,
     requiredTotal: (loggedDays + flexOffDays) * sec.requiredHours,
     daysLeft,
-    weekNum
+    weekNum,
+    totalWorkingDays,
+    calendarDay
   };
 }
 function fmtFlex(hrs) {
@@ -52285,20 +52299,15 @@ function SecondmentCard({
       cls: "use"
     };
   }
-  // v726 · to-date tracker: total working days in the secondment
-  const totalWorkingDays = (() => {
-    const s2 = new Date(start);
-    let n = 0;
-    while (s2 <= end) {
-      const dow = s2.getDay();
-      if (dow >= 1 && dow <= 5) n++;
-      s2.setDate(s2.getDate() + 1);
-    }
-    return n;
-  })();
-  const loggedDays = st.loggedDays + st.flexOffDays + st.alDays + st.sickDays;
-  const pctDone = totalWorkingDays > 0 ? Math.min(100, Math.round(loggedDays / totalWorkingDays * 100)) : 0;
+  // v726 · to-date tracker: use calendarDay/totalWorkingDays from secondmentStats
+  const pctDone = st.totalWorkingDays > 0 ? Math.min(100, Math.round(st.calendarDay / st.totalWorkingDays * 100)) : 0;
   const balCol = st.flexBalance >= 0 ? "#5EE7B4" : "#EF4444";
+  // Theme-aware stat colours: darker in light mode for contrast, bright in dark mode
+  const isDark = C.bg === "#0e0c15" || C.bg === "#0f0d17" || (C.bg || "").charAt(1) < "5";
+  const statGreen = isDark ? "#5EE7B4" : "#1a8a55";
+  const statGrey = isDark ? "#b0b0c0" : "#5a5a6e";
+  const statBlue = isDark ? "#60a5fa" : "#2563b4";
+  const statDefault = isDark ? "#d4c8e0" : "#7a6e5c";
   const addBtnBg = softTint(C.accent, 0.12);
   const addBtnBd = softTint(C.accent, 0.25);
   return /*#__PURE__*/React.createElement("div", {
@@ -52377,7 +52386,7 @@ function SecondmentCard({
       fontSize: 11,
       color: C.inkFaint
     }
-  }, loggedDays, "/", totalWorkingDays, " days"), /*#__PURE__*/React.createElement("span", {
+  }, "Day ", st.calendarDay, "/", st.totalWorkingDays), /*#__PURE__*/React.createElement("span", {
     style: {
       marginLeft: "auto",
       display: "flex",
@@ -52536,7 +52545,7 @@ function SecondmentCard({
       fontWeight: 600,
       color: C.inkFaint
     }
-  }, loggedDays, " of ", totalWorkingDays, " days logged")), /*#__PURE__*/React.createElement("div", {
+  }, "Day ", st.calendarDay, " of ", st.totalWorkingDays)), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 6,
       background: C.ruleSoft || C.rule,
@@ -52558,22 +52567,32 @@ function SecondmentCard({
     }
   }, [{
     n: st.worked.toFixed(1),
-    l: "Worked"
+    l: "Worked",
+    nc: statDefault,
+    lc: C.inkFaint
   }, {
     n: st.requiredTotal.toFixed(1),
-    l: "Required"
+    l: "Required",
+    nc: statDefault,
+    lc: C.inkFaint
   }, {
     n: "+" + st.flexEarned.toFixed(1),
     l: "Flex +",
-    c: "#5EE7B4"
+    c: "#5EE7B4",
+    nc: statGreen,
+    lc: statGreen
   }, {
     n: "\u2212" + st.flexUsed.toFixed(1),
     l: "Flex \u2212",
-    c: "#8b8b9e"
+    c: "#8b8b9e",
+    nc: statGrey,
+    lc: statGrey
   }, {
     n: st.alDays,
     l: "AL",
-    c: "#60a5fa"
+    c: "#60a5fa",
+    nc: statBlue,
+    lc: statBlue
   }].map((s, i) => /*#__PURE__*/React.createElement("div", {
     key: i,
     style: {
@@ -52588,7 +52607,7 @@ function SecondmentCard({
     style: {
       fontSize: 14,
       fontWeight: 700,
-      color: C.ink
+      color: s.nc
     }
   }, s.n), /*#__PURE__*/React.createElement("div", {
     className: "sans",
@@ -52596,8 +52615,8 @@ function SecondmentCard({
       fontSize: 8,
       textTransform: "uppercase",
       letterSpacing: 0.7,
-      color: s.c || C.inkFaint,
-      fontWeight: 600,
+      color: s.lc,
+      fontWeight: 700,
       marginTop: 1
     }
   }, s.l)))))), showAddMenu && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
