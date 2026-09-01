@@ -14445,14 +14445,14 @@ function App({
 
   // Blend-B agenda: one ruled column mixing overdue + today's tasks + next events.
   // Each entry: {kind, ref, title, sub, date, dotColor, badge, overdue, done}.
-  // v726 · Suppress secondment person's WORKED SHIFT cards on dashboard (mirrors WorkTab)
-  // Leave, sick, flex off, RDO days still show — only regular roster shifts hidden.
+  // v726 · Suppress ALL of secondment person's roster cards (shifts + day-offs) on dashboard.
+  // Secondment-logged entries (AL, sick, flex off) are injected as synthetic events instead.
   const _dashSecActive = secondment && secondment.active;
   const _dashSecFilter = e => {
     if (!_dashSecActive) return true;
-    if (e.dayOff) return true;
-    if (e.category !== SHIFT_CAT) return true;
-    const who = e.assignee || "both";
+    if (e._secondment) return true; // synthetic secondment entries always pass
+    if (e.category !== SHIFT_CAT && !e.dayOff) return true;
+    const who = e.assignee || e.person || "both";
     if (who !== secondment.person || who === "both") return true;
     const d = e._occDate || e.date;
     return !d || d < secondment.start || d > secondment.end;
@@ -33246,13 +33246,14 @@ function CalendarTab({
   const year = calDate.getFullYear(),
     month = calDate.getMonth();
 
-  // v726 · Suppress secondment person's WORKED SHIFT cards on calendar (mirrors dashboard)
-  // Leave, sick, flex off, RDO days still show — only regular roster shifts hidden.
+  // v726 · Suppress ALL of secondment person's roster cards (shifts + day-offs) on calendar.
+  // Secondment-logged entries are injected as synthetic events after this filter.
+  // Must check BOTH assignee AND person — regularOccurrencesResolved uses person, not assignee.
   const _calSecFilter = e => {
     if (!secondment || !secondment.active) return true;
-    if (e.dayOff) return true;
-    if (e.category !== SHIFT_CAT) return true;
-    const who = e.assignee || "both";
+    if (e._secondment) return true;
+    if (e.category !== SHIFT_CAT && !e.dayOff) return true;
+    const who = e.assignee || e.person || "both";
     if (who !== secondment.person || who === "both") return true;
     const d = e._occDate || e.date;
     return !d || d < secondment.start || d > secondment.end;
