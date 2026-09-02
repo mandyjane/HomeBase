@@ -52303,11 +52303,12 @@ function SecondmentCard({
   const pctDone = st.totalWorkingDays > 0 ? Math.min(100, Math.round(st.calendarDay / st.totalWorkingDays * 100)) : 0;
   const balCol = st.flexBalance >= 0 ? "#5EE7B4" : "#EF4444";
   // Theme-aware stat colours: darker in light mode for contrast, bright in dark mode
-  const isDark = C.bg === "#0e0c15" || C.bg === "#0f0d17" || (C.bg || "").charAt(1) < "5";
-  const statGreen = isDark ? "#5EE7B4" : "#1a8a55";
-  const statGrey = isDark ? "#b0b0c0" : "#5a5a6e";
-  const statBlue = isDark ? "#60a5fa" : "#2563b4";
-  const statDefault = isDark ? "#d4c8e0" : "#7a6e5c";
+  // Theme detection: if ink is bright text → dark mode, if ink is dark text → light mode
+  const isDark = parseInt((C.ink || "#000").slice(1, 3), 16) > 128;
+  const statGreen = isDark ? "#5EE7B4" : "#0d6b3a";
+  const statGrey = isDark ? "#b0b0c0" : "#3d3d50";
+  const statBlue = isDark ? "#60a5fa" : "#1d4ed8";
+  const statDefault = isDark ? "#d4c8e0" : "#4a3f30";
   const addBtnBg = softTint(C.accent, 0.12);
   const addBtnBd = softTint(C.accent, 0.25);
   return /*#__PURE__*/React.createElement("div", {
