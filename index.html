@@ -18789,7 +18789,183 @@ function App({
       });
     })))), (tab === "tasks" || tab === "events") && /*#__PURE__*/React.createElement("div", {
       className: "fade"
-    }, showPoints && tab === "tasks" && listType === "tasks" && goalPlace !== "home" && /*#__PURE__*/React.createElement("div", {
+    }, showPoints && tab === "tasks" && listType === "tasks" && (() => {
+      // Calculate total points available this month by expanding recurring tasks
+      const now = new Date();
+      const yr = now.getFullYear(),
+        mo = now.getMonth();
+      const mStart = new Date(yr, mo, 1);
+      const mEnd = new Date(yr, mo + 1, 0);
+      const mStartStr = [yr, String(mo + 1).padStart(2, "0"), "01"].join("-");
+      const mEndStr = [yr, String(mo + 1).padStart(2, "0"), String(mEnd.getDate()).padStart(2, "0")].join("-");
+      let totalAvail = 0;
+      (visTasks || tasks).filter(t => !t._deleted && !t.purged && (t.points || 0) > 0 && !t.private).forEach(t => {
+        if (t.recur === "none") {
+          if (t.dueDate >= mStartStr && t.dueDate <= mEndStr) totalAvail += t.points || 0;
+        } else {
+          // count occurrences in the month
+          const d = new Date(t.dueDate + "T12:00:00");
+          if (isNaN(d.getTime())) return;
+          while (d <= mEnd) {
+            if (d >= mStart) {
+              const ds = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+              const ex = t.exceptions && t.exceptions[ds];
+              if (!ex || !ex.deleted && !ex.skipped) totalAvail += (ex && ex.points != null ? ex.points : t.points) || 0;
+            }
+            // step by recurrence
+            if (t.recur === "daily") d.setDate(d.getDate() + 1);else if (t.recur === "weekly") d.setDate(d.getDate() + 7);else if (t.recur === "fortnightly") d.setDate(d.getDate() + 14);else if (t.recur === "monthly") d.setMonth(d.getMonth() + 1);else break;
+            if (d > mEnd) break;
+          }
+        }
+      });
+      // Points earned this month
+      const resetF = effectiveResetAt || null;
+      const earnedAll = [...collectCompletedTasks(visTasks || tasks, "shared", mStartStr, mEndStr, resetF), ...collectCompletedTasks(visTasks || tasks, "her", mStartStr, mEndStr, resetF), ...collectCompletedTasks(visTasks || tasks, "him", mStartStr, mEndStr, resetF), ...collectBonusActivity(bonusLog, "her", mStartStr, mEndStr, resetF), ...collectBonusActivity(bonusLog, "him", mStartStr, mEndStr, resetF)];
+      // Deduplicate by task id+date
+      const seen = new Set();
+      let earned = 0;
+      earnedAll.forEach(t => {
+        const k = (t.id || "") + ":" + (t.doneDate || t.date || "");
+        if (!seen.has(k)) {
+          seen.add(k);
+          earned += t.points || 0;
+        }
+      });
+      const remaining = Math.max(0, totalAvail - earned);
+      const pct = totalAvail > 0 ? Math.min(100, Math.round(earned / totalAvail * 100)) : 0;
+      if (totalAvail === 0) return null;
+      const _ptsDark = parseInt((C.ink || "#000").slice(1, 3), 16) > 128;
+      const monthName = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][mo];
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: C.card,
+          borderRadius: 16,
+          padding: "14px 16px",
+          border: "1px solid " + C.rule,
+          marginBottom: 14
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 10
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          width: 32,
+          height: 32,
+          borderRadius: 10,
+          background: softTint(C.accent, 0.12),
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }
+      }, /*#__PURE__*/React.createElement("svg", {
+        width: "16",
+        height: "16",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: C.accent,
+        strokeWidth: "2.2",
+        strokeLinecap: "round"
+      }, /*#__PURE__*/React.createElement("polygon", {
+        points: "12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+      }))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+        className: "sans",
+        style: {
+          fontSize: 10,
+          letterSpacing: 1.2,
+          textTransform: "uppercase",
+          color: C.inkFaint,
+          fontWeight: 700
+        }
+      }, "Points ", "·", " ", monthName), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "baseline",
+          gap: 6,
+          marginTop: 2
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "serif",
+        style: {
+          fontSize: 22,
+          fontWeight: 700,
+          fontStyle: "italic",
+          color: _ptsDark ? "#d4c8e0" : "#4a3f30"
+        }
+      }, totalAvail.toLocaleString()), /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 11,
+          color: C.inkFaint
+        }
+      }, "available")))), /*#__PURE__*/React.createElement("div", {
+        style: {
+          textAlign: "right"
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "serif",
+        style: {
+          fontSize: 18,
+          fontWeight: 700,
+          color: _ptsDark ? "#5EE7B4" : "#0d6b3a"
+        }
+      }, earned), /*#__PURE__*/React.createElement("div", {
+        className: "sans",
+        style: {
+          fontSize: 9,
+          textTransform: "uppercase",
+          letterSpacing: 0.8,
+          color: C.inkFaint,
+          fontWeight: 600
+        }
+      }, "earned"))), /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginTop: 10
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          height: 4,
+          background: C.ruleSoft || "rgba(0,0,0,0.05)",
+          borderRadius: 2,
+          overflow: "hidden"
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          width: pct + "%",
+          height: "100%",
+          background: "linear-gradient(90deg," + C.accent + "," + rgbaFromHex(C.accent, 0.6) + ")",
+          borderRadius: 2
+        }
+      })), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          marginTop: 4
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 9,
+          color: C.inkFaint,
+          fontWeight: 600
+        }
+      }, pct, "% earned"), /*#__PURE__*/React.createElement("span", {
+        className: "sans",
+        style: {
+          fontSize: 9,
+          color: C.inkFaint,
+          fontWeight: 600
+        }
+      }, remaining.toLocaleString(), " remaining"))));
+    })(), showPoints && tab === "tasks" && listType === "tasks" && goalPlace !== "home" && /*#__PURE__*/React.createElement("div", {
       style: {
         marginBottom: 14
       }
