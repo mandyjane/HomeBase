@@ -37036,7 +37036,9 @@ function BillsTab({
     // $0 or empty — a cleared amount means "I don't know what it costs, show me the
     // average". Once paid, the recorded amount speaks for itself.
     const regHist = !isCard && !r.paid && !(parseAmt(r.bill.amount) > 0) ? billHistory(r.bill) : [];
-    const avgAmt = isCard && !r.paid ? billAverage(cardHist, billAvgMethod) : !r.paid && !(parseAmt(r.bill.amount) > 0) ? billAverage(regHist, billAvgMethod) : 0;
+    // v727 · If a bill amount is explicitly set, it overrides the average for ALL bill types
+    const hasSetAmt = parseAmt(r.bill.amount) > 0;
+    const avgAmt = !r.paid && !hasSetAmt ? isCard ? billAverage(cardHist, billAvgMethod) : billAverage(regHist, billAvgMethod) : 0;
     const showAvgPre = avgAmt > 0;
     const lastStmtTo = cardHist.filter(h => h.stmtTo).sort((a, b) => b.stmtTo.localeCompare(a.stmtTo))[0]?.stmtTo;
     const predictedClose = lastStmtTo ? addMonths(lastStmtTo, 1) : null;
@@ -52406,6 +52408,7 @@ function SecondmentCard({
   onToggleCollapse
 }) {
   const [showAddMenu, setShowAddMenu] = React.useState(false);
+  const [wkToggled, setWkToggled] = React.useState(new Set());
   if (!sec || !sec.active) return null;
   const today = new Date();
   today.setHours(12, 0, 0, 0);
@@ -52987,32 +52990,121 @@ function SecondmentCard({
         textAlign: "right"
       }
     }, "Balance")), (() => {
-      let lastWk = 0;
-      return rows.map((r, i) => {
-        const d = new Date(r.date + "T12:00:00");
-        const dlbl = d.toLocaleDateString("en-AU", {
-          weekday: "short",
-          day: "numeric",
-          month: "numeric"
-        }).replace(",", "");
-        const isToday = r.date === todayStr2;
-        const wkDiv = r.wk !== lastWk;
-        lastWk = r.wk;
-        const changeLbl = r.type === "al" || r.type === "sick" ? "\u2014" : Math.abs(r.change) < 0.01 ? "0" : fmtFlex(r.change);
-        const changeCol = r.type === "al" || r.type === "sick" ? "#60a5fa" : Math.abs(r.change) < 0.01 ? C.inkFaint : r.change > 0 ? "#5EE7B4" : "#8b8b9e";
-        const balCol = Math.abs(r.running) < 0.01 ? C.inkMute : r.running > 0 ? "#5EE7B4" : "#EF4444";
-        const balLbl = Math.abs(r.running) < 0.01 ? "0" : fmtFlex(r.running);
-        const timesLbl = r.type === "worked" && r.start && r.end ? r.start + "\u2013" + r.end : r.type === "flex_off" ? "\u26a1 Flex Off" : r.type === "al" ? "\ud83c\udfd6 AL" : "\ud83e\udd12 Sick";
-        const hoursLbl = r.type === "worked" ? fmtHrsShort(r.hours) : "\u2014";
-        const hoursCol = r.type === "al" || r.type === "sick" ? "#60a5fa" : C.inkMute;
+      // v727 · Auto-collapse past weeks
+      const secStartD = new Date(sec.start + "T12:00:00");
+      const todayD3 = new Date();
+      todayD3.setHours(12, 0, 0, 0);
+      const curWk = Math.max(1, Math.floor((todayD3 - secStartD) / 604800000) + 1);
+      const weekMap = {};
+      rows.forEach(r => {
+        if (!weekMap[r.wk]) weekMap[r.wk] = [];
+        weekMap[r.wk].push(r);
+      });
+      const weekNums = Object.keys(weekMap).map(Number).sort((a, b) => a - b);
+      const toggleWk = wk => setWkToggled(s => {
+        const n = new Set(s);
+        if (n.has(wk)) n.delete(wk);else n.add(wk);
+        return n;
+      });
+      return weekNums.map(wk => {
+        const wkRows = weekMap[wk];
+        const netChange = wkRows.reduce((s, r) => s + r.change, 0);
+        const closingBal = wkRows[wkRows.length - 1].running;
+        const isPast = wk < curWk;
+        const isWkCollapsed = isPast !== wkToggled.has(wk);
+        const hasToday = wkRows.some(r => r.date === todayStr2);
+        if (isWkCollapsed) {
+          const netCol = Math.abs(netChange) < 0.01 ? C.inkFaint : netChange > 0 ? "#5EE7B4" : "#8b8b9e";
+          const netLbl = Math.abs(netChange) < 0.01 ? "0" : fmtFlex(netChange);
+          const bCol = Math.abs(closingBal) < 0.01 ? C.inkMute : closingBal > 0 ? "#5EE7B4" : "#EF4444";
+          const bLbl = Math.abs(closingBal) < 0.01 ? "0" : fmtFlex(closingBal);
+          return /*#__PURE__*/React.createElement("div", {
+            key: "wk" + wk,
+            onClick: () => toggleWk(wk),
+            style: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 10px",
+              borderBottom: "1px solid rgba(52,45,72,0.3)",
+              cursor: "pointer"
+            }
+          }, /*#__PURE__*/React.createElement("div", {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: 6
+            }
+          }, /*#__PURE__*/React.createElement("svg", {
+            width: "12",
+            height: "12",
+            viewBox: "0 0 24 24",
+            fill: "none",
+            stroke: C.inkFaint,
+            strokeWidth: "2.5",
+            strokeLinecap: "round"
+          }, /*#__PURE__*/React.createElement("polyline", {
+            points: "9 6 15 12 9 18"
+          })), /*#__PURE__*/React.createElement("span", {
+            className: "sans",
+            style: {
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              color: C.inkFaint
+            }
+          }, "Week ", wk), /*#__PURE__*/React.createElement("span", {
+            className: "sans",
+            style: {
+              fontSize: 9,
+              color: C.inkMute,
+              fontWeight: 500
+            }
+          }, "·", " ", wkRows.length)), /*#__PURE__*/React.createElement("div", {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: 10
+            }
+          }, /*#__PURE__*/React.createElement("span", {
+            className: "sans",
+            style: {
+              fontSize: 10,
+              fontWeight: 600,
+              color: netCol
+            }
+          }, netLbl), /*#__PURE__*/React.createElement("span", {
+            className: "sans",
+            style: {
+              fontSize: 10,
+              fontWeight: 700,
+              color: bCol
+            }
+          }, bLbl)));
+        }
         return /*#__PURE__*/React.createElement(React.Fragment, {
-          key: r.date
-        }, wkDiv && /*#__PURE__*/React.createElement("div", {
+          key: "wk" + wk
+        }, /*#__PURE__*/React.createElement("div", {
+          onClick: () => toggleWk(wk),
           style: {
-            gridColumn: "1/-1",
-            padding: "8px 10px 2px"
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "8px 10px 2px",
+            cursor: "pointer"
           }
-        }, /*#__PURE__*/React.createElement("span", {
+        }, /*#__PURE__*/React.createElement("svg", {
+          width: "12",
+          height: "12",
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: C.inkFaint,
+          strokeWidth: "2.5",
+          strokeLinecap: "round"
+        }, /*#__PURE__*/React.createElement("polyline", {
+          points: "6 9 12 15 18 9"
+        })), /*#__PURE__*/React.createElement("span", {
           className: "sans",
           style: {
             fontSize: 9,
@@ -53021,55 +53113,72 @@ function SecondmentCard({
             textTransform: "uppercase",
             color: C.inkFaint
           }
-        }, "Week ", r.wk, isToday ? " (current)" : "")), /*#__PURE__*/React.createElement("div", {
-          style: {
-            display: "grid",
-            gridTemplateColumns: "56px 72px 46px 50px 54px",
-            gap: 0,
-            padding: "7px 10px",
-            alignItems: "center",
-            borderBottom: "1px solid rgba(52,45,72,0.3)",
-            ...(isToday ? {
-              background: "rgba(192,132,252,0.06)"
-            } : {})
-          }
-        }, /*#__PURE__*/React.createElement("span", {
-          className: "sans",
-          style: {
-            fontSize: 11,
-            fontWeight: 600,
-            color: isToday ? C.accent : C.inkMute
-          }
-        }, isToday ? "Today" : dlbl), /*#__PURE__*/React.createElement("span", {
-          className: "sans",
-          style: {
-            fontSize: 10.5,
-            color: r.type === "al" || r.type === "sick" ? "#60a5fa" : C.inkMute
-          }
-        }, timesLbl), /*#__PURE__*/React.createElement("span", {
-          className: "sans",
-          style: {
-            fontSize: 10.5,
-            textAlign: "right",
-            color: hoursCol
-          }
-        }, hoursLbl), /*#__PURE__*/React.createElement("span", {
-          className: "sans",
-          style: {
-            fontSize: 11,
-            fontWeight: 700,
-            textAlign: "right",
-            color: changeCol
-          }
-        }, changeLbl), /*#__PURE__*/React.createElement("span", {
-          className: "sans",
-          style: {
-            fontSize: 11,
-            fontWeight: 700,
-            textAlign: "right",
-            color: balCol
-          }
-        }, balLbl)));
+        }, "Week ", wk, hasToday ? " (current)" : "")), wkRows.map(r => {
+          const d = new Date(r.date + "T12:00:00");
+          const dlbl = d.toLocaleDateString("en-AU", {
+            weekday: "short",
+            day: "numeric",
+            month: "numeric"
+          }).replace(",", "");
+          const isToday = r.date === todayStr2;
+          const changeLbl = r.type === "al" || r.type === "sick" ? "\u2014" : Math.abs(r.change) < 0.01 ? "0" : fmtFlex(r.change);
+          const changeCol = r.type === "al" || r.type === "sick" ? "#60a5fa" : Math.abs(r.change) < 0.01 ? C.inkFaint : r.change > 0 ? "#5EE7B4" : "#8b8b9e";
+          const balCol = Math.abs(r.running) < 0.01 ? C.inkMute : r.running > 0 ? "#5EE7B4" : "#EF4444";
+          const balLbl = Math.abs(r.running) < 0.01 ? "0" : fmtFlex(r.running);
+          const timesLbl = r.type === "worked" && r.start && r.end ? r.start + "\u2013" + r.end : r.type === "flex_off" ? "\u26a1 Flex Off" : r.type === "al" ? "\ud83c\udfd6 AL" : "\ud83e\udd12 Sick";
+          const hoursLbl = r.type === "worked" ? fmtHrsShort(r.hours) : "\u2014";
+          const hoursCol = r.type === "al" || r.type === "sick" ? "#60a5fa" : C.inkMute;
+          return /*#__PURE__*/React.createElement("div", {
+            key: r.date,
+            style: {
+              display: "grid",
+              gridTemplateColumns: "56px 72px 46px 50px 54px",
+              gap: 0,
+              padding: "7px 10px",
+              alignItems: "center",
+              borderBottom: "1px solid rgba(52,45,72,0.3)",
+              ...(isToday ? {
+                background: "rgba(192,132,252,0.06)"
+              } : {})
+            }
+          }, /*#__PURE__*/React.createElement("span", {
+            className: "sans",
+            style: {
+              fontSize: 11,
+              fontWeight: 600,
+              color: isToday ? C.accent : C.inkMute
+            }
+          }, isToday ? "Today" : dlbl), /*#__PURE__*/React.createElement("span", {
+            className: "sans",
+            style: {
+              fontSize: 10.5,
+              color: r.type === "al" || r.type === "sick" ? "#60a5fa" : C.inkMute
+            }
+          }, timesLbl), /*#__PURE__*/React.createElement("span", {
+            className: "sans",
+            style: {
+              fontSize: 10.5,
+              textAlign: "right",
+              color: hoursCol
+            }
+          }, hoursLbl), /*#__PURE__*/React.createElement("span", {
+            className: "sans",
+            style: {
+              fontSize: 11,
+              fontWeight: 700,
+              textAlign: "right",
+              color: changeCol
+            }
+          }, changeLbl), /*#__PURE__*/React.createElement("span", {
+            className: "sans",
+            style: {
+              fontSize: 11,
+              fontWeight: 700,
+              textAlign: "right",
+              color: balCol
+            }
+          }, balLbl));
+        }));
       });
     })()));
   })());
