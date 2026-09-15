@@ -37036,8 +37036,9 @@ function BillsTab({
     // $0 or empty — a cleared amount means "I don't know what it costs, show me the
     // average". Once paid, the recorded amount speaks for itself.
     const regHist = !isCard && !r.paid && !(parseAmt(r.bill.amount) > 0) ? billHistory(r.bill) : [];
-    // v727 · If a bill amount is explicitly set, it overrides the average for ALL bill types
-    const hasSetAmt = parseAmt(r.bill.amount) > 0;
+    // v727 · If a bill amount is explicitly set (series OR this occurrence's exception), it overrides the average
+    const excAmt = r.bill.exceptions && r.bill.exceptions[r.date] && r.bill.exceptions[r.date].amount;
+    const hasSetAmt = parseAmt(r.bill.amount) > 0 || excAmt != null && parseAmt(excAmt) > 0;
     const avgAmt = !r.paid && !hasSetAmt ? isCard ? billAverage(cardHist, billAvgMethod) : billAverage(regHist, billAvgMethod) : 0;
     const showAvgPre = avgAmt > 0;
     const lastStmtTo = cardHist.filter(h => h.stmtTo).sort((a, b) => b.stmtTo.localeCompare(a.stmtTo))[0]?.stmtTo;
