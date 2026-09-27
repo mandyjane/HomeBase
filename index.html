@@ -18670,7 +18670,10 @@ function App({
         onEdit: () => {
           setEditTask(row.ref);
           setShowAdd(true);
-        }
+        },
+        onDelete: scope => deleteTask(row.ref, scope),
+        onEndRepeat: () => endRepeat(row.ref._seriesId || row.ref.id),
+        onEndRepeatAt: () => endRepeatAt(row.ref._seriesId || row.ref.id, row.ref._occDate || row.ref.dueDate)
       })), tomorrowOtherRows.map((row, i) => /*#__PURE__*/React.createElement(AgendaRow, {
         billPayer: billPayer,
         billQuickPay: billQuickPay,
@@ -18704,11 +18707,16 @@ function App({
             setEditTask(row.ref);
             setShowAdd(true);
           }
+        },
+        onDelete: scope => {
+          if (row.kind === "task") deleteTask(row.ref, scope);else deleteEvent(row.ref, scope);
+        },
+        onEndRepeat: () => {
+          if (row.kind === "event") endRepeatEvent(row.ref._seriesId || row.ref.id);else endRepeat(row.ref._seriesId || row.ref.id);
+        },
+        onEndRepeatAt: () => {
+          if (row.kind === "event") endRepeatEventAt(row.ref._seriesId || row.ref.id, row.ref._occDate || row.ref.date);else endRepeatAt(row.ref._seriesId || row.ref.id, row.ref._occDate || row.ref.dueDate);
         }
-        /* NOT `compact`. That flag means "the parent card IS the expansion",
-           so the row renders only its EXPANDED body — with no parent card
-           around it that drew a bare Edit button and no title. The Bills tab
-           uses it correctly because its rows sit inside a wrapper card. */
       })))));
     })(), [["deadline", homeDeadlines, "Deadlines", C.deadline, C.deadlineSoft], ["project", homeProjects, "Projects", C.project, C.projectSoft]].filter(([, list]) => list.length > 0).map(([kind, list, heading, col, soft]) => /*#__PURE__*/React.createElement("div", {
       key: kind,
