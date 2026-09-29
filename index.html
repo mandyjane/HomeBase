@@ -10537,16 +10537,18 @@ function App({
         const now = goalProgress(g, w, points, after, goalLog);
         // v609 · For shared goals, override with ground truth from collectCompletedTasks
         // so the popup doesn't fire on stale pointsPeriods data.
-        if (w === "shared") {
+        // v727 · Same ground-truth override for personal goals (her/him) — fixes late popup
+        // and mismatched points between popup and Activity tab.
+        if (w === "shared" || w === "her" || w === "him") {
           const _bk = periodBucket(migratePeriod(g.period), fpNow);
           const _pStart = _bk && _bk.key ? _bk.key.slice(0, 10) : null;
-          const _acts = collectCompletedTasks(visTasks, "shared", _pStart, null, null);
-          const _bActs = collectBonusActivity(bonusLog, "shared", _pStart, null, null);
+          const _acts = collectCompletedTasks(visTasks, w, _pStart, null, null);
+          const _bActs = collectBonusActivity(bonusLog, w, _pStart, null, null);
           const gt = [..._acts, ..._bActs].reduce((s, t) => s + (t.points || 0), 0);
           before.current = gt;
           before.met = gt >= before.target && !before.claimedThisPeriod;
-          // "after" adds the just-awarded points on top of ground truth
-          const gtAfter = gt + (aw.her || 0) + (aw.him || 0);
+          const myPts = w === "shared" ? (aw.her || 0) + (aw.him || 0) : aw[w] || 0;
+          const gtAfter = gt + myPts;
           now.current = gtAfter;
           now.met = gtAfter >= now.target && !now.claimedThisPeriod;
         }
