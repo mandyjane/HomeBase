@@ -12182,16 +12182,22 @@ function App({
             subtasks,
             ...fields
           } = task;
-          userSetTasks(ts => ts.map(t => t.id === orig.id ? {
-            ...t,
-            exceptions: {
-              ...(t.exceptions || {}),
-              [d]: {
-                ...(t.exceptions && t.exceptions[d] || {}),
-                ...fields
+          userSetTasks(ts => ts.map(t => {
+            if (t.id !== orig.id) return t;
+            // v727 · subtasks are series-level (not per-occurrence), so write them to the series directly
+            const updated = {
+              ...t,
+              exceptions: {
+                ...(t.exceptions || {}),
+                [d]: {
+                  ...(t.exceptions && t.exceptions[d] || {}),
+                  ...fields
+                }
               }
-            }
-          } : t));
+            };
+            if (subtasks) updated.subtasks = subtasks;
+            return updated;
+          }));
           showToast("This occurrence updated", "success");
         } else if (scope === "forward") {
           // SPLIT: end the old series the day before this occurrence, and start a fresh
