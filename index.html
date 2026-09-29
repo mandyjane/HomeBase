@@ -48197,7 +48197,7 @@ function MortgageView({
     const next = sortedRates[i - 1];
     const delta = next ? (next.rate - rc.rate).toFixed(2) : null;
     const isCurrent = rc.date === currentRate?.date;
-    const col = isCurrent ? C.urgent || "#f0a030" : parseFloat(delta) > 0 ? C.urgent || "#e85555" : i === sorted.length - 1 ? BILL_COLOR : C.low || GRN;
+    const col = isCurrent ? C.urgent || "#f0a030" : parseFloat(delta) > 0 ? C.urgent || "#e85555" : i === sortedRates.length - 1 ? BILL_COLOR : C.low || GRN;
     // Find recalculated weekly pmt from rateSchedule
     const sched = (calc?.rateSchedule || []).find(s => s.date === rc.date);
     return /*#__PURE__*/React.createElement("div", {
