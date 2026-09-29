@@ -48534,6 +48534,7 @@ function MortgageSettingsSheet({
     sheetRef
   } = useSwipeToClose(onClose);
   const cfg = data || MORT_DEFAULT;
+  const today = toLocalYMD(new Date());
   const [d, setD] = useState(cfg);
   const [rateEdit, setRateEdit] = useState(null); // index being edited
   function save() {
