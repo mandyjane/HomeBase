@@ -2325,7 +2325,7 @@ function mortWeeklyPmt(balance, annualRate, weeksRemaining) {
   if (r < 0.00001) return balance / Math.max(1, weeksRemaining);
   return balance * r * Math.pow(1 + r, weeksRemaining) / (Math.pow(1 + r, weeksRemaining) - 1);
 }
-function mortCalc(cfg, today) {
+function mortCalc(cfg, today, opts) {
   const {
     loanAmount,
     startDate,
@@ -2334,6 +2334,7 @@ function mortCalc(cfg, today) {
     rateChanges,
     transactions
   } = cfg;
+  const lockPayments = opts && opts.lockPayments; // v727 · don't recalculate weekly pmt on rate change
   if (!loanAmount || !startDate || !rateChanges || !rateChanges.length) return null;
   const termYears = loanTermYears || 30;
   const totalWeeks = Math.round(termYears * 52);
@@ -2454,19 +2455,22 @@ function mortCalc(cfg, today) {
     const overrideChanged = schedEntry && schedEntry.weeklyPmtOverride > 0 && Math.abs(schedEntry.weeklyPmtOverride - weeklyPmt) > 0.01;
     if ((rateChanged || overrideChanged) && cursor > startDate) {
       currentRate = newRate;
-      const weeksLeft = Math.max(1, totalWeeks - weeksDone);
-      const rateOverride = schedEntry?.weeklyPmtOverride || 0;
-      weeklyPmt = rateOverride > 0 ? rateOverride : mortWeeklyPmt(balance, currentRate, weeksLeft);
+      // v727 · lockPayments: interest accrues at new rate but weekly payment stays unchanged
+      if (!lockPayments) {
+        const weeksLeft = Math.max(1, totalWeeks - weeksDone);
+        const rateOverride = schedEntry?.weeklyPmtOverride || 0;
+        weeklyPmt = rateOverride > 0 ? rateOverride : mortWeeklyPmt(balance, currentRate, weeksLeft);
+      }
       // Record for UI
       const existing = rateSchedule.find(r => r.date === cursor);
       if (existing) {
         existing.weeklyPmt = Math.round(weeklyPmt);
-        existing.isOverride = rateOverride > 0;
+        existing.isOverride = lockPayments;
       } else rateSchedule.push({
         date: cursor,
         rate: currentRate * 100,
         weeklyPmt: Math.round(weeklyPmt),
-        isOverride: rateOverride > 0
+        isOverride: lockPayments
       });
     }
 
@@ -46594,6 +46598,10 @@ function MortgageView({
   const sortedRates = [...(cfg.rateChanges || [])].sort((a, b) => b.date.localeCompare(a.date));
   const currentRate = sortedRates.find(r => r.date <= today) || sortedRates[sortedRates.length - 1];
   const calc = React.useMemo(() => mortCalc(cfg, today), [cfg, today]);
+  // v727 · "Keep current payment" projection — same rates but weekly payment doesn't adjust
+  const lockedCalc = React.useMemo(() => sortedRates.length > 1 ? mortCalc(cfg, today, {
+    lockPayments: true
+  }) : null, [cfg, today]);
 
   // ── Helpers ──
   const herName = people?.her?.name || "Her";
@@ -48289,7 +48297,170 @@ function MortgageView({
         color: parseFloat(delta) > 0 ? C.urgent || "#f0a030" : GRN
       }
     }, parseFloat(delta) > 0 ? "+" : "", delta, "%"));
-  }))), regularTx.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }), lockedCalc && calc && (() => {
+    const adjPmt = calc.weeklyPmt;
+    const lockPmt = lockedCalc.weeklyPmt;
+    const adjPayoff = calc.payoffDate;
+    const lockPayoff = lockedCalc.payoffDate;
+    const adjInt = Math.round(calc.totalInterestPaid);
+    const lockInt = Math.round(lockedCalc.totalInterestPaid);
+    const extraInt = lockInt - adjInt;
+    const adjD = adjPayoff ? new Date(adjPayoff + "T00:00:00") : null;
+    const lockD = lockPayoff ? new Date(lockPayoff + "T00:00:00") : null;
+    const extraMs = adjD && lockD ? lockD - adjD : 0;
+    const extraMos = extraMs > 0 ? Math.round(extraMs / 1000 / 60 / 60 / 24 / 30.44) : 0;
+    const extraYrs = Math.floor(extraMos / 12);
+    const extraMoR = extraMos % 12;
+    const extraStr = extraYrs > 0 ? `${extraYrs} yr${extraYrs !== 1 ? "s" : ""} ${extraMoR} mo` : `${extraMoR} mo`;
+    if (Math.abs(adjPmt - lockPmt) < 1) return null;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        borderTop: `1px solid ${sRule}`,
+        padding: "12px 14px"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 9,
+        fontWeight: 800,
+        letterSpacing: ".08em",
+        textTransform: "uppercase",
+        color: C.inkFaint,
+        marginBottom: 10
+      }
+    }, "Rate impact"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 8
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "rgba(0,214,143,0.06)",
+        borderLeft: `3px solid ${GRN}`,
+        padding: "9px 10px"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 8.5,
+        fontWeight: 700,
+        letterSpacing: ".06em",
+        textTransform: "uppercase",
+        color: GRN,
+        marginBottom: 4
+      }
+    }, "Adjusted repayment"), /*#__PURE__*/React.createElement("div", {
+      className: numClass(),
+      style: {
+        fontSize: 16,
+        color: C.ink
+      }
+    }, "$", adjPmt, "/wk"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 6,
+        paddingTop: 6,
+        borderTop: `0.5px solid ${sRule}`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 10,
+        color: C.inkMute
+      }
+    }, "Payoff"), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 13,
+        fontWeight: 600,
+        color: C.ink
+      }
+    }, adjPayoff ? fmtPayoffDate(adjPayoff) : "\u2014")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 4
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 10,
+        color: C.inkMute
+      }
+    }, "Total interest"), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 13,
+        fontWeight: 600,
+        color: C.ink
+      }
+    }, "$", (adjInt / 1000).toFixed(0), "k"))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "rgba(240,160,48,0.06)",
+        borderLeft: `3px solid ${C.urgent || "#f0a030"}`,
+        padding: "9px 10px"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 8.5,
+        fontWeight: 700,
+        letterSpacing: ".06em",
+        textTransform: "uppercase",
+        color: C.urgent || "#f0a030",
+        marginBottom: 4
+      }
+    }, "Keep current pmt"), /*#__PURE__*/React.createElement("div", {
+      className: numClass(),
+      style: {
+        fontSize: 16,
+        color: C.ink
+      }
+    }, "$", lockPmt, "/wk"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 6,
+        paddingTop: 6,
+        borderTop: `0.5px solid ${sRule}`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 10,
+        color: C.inkMute
+      }
+    }, "Payoff"), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 13,
+        fontWeight: 600,
+        color: C.urgent || "#f0a030"
+      }
+    }, lockPayoff ? fmtPayoffDate(lockPayoff) : "\u2014")), /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 4
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 10,
+        color: C.inkMute
+      }
+    }, "Total interest"), /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 13,
+        fontWeight: 600,
+        color: C.urgent || "#f0a030"
+      }
+    }, "$", (lockInt / 1000).toFixed(0), "k")))), extraMos > 0 && /*#__PURE__*/React.createElement("div", {
+      className: "sans",
+      style: {
+        fontSize: 10.5,
+        color: C.inkMute,
+        marginTop: 8,
+        paddingTop: 8,
+        borderTop: `0.5px solid ${sRule}`
+      }
+    }, "Keeping $", lockPmt, "/wk adds ~", extraStr, extraInt > 0 ? ` and ~$${(extraInt / 1000).toFixed(0)}k extra interest` : ""));
+  })())), regularTx.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
       fontWeight: 800,
