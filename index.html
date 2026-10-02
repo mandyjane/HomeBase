@@ -8288,7 +8288,31 @@ function App({
     try {
       (lsGet("hb_tasks", SAMPLE) || []).forEach(t => {
         if (typeof t.id === "number") seedUid(t.id);
+        (t.subtasks || []).forEach(s => {
+          if (typeof s.id === "number") seedUid(s.id);
+        });
       });
+      // v727 · Runtime dedup of colliding subtask IDs — runs every load, checks GLOBALLY
+      // across all tasks (not just within each task). Catches duplicates from save bugs,
+      // sync races, or post-migration additions.
+      {
+        const raw = lsGet("hb_tasks", SAMPLE) || [];
+        const globalSeen = new Set();
+        let fixed = false;
+        raw.forEach(t => {
+          if (typeof t.id === "number") globalSeen.add(t.id); // task IDs occupy the same space
+          if (!t.subtasks || !t.subtasks.length) return;
+          t.subtasks.forEach(s => {
+            if (globalSeen.has(s.id)) {
+              s.id = uid();
+              fixed = true;
+            } else globalSeen.add(s.id);
+          });
+        });
+        if (fixed) try {
+          lsSet("hb_tasks", raw);
+        } catch {}
+      }
       (lsGet("hb_events", SAMPLE_EVENTS) || []).forEach(e => {
         if (typeof e.id === "number") seedEuid(e.id);
       });
@@ -10037,6 +10061,13 @@ function App({
     const syncTasks = !dirty || dirty.has("hb_tasks");
     const syncEvents = !dirty || dirty.has("hb_events");
     const syncedTasks = syncTasks ? lsGet("hb_tasks", SAMPLE) || [] : tasks;
+    // v727 · Reseed uid counter from synced data so new IDs never collide with partner's
+    if (syncTasks) syncedTasks.forEach(t => {
+      if (typeof t.id === "number") seedUid(t.id);
+      (t.subtasks || []).forEach(s => {
+        if (typeof s.id === "number") seedUid(s.id);
+      });
+    });
     // v696 · Update the prev ref BEFORE setTasks so the useLayoutEffect sees no diff.
     // Without this, sync-loaded data (especially after a cache clear) looks like a
     // user change, gets stamped with fresh _modAt, and pushes stale data as "newest".
@@ -16459,7 +16490,8 @@ function App({
       const earned = [..._acts, ..._bActs].reduce((s, t) => s + (t.points || 0), 0);
       const _claimedThisPeriod = (goalLog || []).some(e => e.id === entryId(key, p, bk.key) && e.claimed);
       const _gtMet = earned >= target && !_claimedThisPeriod;
-      const _trophyShow = _gtMet || owedCount(goalLog, key) > 0;
+      // v727 · Trophy only shows when goal met THIS period, not for unclaimed past treats
+      const _trophyShow = _gtMet;
       return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
@@ -17637,7 +17669,8 @@ function App({
       // v166 · the dash card ignores treats snoozed via "Later". isOwed and every
       // other surface (person card, Record) are untouched — this filter is local.
       const snz = new Set(treatDashSnooze || []);
-      const dashOwed = (goalLog || []).filter(e => isOwed(e) && !snz.has(e.id));
+      // v727 · Only show treats owed to the current user (personal + shared), not partner's
+      const dashOwed = (goalLog || []).filter(e => isOwed(e) && !snz.has(e.id) && (e.who === currentUser || e.who === "shared"));
       const dashOwedCount = dashOwed.length;
       return dashOwedCount > 0 && /*#__PURE__*/React.createElement("div", {
         onClick: () => {
@@ -46598,10 +46631,6 @@ function MortgageView({
   const sortedRates = [...(cfg.rateChanges || [])].sort((a, b) => b.date.localeCompare(a.date));
   const currentRate = sortedRates.find(r => r.date <= today) || sortedRates[sortedRates.length - 1];
   const calc = React.useMemo(() => mortCalc(cfg, today), [cfg, today]);
-  // v727 · "Keep current payment" projection — same rates but weekly payment doesn't adjust
-  const lockedCalc = React.useMemo(() => sortedRates.length > 1 ? mortCalc(cfg, today, {
-    lockPayments: true
-  }) : null, [cfg, today]);
 
   // ── Helpers ──
   const herName = people?.her?.name || "Her";
@@ -48297,22 +48326,26 @@ function MortgageView({
         color: parseFloat(delta) > 0 ? C.urgent || "#f0a030" : GRN
       }
     }, parseFloat(delta) > 0 ? "+" : "", delta, "%"));
-  }), lockedCalc && calc && (() => {
-    const adjPmt = calc.weeklyPmt;
-    const lockPmt = lockedCalc.weeklyPmt;
-    const adjPayoff = calc.payoffDate;
-    const lockPayoff = lockedCalc.payoffDate;
-    const adjInt = Math.round(calc.totalInterestPaid);
-    const lockInt = Math.round(lockedCalc.totalInterestPaid);
-    const extraInt = lockInt - adjInt;
-    const adjD = adjPayoff ? new Date(adjPayoff + "T00:00:00") : null;
-    const lockD = lockPayoff ? new Date(lockPayoff + "T00:00:00") : null;
-    const extraMs = adjD && lockD ? lockD - adjD : 0;
-    const extraMos = extraMs > 0 ? Math.round(extraMs / 1000 / 60 / 60 / 24 / 30.44) : 0;
-    const extraYrs = Math.floor(extraMos / 12);
-    const extraMoR = extraMos % 12;
-    const extraStr = extraYrs > 0 ? `${extraYrs} yr${extraYrs !== 1 ? "s" : ""} ${extraMoR} mo` : `${extraMoR} mo`;
-    if (Math.abs(adjPmt - lockPmt) < 1) return null;
+  }), sortedRates.length > 1 && calc && (() => {
+    // Compute projection WITHOUT the latest rate change
+    const latestRC = sortedRates[0]; // sortedRates is desc by date
+    const prevRates = (cfg.rateChanges || []).filter(r => r.id !== latestRC.id);
+    if (!prevRates.length) return null;
+    const prevCalc = mortCalc({
+      ...cfg,
+      rateChanges: prevRates
+    }, today);
+    if (!prevCalc) return null;
+    const prevPmt = prevCalc.weeklyPmt;
+    const nowPmt = calc.weeklyPmt;
+    const pmtDiff = nowPmt - prevPmt;
+    const prevInt = Math.round(prevCalc.totalInterestPaid);
+    const nowInt = Math.round(calc.totalInterestPaid);
+    const intDiff = nowInt - prevInt;
+    const prevRate = prevRates.sort((a, b) => b.date.localeCompare(a.date))[0]?.rate;
+    const nowRate = latestRC.rate;
+    const rateDiff = ((nowRate || 0) - (prevRate || 0)).toFixed(2);
+    if (Math.abs(pmtDiff) < 1 && Math.abs(intDiff) < 100) return null;
     return /*#__PURE__*/React.createElement("div", {
       style: {
         borderTop: `1px solid ${sRule}`,
@@ -48328,138 +48361,85 @@ function MortgageView({
         color: C.inkFaint,
         marginBottom: 10
       }
-    }, "Rate impact"), /*#__PURE__*/React.createElement("div", {
+    }, "Latest rate change impact"), /*#__PURE__*/React.createElement("div", {
       style: {
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
+        display: "flex",
+        flexDirection: "column",
         gap: 8
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
-        background: "rgba(0,214,143,0.06)",
-        borderLeft: `3px solid ${GRN}`,
-        padding: "9px 10px"
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
       }
-    }, /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        fontSize: 8.5,
-        fontWeight: 700,
-        letterSpacing: ".06em",
-        textTransform: "uppercase",
-        color: GRN,
-        marginBottom: 4
-      }
-    }, "Adjusted repayment"), /*#__PURE__*/React.createElement("div", {
-      className: numClass(),
-      style: {
-        fontSize: 16,
-        color: C.ink
-      }
-    }, "$", adjPmt, "/wk"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 6,
-        paddingTop: 6,
-        borderTop: `0.5px solid ${sRule}`
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "sans",
-      style: {
-        fontSize: 10,
+        fontSize: 12,
         color: C.inkMute
       }
-    }, "Payoff"), /*#__PURE__*/React.createElement("div", {
+    }, "Rate"), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        fontSize: 13,
-        fontWeight: 600,
+        fontSize: 12,
         color: C.ink
       }
-    }, adjPayoff ? fmtPayoffDate(adjPayoff) : "\u2014")), /*#__PURE__*/React.createElement("div", {
+    }, prevRate, "% ", "→", " ", /*#__PURE__*/React.createElement("b", {
       style: {
-        marginTop: 4
+        color: parseFloat(rateDiff) > 0 ? C.urgent || "#f0a030" : GRN
       }
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "sans",
+    }, nowRate, "%"), " ", /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
-        color: C.inkMute
+        color: parseFloat(rateDiff) > 0 ? C.urgent || "#f0a030" : GRN
       }
-    }, "Total interest"), /*#__PURE__*/React.createElement("div", {
+    }, "(", parseFloat(rateDiff) > 0 ? "+" : "", rateDiff, "%)"))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        fontSize: 13,
-        fontWeight: 600,
+        fontSize: 12,
+        color: C.inkMute
+      }
+    }, "Repayment"), /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12,
         color: C.ink
       }
-    }, "$", (adjInt / 1000).toFixed(0), "k"))), /*#__PURE__*/React.createElement("div", {
+    }, "$", prevPmt, "/wk ", "→", " ", /*#__PURE__*/React.createElement("b", {
       style: {
-        background: "rgba(240,160,48,0.06)",
-        borderLeft: `3px solid ${C.urgent || "#f0a030"}`,
-        padding: "9px 10px"
+        color: pmtDiff > 0 ? C.urgent || "#f0a030" : GRN
       }
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "sans",
-      style: {
-        fontSize: 8.5,
-        fontWeight: 700,
-        letterSpacing: ".06em",
-        textTransform: "uppercase",
-        color: C.urgent || "#f0a030",
-        marginBottom: 4
-      }
-    }, "Keep current pmt"), /*#__PURE__*/React.createElement("div", {
-      className: numClass(),
-      style: {
-        fontSize: 16,
-        color: C.ink
-      }
-    }, "$", lockPmt, "/wk"), /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 6,
-        paddingTop: 6,
-        borderTop: `0.5px solid ${sRule}`
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "sans",
+    }, "$", nowPmt, "/wk"), " ", /*#__PURE__*/React.createElement("span", {
       style: {
         fontSize: 10,
+        color: pmtDiff > 0 ? C.urgent || "#f0a030" : GRN
+      }
+    }, "(", pmtDiff > 0 ? "+" : "", "$", pmtDiff, "/wk)"))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "sans",
+      style: {
+        fontSize: 12,
         color: C.inkMute
       }
-    }, "Payoff"), /*#__PURE__*/React.createElement("div", {
+    }, "Total interest"), /*#__PURE__*/React.createElement("span", {
       className: "sans",
       style: {
-        fontSize: 13,
-        fontWeight: 600,
-        color: C.urgent || "#f0a030"
+        fontSize: 12,
+        color: intDiff > 0 ? C.urgent || "#f0a030" : GRN
       }
-    }, lockPayoff ? fmtPayoffDate(lockPayoff) : "\u2014")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 4
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "sans",
-      style: {
-        fontSize: 10,
-        color: C.inkMute
-      }
-    }, "Total interest"), /*#__PURE__*/React.createElement("div", {
-      className: "sans",
-      style: {
-        fontSize: 13,
-        fontWeight: 600,
-        color: C.urgent || "#f0a030"
-      }
-    }, "$", (lockInt / 1000).toFixed(0), "k")))), extraMos > 0 && /*#__PURE__*/React.createElement("div", {
-      className: "sans",
-      style: {
-        fontSize: 10.5,
-        color: C.inkMute,
-        marginTop: 8,
-        paddingTop: 8,
-        borderTop: `0.5px solid ${sRule}`
-      }
-    }, "Keeping $", lockPmt, "/wk adds ~", extraStr, extraInt > 0 ? ` and ~$${(extraInt / 1000).toFixed(0)}k extra interest` : ""));
+    }, intDiff > 0 ? "+" : "", "$", Math.abs(intDiff) > 999 ? `${(intDiff / 1000).toFixed(1)}k` : intDiff, " over loan life"))));
   })())), regularTx.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
