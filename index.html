@@ -10220,6 +10220,31 @@ function App({
     setPointsPeriods(fresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // v731 · One-time rescore: entries created during the October→November rollover may have
+  // been written before all partner tasks arrived via Supabase sync, leaving the score lower
+  // than the actual ground truth. Re-derive every unclaimed entry from the last 62 days using
+  // the same collectCompletedTasks logic as recordClosedPeriods. Runs after that effect so
+  // freshly-created entries are included. Flag prevents re-running on every mount.
+  useEffect(() => {
+    if (lsGet("hb_goalLogRescore731")) return;
+    if (!goalLog || !goalLog.length || !tasks || !tasks.length) return;
+    const cutoffDate = toLocalYMD(new Date(Date.now() - 62 * 86400000));
+    const fixed = goalLog.map(e => {
+      if (e.claimed) return e;
+      if (!e.ends || e.ends < cutoffDate) return e;
+      const pStart = e.key ? e.key.slice(0, 10) : null;
+      if (!pStart) return e;
+      const pEndStr = toLocalYMD(periodEnd(e.period, e.key));
+      const resetF = e.who === "shared" ? null : pointsResetAt;
+      const cT = collectCompletedTasks(tasks, e.who, pStart, pEndStr, resetF);
+      const cB = collectBonusActivity(bonusLog, e.who, pStart, pEndStr, resetF);
+      const scored = [...cT, ...cB].reduce((s, t) => s + (t.points || 0), 0);
+      if (scored === e.score) return e;
+      return { ...e, score: scored, met: scored >= e.target };
+    });
+    setGoalLog(fixed);
+    lsSet("hb_goalLogRescore731", true);
+  }, []);
   // v565 · Removed hb_goalLogCleaned3 one-shot migration (v524). Already run on both devices.
   // For each goal, if ITS period's bucket key has rolled, freeze an entry for the
   // period that just ended. Idempotent: entryId dedupes, so a double-mount cannot
