@@ -10125,6 +10125,31 @@ function App({
       her: herPts,
       him: himPts
     });
+    // v731 · Rescore recent unclaimed goalLog entries after sync so a record written
+    // on first load (before all partner tasks had arrived) self-corrects once tasks
+    // are up to date. Only re-checks entries whose period ended within the last 62
+    // days; claimed entries are frozen and skipped.
+    const _cutoffDate = toLocalYMD(new Date(Date.now() - 62 * 86400000));
+    setGoalLog(prev => {
+      if (!prev || !prev.length) return prev;
+      let changed = false;
+      const next = prev.map(e => {
+        if (e.claimed) return e;
+        if (!e.ends || e.ends < _cutoffDate) return e;
+        const pStart = e.key ? e.key.slice(0, 10) : null;
+        if (!pStart) return e;
+        const pEndDate = periodEnd(e.period, e.key);
+        const pEndStr = toLocalYMD(pEndDate);
+        const resetF = e.who === "shared" ? null : _resetAt;
+        const cT = collectCompletedTasks(syncedTasks, e.who, pStart, pEndStr, resetF);
+        const cB = collectBonusActivity(syncedBonusLog, e.who, pStart, pEndStr, resetF);
+        const scored = [...cT, ...cB].reduce((s, t) => s + (t.points || 0), 0);
+        if (scored === e.score) return e;
+        changed = true;
+        return { ...e, score: scored, met: scored >= e.target };
+      });
+      return changed ? next : prev;
+    });
   }, [syncVersion, tasks]);
   // v560 · Re-read treat requests when app comes to foreground. The Supabase realtime
   // subscription updates localStorage in the background, but React state stays stale
@@ -10194,6 +10219,31 @@ function App({
     if (stored) recordClosedPeriods(stored, fresh);
     setPointsPeriods(fresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // v731 · One-time rescore: entries created during the October→November rollover may have
+  // been written before all partner tasks arrived via Supabase sync, leaving the score lower
+  // than the actual ground truth. Re-derive every unclaimed entry from the last 62 days using
+  // the same collectCompletedTasks logic as recordClosedPeriods. Runs after that effect so
+  // freshly-created entries are included. Flag prevents re-running on every mount.
+  useEffect(() => {
+    if (lsGet("hb_goalLogRescore731")) return;
+    if (!goalLog || !goalLog.length || !tasks || !tasks.length) return;
+    const cutoffDate = toLocalYMD(new Date(Date.now() - 62 * 86400000));
+    const fixed = goalLog.map(e => {
+      if (e.claimed) return e;
+      if (!e.ends || e.ends < cutoffDate) return e;
+      const pStart = e.key ? e.key.slice(0, 10) : null;
+      if (!pStart) return e;
+      const pEndStr = toLocalYMD(periodEnd(e.period, e.key));
+      const resetF = e.who === "shared" ? null : pointsResetAt;
+      const cT = collectCompletedTasks(tasks, e.who, pStart, pEndStr, resetF);
+      const cB = collectBonusActivity(bonusLog, e.who, pStart, pEndStr, resetF);
+      const scored = [...cT, ...cB].reduce((s, t) => s + (t.points || 0), 0);
+      if (scored === e.score) return e;
+      return { ...e, score: scored, met: scored >= e.target };
+    });
+    setGoalLog(fixed);
+    lsSet("hb_goalLogRescore731", true);
   }, []);
   // v565 · Removed hb_goalLogCleaned3 one-shot migration (v524). Already run on both devices.
   // For each goal, if ITS period's bucket key has rolled, freeze an entry for the
@@ -10580,11 +10630,16 @@ function App({
         // so the popup doesn't fire on stale pointsPeriods data.
         // v727 · Same ground-truth override for personal goals (her/him) — fixes late popup
         // and mismatched points between popup and Activity tab.
+        // v731 · Apply pointsResetAt for personal goals, matching recordClosedPeriods and
+        // the Goal tab display. Without this, a mid-period points reset caused the popup to
+        // count pre-reset tasks (null resetAfter) while the record correctly excluded them,
+        // producing a "goal met" notice for a score the record would never confirm.
         if (w === "shared" || w === "her" || w === "him") {
           const _bk = periodBucket(migratePeriod(g.period), fpNow);
           const _pStart = _bk && _bk.key ? _bk.key.slice(0, 10) : null;
-          const _acts = collectCompletedTasks(visTasks, w, _pStart, null, null);
-          const _bActs = collectBonusActivity(bonusLog, w, _pStart, null, null);
+          const _resetF = w === "shared" ? null : pointsResetAt;
+          const _acts = collectCompletedTasks(visTasks, w, _pStart, null, _resetF);
+          const _bActs = collectBonusActivity(bonusLog, w, _pStart, null, _resetF);
           const gt = [..._acts, ..._bActs].reduce((s, t) => s + (t.points || 0), 0);
           before.current = gt;
           before.met = gt >= before.target && !before.claimedThisPeriod;
@@ -14801,7 +14856,20 @@ function App({
     if (ev.end <= ev.time) return false;
     return ev.end <= nowHHMM; // both "HH:MM", so string compare is safe
   };
-  const homeWorkRows = homeWorkRows0.filter(r => !shiftStarted(r));
+  // v732 · Dedup: sync can create duplicate shift entries with different IDs. The Work tab
+  // already deduplicates (v728) but the Dashboard path didn't. Apply the same key here.
+  const homeWorkRows = (() => {
+    const raw = homeWorkRows0.filter(r => !shiftStarted(r));
+    const seen = new Set();
+    return raw.filter(r => {
+      const e = r.ref;
+      if (e._regular || e._ot || e._secondment) return true;
+      const k = (e.assignee || "") + (e._occDate || e.date) + (e.title || "") + (e.time || "") + (e.end || "") + (e.dayOff || "") + (e.workEx || "");
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  })();
   // Everything today's shift rolled INTO is tomorrow's work, already built below.
 
   // ── TOMORROW ON THE DASHBOARD *(v238)* ────────────────────────────────────────────────
@@ -14932,7 +15000,19 @@ function App({
     if (aAD !== bAD) return aAD - bAD;
     return (a._t ? 0 : 1) - (b._t ? 0 : 1) || a._t.localeCompare(b._t);
   });
-  const tomorrowWorkRows = tomorrowRows.filter(isWorkRow);
+  // v732 · Same sync-duplicate dedup as homeWorkRows.
+  const tomorrowWorkRows = (() => {
+    const raw = tomorrowRows.filter(isWorkRow);
+    const seen = new Set();
+    return raw.filter(r => {
+      const e = r.ref;
+      if (e._regular || e._ot || e._secondment) return true;
+      const k = (e.assignee || "") + (e._occDate || e.date) + (e.title || "") + (e.time || "") + (e.end || "") + (e.dayOff || "") + (e.workEx || "");
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  })();
   const tomorrowBillRows = tomorrowRows.filter(r => !isWorkRow(r) && r.kind === "task" && isBill(r.ref));
   const tomorrowOtherRows = tomorrowRows.filter(r => !isWorkRow(r) && !(r.kind === "task" && isBill(r.ref)));
   // v187 · non-work EVENTS get their own "Events · Today" section (reward-claimed events
