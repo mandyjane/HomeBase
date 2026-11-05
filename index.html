@@ -14856,7 +14856,20 @@ function App({
     if (ev.end <= ev.time) return false;
     return ev.end <= nowHHMM; // both "HH:MM", so string compare is safe
   };
-  const homeWorkRows = homeWorkRows0.filter(r => !shiftStarted(r));
+  // v732 · Dedup: sync can create duplicate shift entries with different IDs. The Work tab
+  // already deduplicates (v728) but the Dashboard path didn't. Apply the same key here.
+  const homeWorkRows = (() => {
+    const raw = homeWorkRows0.filter(r => !shiftStarted(r));
+    const seen = new Set();
+    return raw.filter(r => {
+      const e = r.ref;
+      if (e._regular || e._ot || e._secondment) return true;
+      const k = (e.assignee || "") + (e._occDate || e.date) + (e.title || "") + (e.time || "") + (e.end || "") + (e.dayOff || "") + (e.workEx || "");
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  })();
   // Everything today's shift rolled INTO is tomorrow's work, already built below.
 
   // ── TOMORROW ON THE DASHBOARD *(v238)* ────────────────────────────────────────────────
@@ -14987,7 +15000,19 @@ function App({
     if (aAD !== bAD) return aAD - bAD;
     return (a._t ? 0 : 1) - (b._t ? 0 : 1) || a._t.localeCompare(b._t);
   });
-  const tomorrowWorkRows = tomorrowRows.filter(isWorkRow);
+  // v732 · Same sync-duplicate dedup as homeWorkRows.
+  const tomorrowWorkRows = (() => {
+    const raw = tomorrowRows.filter(isWorkRow);
+    const seen = new Set();
+    return raw.filter(r => {
+      const e = r.ref;
+      if (e._regular || e._ot || e._secondment) return true;
+      const k = (e.assignee || "") + (e._occDate || e.date) + (e.title || "") + (e.time || "") + (e.end || "") + (e.dayOff || "") + (e.workEx || "");
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  })();
   const tomorrowBillRows = tomorrowRows.filter(r => !isWorkRow(r) && r.kind === "task" && isBill(r.ref));
   const tomorrowOtherRows = tomorrowRows.filter(r => !isWorkRow(r) && !(r.kind === "task" && isBill(r.ref)));
   // v187 · non-work EVENTS get their own "Events · Today" section (reward-claimed events
