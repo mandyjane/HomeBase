@@ -10220,11 +10220,8 @@ function App({
     setPointsPeriods(fresh);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // v731 · One-time rescore: entries created during the October→November rollover may have
-  // been written before all partner tasks arrived via Supabase sync, leaving the score lower
-  // than the actual ground truth. Re-derive every unclaimed entry from the last 62 days using
-  // the same collectCompletedTasks logic as recordClosedPeriods. Runs after that effect so
-  // freshly-created entries are included. Flag prevents re-running on every mount.
+  // v731 · One-time rescore (original — now superseded by v733 below, kept only so the
+  // flag check prevents it re-running on devices that already set it).
   useEffect(() => {
     if (lsGet("hb_goalLogRescore731")) return;
     if (!goalLog || !goalLog.length || !tasks || !tasks.length) return;
@@ -10235,15 +10232,36 @@ function App({
       const pStart = e.key ? e.key.slice(0, 10) : null;
       if (!pStart) return e;
       const pEndStr = toLocalYMD(periodEnd(e.period, e.key));
-      const resetF = e.who === "shared" ? null : pointsResetAt;
-      const cT = collectCompletedTasks(tasks, e.who, pStart, pEndStr, resetF);
-      const cB = collectBonusActivity(bonusLog, e.who, pStart, pEndStr, resetF);
+      const cT = collectCompletedTasks(tasks, e.who, pStart, pEndStr, null);
+      const cB = collectBonusActivity(bonusLog, e.who, pStart, pEndStr, null);
       const scored = [...cT, ...cB].reduce((s, t) => s + (t.points || 0), 0);
       if (scored === e.score) return e;
       return { ...e, score: scored, met: scored >= e.target };
     });
     setGoalLog(fixed);
     lsSet("hb_goalLogRescore731", true);
+  }, []);
+  // v733 · Re-rescore: v731's rescore incorrectly applied pointsResetAt, producing the same
+  // wrong score (398) for Mandy's October goal. Re-run with null resetAfter so all tasks
+  // completed inside the period window are counted, regardless of any display reset.
+  useEffect(() => {
+    if (lsGet("hb_goalLogRescore733")) return;
+    if (!goalLog || !goalLog.length || !tasks || !tasks.length) return;
+    const cutoffDate = toLocalYMD(new Date(Date.now() - 62 * 86400000));
+    const fixed = goalLog.map(e => {
+      if (e.claimed) return e;
+      if (!e.ends || e.ends < cutoffDate) return e;
+      const pStart = e.key ? e.key.slice(0, 10) : null;
+      if (!pStart) return e;
+      const pEndStr = toLocalYMD(periodEnd(e.period, e.key));
+      const cT = collectCompletedTasks(tasks, e.who, pStart, pEndStr, null);
+      const cB = collectBonusActivity(bonusLog, e.who, pStart, pEndStr, null);
+      const scored = [...cT, ...cB].reduce((s, t) => s + (t.points || 0), 0);
+      if (scored === e.score) return e;
+      return { ...e, score: scored, met: scored >= e.target };
+    });
+    setGoalLog(fixed);
+    lsSet("hb_goalLogRescore733", true);
   }, []);
   // v565 · Removed hb_goalLogCleaned3 one-shot migration (v524). Already run on both devices.
   // For each goal, if ITS period's bucket key has rolled, freeze an entry for the
@@ -10262,11 +10280,13 @@ function App({
       if (oldB.key === newB.key) continue; // still the same period; not closed yet
       // v719 · Ground-truth scoring: derive from collectCompletedTasks + collectBonusActivity
       // instead of the incremental pointsPeriods bucket, which is known to drift.
+      // v733 · Pass null for resetAfter: a mid-period display reset cannot un-earn points that
+      // were already earned inside the period window. Using pointsResetAt here excluded
+      // pre-reset October tasks and produced a score of 398 when the true total was > 400.
       const pStart = oldB.key.slice(0, 10);
       const pEnd = toLocalYMD(periodEnd(period, oldB.key));
-      const resetF = who === "shared" ? null : pointsResetAt;
-      const cTasks = collectCompletedTasks(tasks, who, pStart, pEnd, resetF);
-      const cBonus = collectBonusActivity(bonusLog, who, pStart, pEnd, resetF);
+      const cTasks = collectCompletedTasks(tasks, who, pStart, pEnd, null);
+      const cBonus = collectBonusActivity(bonusLog, who, pStart, pEnd, null);
       const scored = [...cTasks, ...cBonus].reduce((s, t) => s + (t.points || 0), 0);
       add.push(makeEntry(who, goal, oldB.key, scored));
     }
@@ -10630,16 +10650,15 @@ function App({
         // so the popup doesn't fire on stale pointsPeriods data.
         // v727 · Same ground-truth override for personal goals (her/him) — fixes late popup
         // and mismatched points between popup and Activity tab.
-        // v731 · Apply pointsResetAt for personal goals, matching recordClosedPeriods and
-        // the Goal tab display. Without this, a mid-period points reset caused the popup to
-        // count pre-reset tasks (null resetAfter) while the record correctly excluded them,
-        // producing a "goal met" notice for a score the record would never confirm.
+        // v733 · Do NOT pass pointsResetAt here (reverts v731 mistake). Period goals count
+        // every point earned inside the period window — a mid-period display reset cannot
+        // un-earn points that were already earned. Passing pointsResetAt excluded pre-reset
+        // October tasks, producing a score of 398 that never matched the popup's correct ">400".
         if (w === "shared" || w === "her" || w === "him") {
           const _bk = periodBucket(migratePeriod(g.period), fpNow);
           const _pStart = _bk && _bk.key ? _bk.key.slice(0, 10) : null;
-          const _resetF = w === "shared" ? null : pointsResetAt;
-          const _acts = collectCompletedTasks(visTasks, w, _pStart, null, _resetF);
-          const _bActs = collectBonusActivity(bonusLog, w, _pStart, null, _resetF);
+          const _acts = collectCompletedTasks(visTasks, w, _pStart, null, null);
+          const _bActs = collectBonusActivity(bonusLog, w, _pStart, null, null);
           const gt = [..._acts, ..._bActs].reduce((s, t) => s + (t.points || 0), 0);
           before.current = gt;
           before.met = gt >= before.target && !before.claimedThisPeriod;
