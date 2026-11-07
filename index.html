@@ -20866,6 +20866,8 @@ function App({
       setRdoWorkedAsk: setRdoWorkedAsk,
       workCardTint: workCardTint,
       setWorkCardTint: setWorkCardTint,
+      secondment: secondment,
+      setSecondment: setSecondment,
       onClose: () => setShowWorkSettings(false)
     }), showBillSettings && /*#__PURE__*/React.createElement(BillSettingsSheet, {
       billAvgMethod: billAvgMethod,
@@ -45455,11 +45457,25 @@ function WorkSettingsSheet({
   setRdoWorkedAsk,
   workCardTint,
   setWorkCardTint,
+  secondment,
+  setSecondment,
   onClose
 }) {
   const {
     sheetRef
   } = useSwipeToClose(onClose);
+  const [secOpen, setSecOpen] = React.useState(false);
+  const [secDraft, setSecDraft] = React.useState(null);
+  function openSecEdit() {
+    setSecDraft(secondment ? { ...secondment } : { active: true, person: "her", start: "", end: "", requiredHours: 7.25, breakMins: 30, shiftStart: "07:00", shiftEnd: "14:45", entries: [] });
+    setSecOpen(true);
+  }
+  function saveSecDraft() {
+    if (!secDraft) return;
+    const datesChanged = !secondment || secDraft.start !== secondment.start || secDraft.end !== secondment.end;
+    setSecondment({ ...secDraft, entries: datesChanged ? [] : (secondment && secondment.entries || []) });
+    setSecOpen(false);
+  }
   const Toggle = ({
     on
   }) => /*#__PURE__*/React.createElement("span", {
@@ -45871,7 +45887,207 @@ function WorkSettingsSheet({
         boxShadow: on ? C.shadowSm : "none"
       }
     }, lbl);
-  })))), ["her", "him"].map(pk => {
+  })))), /*#__PURE__*/setSecondment && React.createElement(SRow, {
+    hb: "secondment flex tracker period placement dates hours"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "11px 15px 3px",
+      display: "flex",
+      alignItems: "center",
+      gap: 6
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      width: 6,
+      height: 6,
+      borderRadius: 1,
+      background: C.accent,
+      transform: "rotate(45deg)",
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "lbl",
+    style: {
+      fontSize: 10,
+      fontWeight: 800,
+      letterSpacing: 1.4,
+      color: C.inkFaint
+    }
+  }, "Secondment")), /*#__PURE__*/React.createElement("button", {
+    onClick: secOpen ? () => setSecOpen(false) : openSecEdit,
+    style: {
+      ...rowBase,
+      paddingTop: 7,
+      paddingBottom: secOpen ? 4 : 12
+    }
+  }, /*#__PURE__*/React.createElement(IconTile, {
+    tint: secondment && secondment.active ? C.accent : undefined
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "18",
+    height: "18",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "2",
+    y: "7",
+    width: "20",
+    height: "14",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2M12 12v5M9.5 14.5h5"
+  }))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0,
+      textAlign: "left"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "block",
+      fontSize: 14,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Secondment period"), /*#__PURE__*/React.createElement("span", {
+    className: "sans",
+    style: {
+      display: "block",
+      fontSize: 11,
+      color: secondment && secondment.active ? C.accent : C.inkMute,
+      marginTop: 1
+    }
+  }, secondment && secondment.active ? (secondment.start || "?") + " → " + (secondment.end || "?") : "Off — tap to configure")), /*#__PURE__*/React.createElement("svg", {
+    width: "16",
+    height: "16",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: C.inkMute,
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    style: {
+      flexShrink: 0,
+      transform: secOpen ? "rotate(180deg)" : "none",
+      transition: "transform 0.2s"
+    }
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M6 9l6 6 6-6"
+  }))), secOpen && secDraft && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "2px 15px 14px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!secDraft.active,
+    onChange: e => setSecDraft(d => ({ ...d, active: e.target.checked })),
+    style: {
+      width: 18,
+      height: 18,
+      accentColor: C.accent,
+      cursor: "pointer"
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      fontWeight: 600,
+      color: C.ink
+    }
+  }, "Active (shows flex tracker)")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 8
+    }
+  }, [["person", "Person", null, ["her", "him"], k => (k === "her" ? (people && people.her && people.her.name) || "Her" : (people && people.him && people.him.name) || "Him")], ["start", "Start date", "date"], ["end", "End date (tentative ok)", "date"], ["requiredHours", "Hours / day", "number"], ["breakMins", "Break (mins)", "number"], ["shiftStart", "Default shift start", "time"], ["shiftEnd", "Default shift end", "time"]].map(([field, label, type, options, optLabel]) => /*#__PURE__*/React.createElement("label", {
+    key: field,
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 3,
+      gridColumn: (field === "person" || field === "start" || field === "end") ? "1 / -1" : undefined
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: 0.6,
+      color: C.inkMute,
+      textTransform: "uppercase"
+    }
+  }, label), options ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6
+    }
+  }, options.map(opt => /*#__PURE__*/React.createElement("button", {
+    key: opt,
+    onClick: () => setSecDraft(d => ({ ...d, [field]: opt })),
+    className: "sans",
+    style: {
+      flex: 1,
+      padding: "7px 0",
+      borderRadius: 9,
+      border: "none",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+      background: secDraft[field] === opt ? C.accent : C.pageWarm,
+      color: secDraft[field] === opt ? "#fff" : C.ink
+    }
+  }, optLabel ? optLabel(opt) : opt))) : /*#__PURE__*/React.createElement("input", {
+    type: type,
+    value: secDraft[field] || "",
+    step: type === "number" ? "0.25" : undefined,
+    min: type === "number" ? "0" : undefined,
+    onChange: e => setSecDraft(d => ({ ...d, [field]: type === "number" ? parseFloat(e.target.value) || 0 : e.target.value })),
+    style: {
+      padding: "7px 10px",
+      borderRadius: 9,
+      border: "1.5px solid " + C.rule,
+      background: C.card,
+      color: C.ink,
+      fontSize: 13,
+      fontFamily: "'Roboto Condensed', sans-serif",
+      width: "100%",
+      boxSizing: "border-box"
+    }
+  })))), (secondment && (secDraft.start !== secondment.start || secDraft.end !== secondment.end)) && /*#__PURE__*/React.createElement("p", {
+    className: "sans",
+    style: {
+      fontSize: 11,
+      color: C.inkMute,
+      margin: "2px 0 0",
+      lineHeight: 1.4
+    }
+  }, "Dates changed — previous flex entries will be cleared."), /*#__PURE__*/React.createElement("button", {
+    onClick: saveSecDraft,
+    className: "sans",
+    style: {
+      alignSelf: "flex-end",
+      padding: "9px 22px",
+      borderRadius: 12,
+      border: "none",
+      background: C.accent,
+      color: "#fff",
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer"
+    }
+  }, "Save"))), ["her", "him"].map(pk => {
     const pc = personColor(people[pk].color);
     const pat = patternFor(workPatterns, pk);
     const setPat = patch => setWorkPatterns(w => ({
