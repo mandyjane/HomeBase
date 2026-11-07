@@ -8710,17 +8710,25 @@ function App({
     lsSet("hb_workCardTint", workCardTint);
   }, [workCardTint]);
   // v721 · Secondment flex tracker
-  const [secondment, setSecondment] = useState(() => lsGet("hb_secondment", {
-    active: true,
-    person: "her",
-    start: "2026-08-31",
-    end: "2026-10-02",
-    requiredHours: 7.25,
-    breakMins: 30,
-    shiftStart: "07:00",
-    shiftEnd: "14:45",
-    entries: [] // [{date,type:"worked"|"flex_off"|"al"|"sick",start?,end?,hours?}]
-  }));
+  // v735 · New placement Nov 2026–Jan 2027. Start = Sat 8 Nov to align with pay week.
+  const [secondment, setSecondment] = useState(() => {
+    const stored = lsGet("hb_secondment", null);
+    // Migration: if stored dates still reflect the old Aug–Oct placement, reset for the new one.
+    if (!stored || stored.start === "2026-08-31" || stored.start === "2026-11-08") {
+      return {
+        active: true,
+        person: "her",
+        start: "2026-11-07",
+        end: "2027-01-31",
+        requiredHours: (stored && stored.requiredHours) || 7.25,
+        breakMins: (stored && stored.breakMins) || 30,
+        shiftStart: (stored && stored.shiftStart) || "07:00",
+        shiftEnd: (stored && stored.shiftEnd) || "14:45",
+        entries: []
+      };
+    }
+    return stored;
+  });
   useEffect(() => {
     lsSet("hb_secondment", secondment);
   }, [secondment]);
