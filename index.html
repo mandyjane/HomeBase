@@ -8714,7 +8714,9 @@ function App({
   const [secondment, setSecondment] = useState(() => {
     const stored = lsGet("hb_secondment", null);
     // Migration: if stored dates still reflect the old Aug–Oct placement, reset for the new one.
+    // v736 · Preserve old entries as previousPeriod so work history is not lost.
     if (!stored || stored.start === "2026-08-31" || stored.start === "2026-11-08") {
+      const hadEntries = stored && stored.entries && stored.entries.length > 0;
       return {
         active: true,
         person: "her",
@@ -8724,7 +8726,8 @@ function App({
         breakMins: (stored && stored.breakMins) || 30,
         shiftStart: (stored && stored.shiftStart) || "07:00",
         shiftEnd: (stored && stored.shiftEnd) || "14:45",
-        entries: []
+        entries: [],
+        previousPeriod: hadEntries ? { start: stored.start, end: stored.end, entries: stored.entries } : null
       };
     }
     return stored;
@@ -54384,11 +54387,11 @@ function WorkTab({
   });
 
   // v722 · Inject secondment flex entries as synthetic shift cards
-  if (_secActive && secondment.entries) {
-    const pName = secondment.person === "her" ? people.her.name : people.him.name;
-    const pColor = secondment.person === "her" ? people.her.color : people.him.color;
-    const secSt = secondmentStats(secondment);
-    secondment.entries.forEach(entry => {
+  // v736 · Also inject previousPeriod entries so work history is not lost on period migration
+  const _injectSecEntries = (entries, secObj) => {
+    if (!entries || !entries.length) return;
+    const pColor = secObj.person === "her" ? people.her.color : people.him.color;
+    entries.forEach(entry => {
       const labels = {
         worked: "Secondment",
         flex_off: "Flex Day Off",
@@ -54397,7 +54400,7 @@ function WorkTab({
       };
       const timeStr = entry.type === "worked" ? entry.start : null;
       const endStr = entry.type === "worked" ? entry.end : null;
-      const diff = entry.type === "worked" ? (entry.hours || 0) - secondment.requiredHours : entry.type === "flex_off" ? -secondment.requiredHours : 0;
+      const diff = entry.type === "worked" ? (entry.hours || 0) - secObj.requiredHours : entry.type === "flex_off" ? -secObj.requiredHours : 0;
       const flexLabel = entry.type === "worked" || entry.type === "flex_off" ? fmtFlex(diff) + " flex" : "No flex impact";
       const hoursLabel = entry.type === "worked" ? fmtHrsShort(entry.hours) + " worked" : entry.type === "flex_off" ? "Flex leave" : "Leave";
       const synth = {
@@ -54405,7 +54408,7 @@ function WorkTab({
         _seriesId: "sec-" + entry.date,
         title: labels[entry.type] || "Secondment",
         category: "Shift",
-        assignee: secondment.person,
+        assignee: secObj.person,
         date: entry.date,
         _occDate: entry.date,
         time: entry.type === "worked" ? timeStr : null,
@@ -54415,15 +54418,21 @@ function WorkTab({
         _secDiff: diff,
         ...(entry.type !== "worked" ? {
           dayOff: entry.type === "al" ? "leave" : entry.type === "sick" ? "sick" : "off",
-          dayOffHours: entry.type === "flex_off" ? secondment.requiredHours : 0,
-          _secDayOffColor: pColor // v723 · force person color on stripes
+          dayOffHours: entry.type === "flex_off" ? secObj.requiredHours : 0,
+          _secDayOffColor: pColor
         } : {}),
         _secFlexLabel: flexLabel,
         _secHoursLabel: hoursLabel,
-        notes: entry.type === "worked" ? entry.start + " → " + entry.end + " · " + secondment.breakMins + "m break · " + hoursLabel : hoursLabel
+        notes: entry.type === "worked" ? entry.start + " → " + entry.end + " · " + secObj.breakMins + "m break · " + hoursLabel : hoursLabel
       };
       shownOccs.push(synth);
     });
+  };
+  if (_secActive && secondment.entries) {
+    _injectSecEntries(secondment.entries, secondment);
+  }
+  if (_secActive && secondment.previousPeriod && secondment.previousPeriod.entries) {
+    _injectSecEntries(secondment.previousPeriod.entries, secondment);
   }
   const grp = {
     Today: [],
@@ -76771,7 +76780,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v732"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v736"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
