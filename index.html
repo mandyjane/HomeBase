@@ -54347,6 +54347,39 @@ function WorkTab({
       }
     });
   }
+  // v737 · Suppress shifts that were superseded by an Update. When a shift's workHist shows
+  // a time-change entry pointing to another card for the same person+date+title, the original
+  // (the one being changed AWAY FROM) is stale and should not render alongside its replacement.
+  {
+    const instanceKey = e => (e._seriesId || e.id) + "|" + (e._occDate || e.date);
+    const occKey = e => (e.assignee || "") + "|" + (e._occDate || e.date) + "|" + (e.title || "");
+    const timeKey = e => (e.time || "") + "-" + (e.end || "");
+    const groups = {};
+    shiftOccs.forEach(e => {
+      if (e._regular || e._ot || e._secondment) return;
+      (groups[occKey(e)] = groups[occKey(e)] || []).push(e);
+    });
+    const superseded = new Set();
+    Object.values(groups).forEach(group => {
+      if (group.length < 2) return;
+      group.forEach(e => {
+        const hist = (workHist || {})[e._seriesId || e.id] || [];
+        hist.forEach(h => {
+          const tc = (h.changes || []).find(c => c.f === "time");
+          if (!tc || !tc.to) return;
+          group.forEach(e2 => {
+            if (e2 === e) return;
+            if (timeKey(e2) === tc.to) superseded.add(instanceKey(e));
+          });
+        });
+      });
+    });
+    if (superseded.size) {
+      const keep = shiftOccs.filter(e => e._regular || e._ot || e._secondment || !superseded.has(instanceKey(e)));
+      shiftOccs.splice(0, shiftOccs.length, ...keep);
+    }
+  }
+
   // SEARCH FILTERS THE LIST, NOT THE OT TOTALS. `ot` is computed above from `events` and
   // reports the hours you ACTUALLY WORKED — a figure that must not change because you typed
   // in a box. So the query is applied to ONE derived list, `shownOccs`, and `ot` keeps
@@ -76780,7 +76813,7 @@ function SettingsPage({
       color: C.inkFaint,
       marginTop: 8
     }
-  }, "v736"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
+  }, "v737"))))), dataToolsOpen && /*#__PURE__*/React.createElement("div", {
     onClick: e => e.target === e.currentTarget && setDataToolsOpen(false),
     className: "hb-scrim",
     style: {
